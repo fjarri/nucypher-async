@@ -1,8 +1,16 @@
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from .ursula import UrsulaServer
+from .ursula import UrsulaServer, HttpError
 from .metadata import FleetState
+
+
+async def wrap_in_response(callable, *args, **kwds):
+    try:
+        result = await callable(*args, **kwds)
+    except HttpError as e:
+        return await make_response((str(e), e.status_code))
+    return await make_response(result.to_json())
 
 
 def make_app(ursula_server):
@@ -29,14 +37,12 @@ def make_app(ursula_server):
 
     @app.route("/ping")
     async def ping():
-        metadata = await app.ursula_server.endpoint_ping()
-        return await make_response(metadata.to_json())
+        return await wrap_in_response(app.ursula_server.endpoint_ping)
 
     @app.route("/exchange_metadata", methods=['POST'])
     async def exchange_metadata():
         state_json = await request.json
         state = FleetState.from_json(state_json)
-        new_state = await app.ursula_server.endpoint_exchange_metadata(state)
-        return await make_response(new_state.to_json())
+        return await wrap_in_response(app.ursula_server.endpoint_exchange_metadata, state)
 
     return app
