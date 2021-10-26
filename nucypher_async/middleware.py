@@ -1,6 +1,6 @@
 import httpx
 
-from .metadata import FleetState
+from .metadata import FleetState, Metadata
 
 
 class NetworkMiddleware:
@@ -12,7 +12,7 @@ class NetworkMiddleware:
         if not response.status_code == 200:
             raise RuntimeError(response)
 
-        return response.json()
+        return Metadata.from_json(response.json())
 
     async def exchange_metadata(self, address, state: FleetState) -> FleetState:
         async with httpx.AsyncClient() as client:
