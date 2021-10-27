@@ -2,11 +2,12 @@ import pytest
 import trio
 
 from nucypher_async.server import start_in_nursery, mock_start_in_nursery
-from nucypher_async.ursula import Ursula, UrsulaServer, Learner
+from nucypher_async.ursula import Ursula, UrsulaServer
 from nucypher_async.app import make_app
 from nucypher_async.middleware import MockMiddleware
 from nucypher_async.alice import Alice
 from nucypher_async.bob import Bob
+from nucypher_async.learner import Learner
 
 
 async def test_client_with_background_tasks():
