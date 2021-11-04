@@ -1,7 +1,15 @@
+import pytest
+import trio
+
+from nucypher_async.server import mock_start_in_nursery
 from nucypher_async.mock_nube.nube import *
+from nucypher_async.middleware import MockMiddleware
+from nucypher_async.ursula import Ursula, UrsulaServer
+from nucypher_async.dkg import Enrico, Bob, MockBlockchain, KeyMakerServer
+from nucypher_async.learner import Learner
 
 
-def test_api():
+def test_low_level_api():
 
     threshold = 2
     shares = 3
@@ -67,3 +75,86 @@ def test_api():
     decrypted_message = decrypt(recipient_sk, [verified_cfrags[0], verified_cfrags[2]], ciphertext)
 
     assert decrypted_message == message
+
+
+@pytest.fixture
+def ursulas():
+    yield [Ursula(i) for i in range(10)]
+
+
+@pytest.fixture
+def keymakers():
+    yield [KeyMaker.random() for i in range(4)]
+
+
+@pytest.fixture
+def mock_middleware():
+    yield MockMiddleware()
+
+
+@pytest.fixture
+def mock_blockchain(ursula_servers):
+    yield MockBlockchain(ursula_servers)
+
+
+@pytest.fixture
+def ursula_servers(mock_middleware, ursulas):
+    servers = []
+    for i in range(10):
+        server = UrsulaServer(ursulas[i], port=9150 + i, middleware=mock_middleware)
+        servers.append(server)
+        mock_middleware.add_server(server.address, server)
+
+    # pre-learn about other Ursulas
+    for i in range(10):
+        # TODO: error-prone, make a Learner method
+        metadatas = [server.ursula.metadata(server.address) for server in servers]
+        servers[i].learner.nodes = {metadata.id: metadata for metadata in metadatas}
+
+    yield servers
+
+
+async def test_dkg_granting(nursery, autojump_clock, ursula_servers, mock_middleware, mock_blockchain):
+
+    ursula_handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
+
+    # Accessed via network, but they don't have to know about each other,
+    # So we'll call their methods directly.
+    keymaker_servers = [KeyMakerServer() for _ in range(4)]
+
+    # Enrico could ask some centralized server to get him parts of encryption keys...
+    # But he'll have to get the verifying keys from them independently anyway.
+    enrico = Enrico()
+
+    label = "some label"
+
+    # Here Enrico contacts the keymakers and gets key parts by label
+    encrypting_key = enrico.make_encrypting_key(label, keymaker_servers)
+
+    plaintext = "secret message"
+    capsule, ciphertext = enrico.encrypt(encrypting_key, plaintext)
+
+    # Bob wants to request access
+    bob = Bob()
+
+    policy = bob.purchase(mock_blockchain, label, threshold=2, shares=3)
+
+    learner = Learner(mock_middleware, seed_addresses=[ursula_servers[0].address])
+    learner.start(nursery)
+    await trio.sleep(100)
+
+    treasure_maps = [
+        keymaker_server.get_treasure_map(mock_blockchain, label)
+        for keymaker_server in keymaker_servers
+        ]
+
+    cfrags = await bob.retrieve_cfrags(learner, capsule, policy, treasure_maps)
+
+    # Recipient verifies that cfrags originate from known keymakers
+    keymaker_vks = [keymaker_server.keymaker.verifying_key() for keymaker_server in keymaker_servers]
+    verified_cfrags = [cfrag.verify(keymaker_vks) for cfrag in cfrags]
+
+    # Recipient decryptis with 2 out of 3 cfrags
+    decrypted = decrypt(bob.secret_key, verified_cfrags, ciphertext)
+
+    assert decrypted == plaintext

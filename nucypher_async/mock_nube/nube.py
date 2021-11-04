@@ -24,6 +24,19 @@ class KeyMaker:
     def make_key_sliver(self, label: str, recipient_pk: 'RecipientPublicKey', threshold: int, shares: int) -> 'KeySliver':
         return KeySliver(self, label, recipient_pk, threshold, shares)
 
+    def make_key_bits(self, label: str, recipient_pk: 'RecipientPublicKey', threshold: int, shares: int) -> List['KeyBit']:
+        return [KeyBit(self, label, recipient_pk, threshold) for _ in range(shares)]
+
+
+# Basically a single share of a key sliver
+class KeyBit:
+
+    def __init__(self, keymaker: KeyMaker, label: str, recipient_pk: 'RecipientPublicKey', threshold: int):
+        self._created_by = keymaker
+        self._label = label
+        self._recipient_pk = recipient_pk
+        self._threshold = threshold
+
 
 class KeySliver:
 
@@ -101,14 +114,30 @@ class RecipientPublicKey:
 
 class KeyFrag:
 
-    def __init__(self, kslivers: Sequence[KeySliver]):
-        self._made_from = kslivers
-        self._threshold = kslivers[0]._threshold
-        self._shares = kslivers[0]._shares
+    @classmethod
+    def from_bits(cls, key_bits: Sequence[KeyBit]):
+        # TODO: check that all the bits are consistent
+        return cls(
+            created_by=[key_bit._created_by for key_bit in key_bits],
+            recipient_pk=key_bits[0]._recipient_pk,
+            threshold=key_bits[0]._threshold)
+
+    @classmethod
+    def from_slivers(cls, key_slivers: Sequence[KeySliver]):
+        # TODO: check that all the slivers are consistent
+        return cls(
+            created_by=[key_sliver._created_by for key_sliver in key_slivers],
+            recipient_pk=key_slivers[0]._recipient_pk,
+            threshold=key_slivers[0]._threshold)
+
+    def __init__(self, created_by: List[KeyMaker], recipient_pk: RecipientPublicKey, threshold: int):
+        self._created_by = created_by
+        self._recipient_pk = recipient_pk
+        self._threshold = threshold
 
 
 def generate_kfrags(kslivers: Sequence[KeySliver]) -> List[KeyFrag]:
-    return [KeyFrag(kslivers) for _ in range(kslivers[0]._shares)]
+    return [KeyFrag.from_slivers(kslivers) for _ in range(kslivers[0]._shares)]
 
 
 class CapsuleFrag:
@@ -116,15 +145,14 @@ class CapsuleFrag:
     def __init__(self, capsule: Capsule, kfrag: KeyFrag):
 
         # Sanity check
-        assert capsule._encryption_key._created_by == [ksliver._created_by for ksliver in kfrag._made_from]
+        assert capsule._encryption_key._created_by == kfrag._created_by
 
         self._capsule = capsule
         self._kfrag = kfrag
 
     def verify(self, keymaker_vks: Sequence[KeyMakerVerifyingKey]) -> 'VerifiedCapsuleFrag':
-        assert len(keymaker_vks) == len(self._kfrag._made_from)
-        for vk, ksliver in zip(keymaker_vks, self._kfrag._made_from):
-            assert vk._created_by == ksliver._created_by
+        assert len(keymaker_vks) == len(self._kfrag._created_by)
+        assert [vk._created_by for vk in keymaker_vks] == self._kfrag._created_by
 
         return VerifiedCapsuleFrag(self)
 
@@ -145,7 +173,6 @@ def decrypt(recipient_sk: RecipientSecretKey, vcfrags: Sequence[VerifiedCapsuleF
 
     for cfrag in cfrags:
         assert cfrag._capsule == ciphertext._capsule
-        for ksliver in cfrag._kfrag._made_from:
-            assert ksliver._recipient_pk._secret_key == recipient_sk
+        assert cfrag._kfrag._recipient_pk._secret_key == recipient_sk
 
     return ciphertext._plaintext

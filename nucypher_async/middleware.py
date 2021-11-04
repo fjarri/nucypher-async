@@ -41,3 +41,7 @@ class MockMiddleware:
     async def exchange_metadata(self, address, payload):
         server = self._known_servers[address]
         return await server.endpoint_exchange_metadata(payload)
+
+    async def reencrypt_dkg(self, address, capsule, key_bits):
+        server = self._known_servers[address]
+        return await server.endpoint_reencrypt_dkg(capsule, key_bits)

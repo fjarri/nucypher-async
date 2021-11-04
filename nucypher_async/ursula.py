@@ -8,7 +8,7 @@ from .learner import Learner
 class Ursula:
 
     def __init__(self, id):
-        self.id = id
+        self.id = str(id)
 
     def metadata(self, address):
         return Metadata(id=self.id, address=address)
@@ -58,3 +58,9 @@ class UrsulaServer:
     async def endpoint_exchange_metadata(self, state: FleetState):
         await self.learner.remember_nodes(state)
         return self.learner.current_state()
+
+    async def endpoint_reencrypt_dkg(self, capsule, key_bits):
+        from .mock_nube.nube import KeyFrag, reencrypt
+        kfrag = KeyFrag.from_bits(key_bits)
+        cfrag = reencrypt(capsule, kfrag)
+        return cfrag
