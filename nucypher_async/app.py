@@ -2,23 +2,23 @@ from quart_trio import QuartTrio
 from quart import make_response, request
 
 from .ursula import UrsulaServer, HttpError
-from .metadata import FleetState
 
 
 async def wrap_in_response(callable, *args, **kwds):
     try:
-        result = await callable(*args, **kwds)
+        result_json = await callable(*args, **kwds)
     except HttpError as e:
         return await make_response((str(e), e.status_code))
-    return await make_response(result.to_json())
+    return await make_response(result_json)
 
 
 def make_app(ursula_server):
     """
     This is a thin layer that serves the following purposes:
     - wrap an UrsulaServer into an ASGI app (using Quart) that can be run in production;
-    - deserialize requests, pass them to UrsulaServer, and serialize the return values.
-    - catch exceptions and wrap them in fitting responses.
+    - pass raw data from requests to UrsulaServer;
+    - wrap the returned raw data into a response;
+    - catch HttpError and wrap them in corresponding responses.
     Nothing else should be happening here, the bulk of the server logic is located in UrsulaServer.
 
     In a sense, this is a "server" counterpart of NetworkMiddleware.
@@ -42,7 +42,6 @@ def make_app(ursula_server):
     @app.route("/exchange_metadata", methods=['POST'])
     async def exchange_metadata():
         state_json = await request.json
-        state = FleetState.from_json(state_json)
-        return await wrap_in_response(app.ursula_server.endpoint_exchange_metadata, state)
+        return await wrap_in_response(app.ursula_server.endpoint_exchange_metadata, state_json)
 
     return app

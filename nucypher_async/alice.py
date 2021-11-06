@@ -16,7 +16,7 @@ class Alice:
         timeout = 10
 
         async def check_node(address):
-            await learner._middleware.ping(address)
+            await learner._client.ping(address)
 
         try:
             with trio.fail_after(timeout):

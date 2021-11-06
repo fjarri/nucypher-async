@@ -3,6 +3,7 @@ import random
 import trio
 
 from .metadata import FleetState
+from .middleware import NetworkClient
 
 
 class Learner:
@@ -12,7 +13,7 @@ class Learner:
     """
 
     def __init__(self, middleware, my_metadata=None, seed_addresses=[]):
-        self._middleware = middleware
+        self._client = NetworkClient(middleware)
         self.seed_addresses = seed_addresses
         self.my_metadata = my_metadata
         self.nodes = {}
@@ -68,7 +69,7 @@ class Learner:
 
         teacher_address = random.choice(addresses)
 
-        remote_state = await self._middleware.exchange_metadata(teacher_address, self.current_state())
+        remote_state = await self._client.exchange_metadata(teacher_address, self.current_state())
 
         await self.remember_nodes(remote_state)
         await this_task.restart_in(10)

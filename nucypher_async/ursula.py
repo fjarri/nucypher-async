@@ -1,6 +1,6 @@
 import trio
 
-from .middleware import NetworkMiddleware
+from .middleware import NetworkMiddleware, HttpError
 from .metadata import Metadata, FleetState
 from .learner import Learner
 
@@ -12,13 +12,6 @@ class Ursula:
 
     def metadata(self, address):
         return Metadata(id=self.id, address=address)
-
-
-class HttpError(Exception):
-
-    def __init__(self, message, status_code):
-        super().__init__(message)
-        self.status_code = status_code
 
 
 class UrsulaServer:
@@ -53,11 +46,12 @@ class UrsulaServer:
         self.started = False
 
     async def endpoint_ping(self):
-        return self.ursula.metadata(self.address)
+        return self.ursula.metadata(self.address).to_json()
 
-    async def endpoint_exchange_metadata(self, state: FleetState):
+    async def endpoint_exchange_metadata(self, state_json):
+        state = FleetState.from_json(state_json)
         await self.learner.remember_nodes(state)
-        return self.learner.current_state()
+        return self.learner.current_state().to_json()
 
     async def endpoint_reencrypt_dkg(self, capsule, key_bits):
         from .mock_nube.nube import KeyFrag, reencrypt

@@ -12,7 +12,7 @@ class Bob:
 
         async def reencrypt(ursula_id):
             addresses = await learner.knows_nodes([ursula_id])
-            await learner._middleware.ping(addresses[ursula_id])
+            await learner._client.ping(addresses[ursula_id])
             responses.add(ursula_id)
             if len(responses) == policy.threshold:
                 finished.set()
