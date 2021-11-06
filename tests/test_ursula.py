@@ -5,8 +5,6 @@ from nucypher_async.server import start_in_nursery, mock_start_in_nursery
 from nucypher_async.ursula import Ursula, UrsulaServer
 from nucypher_async.app import make_app
 from nucypher_async.middleware import MockMiddleware
-from nucypher_async.alice import Alice
-from nucypher_async.bob import Bob
 from nucypher_async.learner import Learner
 
 
@@ -84,23 +82,3 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         # Each Ursula should know about every other Ursula by now.
         if all(len(nodes) == 9 for nodes in known_nodes.values()):
             break
-
-
-async def test_granting(nursery, autojump_clock, ursula_servers, mock_middleware):
-
-    handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
-
-    alice = Alice()
-    bob = Bob()
-
-    alice_learner = Learner(mock_middleware, seed_addresses=[ursula_servers[0].address])
-    alice_learner.start(nursery)
-    await trio.sleep(100)
-
-    policy = await alice.grant(alice_learner, 2, 3)
-
-    bob_learner = Learner(mock_middleware, seed_addresses=[ursula_servers[0].address])
-    bob_learner.start(nursery)
-    await trio.sleep(100)
-    responses = await bob.retrieve(bob_learner, policy)
-    assert len(responses) >= policy.threshold
