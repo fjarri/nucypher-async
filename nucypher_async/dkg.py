@@ -42,8 +42,8 @@ class Bob:
         cfrags = []
         for ursula_id in policy.ursula_ids[:policy.threshold]:
             key_bits = [treasure_map.destinations[ursula_id] for treasure_map in treasure_maps]
-            ursula_metadata = learner.nodes[ursula_id]
-            cfrag = await learner._client.reencrypt_dkg(ursula_metadata.address, capsule, key_bits)
+            ursula_metadata = learner._nodes[ursula_id]
+            cfrag = await learner._client.reencrypt_dkg(ursula_metadata.connection_info, capsule, key_bits)
             cfrags.append(cfrag)
         return cfrags
 

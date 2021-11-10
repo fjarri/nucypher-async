@@ -10,21 +10,19 @@ class Policy:
 
 class Alice:
 
-    async def grant(self, learner, threshold, shares):
+    async def grant(self, learner, ursula_ids, threshold, shares):
 
-        ursula_ids = [str(i) for i in range(shares)]
         timeout = 10
 
-        async def check_node(address):
-            await learner._client.ping(address)
+        async def check_node(cinfo):
+            await learner._client.ping(cinfo)
 
         try:
             with trio.fail_after(timeout):
-                addresses = await learner.knows_nodes(ursula_ids)
-
+                nodes = await learner.knows_nodes(ursula_ids)
                 async with trio.open_nursery() as nursery:
-                    for id in ursula_ids:
-                        nursery.start_soon(check_node, addresses[id])
+                    for node in nodes.values():
+                        nursery.start_soon(check_node, node.connection_info)
 
             return Policy(threshold, ursula_ids)
 
@@ -42,8 +40,8 @@ class Bob:
         finished = trio.Event()
 
         async def reencrypt(ursula_id):
-            addresses = await learner.knows_nodes([ursula_id])
-            await learner._client.ping(addresses[ursula_id])
+            result = await learner.knows_nodes([ursula_id])
+            await learner._client.ping(result[ursula_id].connection_info)
             responses.add(ursula_id)
             if len(responses) == policy.threshold:
                 finished.set()

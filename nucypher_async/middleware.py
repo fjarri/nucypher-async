@@ -1,7 +1,10 @@
+from contextlib import contextmanager
 import http
 import httpx
 
-from .metadata import FleetState, Metadata
+from .certificate import SSLCertificate, fetch_certificate
+from .metadata import FleetState, Metadata, ConnectionInfo
+from .utils import temp_file
 
 
 class HttpError(Exception):
@@ -11,6 +14,15 @@ class HttpError(Exception):
         self.status_code = status_code
 
 
+@contextmanager
+async def async_client_ssl(certificate: SSLCertificate):
+    # TODO: avoid saving the certificate to disk at each request,
+    # and keep them in a directory somewhere.
+    with temp_file(certificate.to_pem_bytes()) as f:
+        async with httpx.AsyncClient(verify=f.name) as client:
+            yield client
+
+
 class NetworkMiddleware:
     """
     The job of NetworkMiddleware is to send the request to the correct endpoint of the server,
@@ -18,20 +30,23 @@ class NetworkMiddleware:
     depending on the status.
     """
 
+    async def fetch_certificate(self, host, port):
+        return await fetch_certificate(host, port)
+
     @staticmethod
     def _unwrap_json(response):
         if not response.status_code == http.HTTPStatus.OK:
             raise HttpError(response, response.status_code)
         return response.json()
 
-    async def ping(self, address):
-        async with httpx.AsyncClient() as client:
-            response = await client.post('http://' + address + '/ping')
+    async def ping(self, cinfo: ConnectionInfo, certificate: SSLCertificate):
+        async with async_client_ssl(certificate) as client:
+            response = await client.post(cinfo.url + '/ping')
         return self._unwrap_json(response)
 
-    async def exchange_metadata(self, address, state_json):
-        async with httpx.AsyncClient() as client:
-            response = await client.post('http://' + address + '/exchange_metadata', json=state.to_json())
+    async def exchange_metadata(self, cinfo: ConnectionInfo, state_json):
+        async with async_client_ssl(certificate) as client:
+            response = await client.post(cinfo.url + '/exchange_metadata', json=state.to_json())
         return self._unwrap_json(response)
 
 
@@ -43,15 +58,21 @@ class MockMiddleware:
     def __init__(self):
         self._known_servers = {}
 
-    def add_server(self, address, ursula_server):
-        self._known_servers[address] = ursula_server
+    def add_server(self, ursula_server):
+        self._known_servers[(ursula_server.host, ursula_server.port)] = ursula_server
 
-    async def ping(self, address):
-        server = self._known_servers[address]
+    async def fetch_certificate(self, host, port):
+        server = self._known_servers[(host, port)]
+        return server.ssl_certificate
+
+    async def ping(self, cinfo):
+        server = self._known_servers[(cinfo.host, cinfo.port)]
+        assert cinfo.certificate == server.ssl_certificate
         return await server.endpoint_ping()
 
-    async def exchange_metadata(self, address, state_json):
-        server = self._known_servers[address]
+    async def exchange_metadata(self, cinfo, state_json):
+        server = self._known_servers[(cinfo.host, cinfo.port)]
+        assert cinfo.certificate == server.ssl_certificate
         return await server.endpoint_exchange_metadata(state_json)
 
 
@@ -65,23 +86,23 @@ class NetworkClient:
     def __init__(self, middleware):
         self._middleware = middleware
 
-    async def ping(self, address) -> Metadata:
+    async def ping(self, cinfo: ConnectionInfo) -> Metadata:
         try:
-            metadata_json = await self._middleware.ping(address)
+            metadata_json = await self._middleware.ping(cinfo)
         except HttpError as e:
             raise RuntimeError(e)
         return Metadata.from_json(metadata_json)
 
-    async def exchange_metadata(self, address, state: FleetState) -> FleetState:
+    async def exchange_metadata(self, cinfo: ConnectionInfo, state: FleetState) -> FleetState:
         try:
-            state_json = await self._middleware.exchange_metadata(address, state.to_json())
+            state_json = await self._middleware.exchange_metadata(cinfo, state.to_json())
         except HttpError as e:
             raise RuntimeError(e)
         return FleetState.from_json(state_json)
 
-    async def reencrypt_dkg(self, address, capsule, key_bits):
+    async def reencrypt_dkg(self, cinfo: ConnectionInfo, capsule, key_bits):
         # FIXME: DKG object serialization is not implemented yet,
         # so this request doesn't go into the middleware per se,
         # we're assuming that we have `MockMiddleware` and get an `UrsulaServer` from it.
-        server = self._middleware._known_servers[address]
+        server = self._middleware._known_servers[(cinfo.host, cinfo.port)]
         return await server.endpoint_reencrypt_dkg(capsule, key_bits)

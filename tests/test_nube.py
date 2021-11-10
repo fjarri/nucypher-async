@@ -79,7 +79,7 @@ def test_low_level_api():
 
 @pytest.fixture
 def ursulas():
-    yield [Ursula(i) for i in range(10)]
+    yield [Ursula() for i in range(10)]
 
 
 @pytest.fixture
@@ -103,13 +103,13 @@ def ursula_servers(mock_middleware, ursulas):
     for i in range(10):
         server = UrsulaServer(ursulas[i], port=9150 + i, middleware=mock_middleware)
         servers.append(server)
-        mock_middleware.add_server(server.address, server)
+        mock_middleware.add_server(server)
 
     # pre-learn about other Ursulas
     for i in range(10):
         # TODO: error-prone, make a Learner method
-        metadatas = [server.ursula.metadata(server.address) for server in servers]
-        servers[i].learner.nodes = {metadata.id: metadata for metadata in metadatas}
+        metadatas = [server.metadata() for server in servers]
+        servers[i].learner._nodes = {metadata.id: metadata for metadata in metadatas}
 
     yield servers
 
@@ -139,9 +139,9 @@ async def test_dkg_granting(nursery, autojump_clock, ursula_servers, mock_middle
 
     policy = bob.purchase(mock_blockchain, label, threshold=2, shares=3)
 
-    learner = Learner(mock_middleware, seed_addresses=[ursula_servers[0].address])
-    learner.start(nursery)
-    await trio.sleep(100)
+    learner = Learner(mock_middleware, seed_addresses=[(ursula_servers[0].host, ursula_servers[0].port)])
+    for _ in range(10):
+        await learner.learning_round()
 
     treasure_maps = [
         keymaker_server.get_treasure_map(mock_blockchain, label)

@@ -12,6 +12,7 @@ setup(
         'Quart',
         'quart-trio',
         'httpx',
+        'cryptography',
         ],
     extras_requires={
         'dev': [

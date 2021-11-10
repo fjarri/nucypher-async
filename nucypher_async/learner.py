@@ -1,9 +1,12 @@
+import enum
 import random
 
 import trio
 
+from .certificate import fetch_certificate
 from .metadata import FleetState
-from .middleware import NetworkClient
+from .middleware import NetworkClient, ConnectionInfo
+from .utils import BackgroundTask
 
 
 class Learner:
@@ -14,81 +17,64 @@ class Learner:
 
     def __init__(self, middleware, my_metadata=None, seed_addresses=[]):
         self._client = NetworkClient(middleware)
-        self.seed_addresses = seed_addresses
-        self.my_metadata = my_metadata
-        self.nodes = {}
+        self._seed_addresses = seed_addresses
+        self._my_metadata = my_metadata
+
+        self._nodes = {} # To be moved to FleetSensor?
 
         self._nodes_updated = trio.Event()
-        self._task_learning = None
 
-    def start(self, nursery):
-        assert not self._task_learning
-        self._task_learning = BackgroundTask(nursery, self.learn)
+    async def remember_nodes(self, new_state):
 
-    def stop(self):
-        assert self._task_learning
-        self._task_learning.stop()
-        self._task_learning = None
-
-    def __del__(self):
-        if self._task_learning:
-            self.stop()
-
-    async def remember_nodes(self, state: FleetState):
-        for id, metadata in state.nodes.items():
-            if self.my_metadata and id == self.my_metadata.id:
+        for id, metadata in new_state.nodes.items():
+            # We know better what our metadata is
+            if self._my_metadata and id == self._my_metadata.id:
                 continue
-            self.nodes[id] = metadata
+            self._nodes[id] = metadata
 
         # Release whoever was waiting for the state to be updated
+        # TODO: only do so if there was a change in the state.
         self._nodes_updated.set()
-        await trio.sleep(0)
+        await trio.sleep(0) # TODO: is it necessary?
         self._nodes_updated = trio.Event()
 
     def current_state(self):
-        nodes = dict(self.nodes)
-        if self.my_metadata:
-            nodes[self.my_metadata.id] = self.my_metadata
+        nodes = dict(self._nodes)
+        if self._my_metadata:
+            nodes[self._my_metadata.id] = self._my_metadata
         return FleetState(nodes)
 
     async def knows_nodes(self, ursula_ids):
         ids_set = set(ursula_ids)
         while True:
-            if ids_set.issubset(self.nodes):
-                return {id: self.nodes[id].address for id in ids_set}
+            if ids_set.issubset(self._nodes):
+                return {id: self._nodes[id] for id in ids_set}
             await self._nodes_updated.wait()
 
-    async def learn(self, this_task):
+    async def learn_from_random_seed_node(self):
 
-        before = set(self.nodes)
+        host, port = self._seed_addresses.pop()
+        certificate = await self._client._middleware.fetch_certificate(host, port)
+        cinfo = ConnectionInfo(host, port, certificate)
 
-        addresses = [node.address for node in self.nodes.values()] + self.seed_addresses
-        if len(addresses) == 0:
-            # Nowhere to learn from
-            return
-
-        teacher_address = random.choice(addresses)
-
-        remote_state = await self._client.exchange_metadata(teacher_address, self.current_state())
+        remote_state = await self._client.exchange_metadata(cinfo, self.current_state())
 
         await self.remember_nodes(remote_state)
-        await this_task.restart_in(10)
 
+    async def learn_from_random_node(self):
 
-class BackgroundTask:
+        node_ids = list(self._nodes)
+        teacher_id = random.choice(node_ids)
+        teacher = self._nodes[teacher_id]
 
-    def __init__(self, nursery, task_callable):
-        self._nursery = nursery
-        self._task_callable = task_callable
-        self._shutdown_event = trio.Event()
+        remote_state = await self._client.exchange_metadata(teacher.connection_info, self.current_state())
 
-        self._nursery.start_soon(self._task_callable, self)
+        await self.remember_nodes(remote_state)
 
-    async def restart_in(self, timeout):
-        with trio.move_on_after(timeout):
-            await self._shutdown_event.wait()
-            return
-        self._nursery.start_soon(self._task_callable, self)
-
-    def stop(self):
-        self._shutdown_event.set()
+    async def learning_round(self):
+        if self._seed_addresses:
+            await self.learn_from_random_seed_node()
+        elif self._nodes:
+            await self.learn_from_random_node()
+        else:
+            raise RuntimeError("No nodes to learn from")

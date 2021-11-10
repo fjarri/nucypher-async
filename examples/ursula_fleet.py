@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     servers = []
     for i in range(10):
-        ursula = Ursula(i)
+        ursula = Ursula()
 
         if i > 0:
             seed_addresses = [f'localhost:{9150+i-1}']
