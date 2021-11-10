@@ -2,9 +2,9 @@ import trio
 
 from .certificate import SSLPrivateKey, SSLCertificate
 from .middleware import NetworkMiddleware, HttpError
-from .metadata import NodeID, Metadata, FleetState
+from .protocol import NodeID, Metadata, ContactRequest
 from .learner import Learner
-from .utils import BackgroundTask
+from .utils import BackgroundTask, Contact, SSLContact
 
 
 class Ursula:
@@ -15,30 +15,29 @@ class Ursula:
 
 class UrsulaServer:
 
-    def __init__(self, ursula, middleware=None, port=9151, host='127.0.0.1', seed_addresses=[]):
-
-        self.port = port
-        self.host = host
-        self.address = f"{host}:{port}"
+    def __init__(self, ursula, middleware=None, port=9151, host='127.0.0.1', seed_contacts=[]):
 
         # TODO: generate the seed from some root secret material.
-        self.ssl_private_key = SSLPrivateKey.from_seed(b'asdasdasd')
-        self.ssl_certificate = SSLCertificate.self_signed(self.ssl_private_key, self.host)
+        self._ssl_private_key = SSLPrivateKey.from_seed(b'asdasdasd')
+        self._ssl_certificate = SSLCertificate.self_signed(self._ssl_private_key, host)
+
+        contact = Contact(host=host, port=port)
+        self.ssl_contact = SSLContact(contact, self._ssl_certificate)
 
         if middleware is None:
             middleware = NetworkMiddleware()
 
         self.ursula = ursula
-        self.learner = Learner(middleware, self.metadata(), seed_addresses)
+        self._metadata = Metadata(
+            node_id=self.ursula.id,
+            ssl_contact=self.ssl_contact)
+
+        self.learner = Learner(middleware, my_metadata=self._metadata, seed_contacts=seed_contacts)
 
         self.started = False
 
     def metadata(self):
-        return Metadata(
-            id=self.ursula.id,
-            host=self.host,
-            port=self.port,
-            certificate=self.ssl_certificate)
+        return self._metadata
 
     def start(self, nursery):
         assert not self.started
@@ -57,6 +56,7 @@ class UrsulaServer:
             pass
         except Exception as e:
             # TODO: log the error here
+            raise
             pass
         await this_task.restart_in(10)
 
@@ -70,10 +70,13 @@ class UrsulaServer:
     async def endpoint_ping(self):
         return self.metadata().to_json()
 
-    async def endpoint_exchange_metadata(self, state_json):
-        state = FleetState.from_json(state_json)
-        await self.learner.remember_nodes(state)
-        return self.learner.current_state().to_json()
+    async def endpoint_get_contacts(self, contact_request_json):
+        contact_request = ContactRequest.from_json(contact_request_json)
+        # Alternatively, we could return all known contacts,
+        # but that would just propagate garbage through the network.
+        if contact_request.signed_contact:
+            await self.learner.add_contact(contact_request.signed_contact)
+        return self.learner.verified_contact_package().to_json()
 
     async def endpoint_reencrypt_dkg(self, capsule, key_bits):
         from .mock_nube.nube import KeyFrag, reencrypt

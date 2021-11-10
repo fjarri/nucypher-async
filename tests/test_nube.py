@@ -109,7 +109,7 @@ def ursula_servers(mock_middleware, ursulas):
     for i in range(10):
         # TODO: error-prone, make a Learner method
         metadatas = [server.metadata() for server in servers]
-        servers[i].learner._nodes = {metadata.id: metadata for metadata in metadatas}
+        servers[i].learner._verified_nodes = {metadata.node_id: metadata for metadata in metadatas}
 
     yield servers
 
@@ -139,8 +139,8 @@ async def test_dkg_granting(nursery, autojump_clock, ursula_servers, mock_middle
 
     policy = bob.purchase(mock_blockchain, label, threshold=2, shares=3)
 
-    learner = Learner(mock_middleware, seed_addresses=[(ursula_servers[0].host, ursula_servers[0].port)])
-    for _ in range(10):
+    learner = Learner(mock_middleware, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    for _ in range(30):
         await learner.learning_round()
 
     treasure_maps = [

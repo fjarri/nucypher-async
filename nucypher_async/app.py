@@ -39,9 +39,9 @@ def make_app(ursula_server):
     async def ping():
         return await wrap_in_response(app.ursula_server.endpoint_ping)
 
-    @app.route("/exchange_metadata", methods=['POST'])
-    async def exchange_metadata():
-        state_json = await request.json
-        return await wrap_in_response(app.ursula_server.endpoint_exchange_metadata, state_json)
+    @app.route("/get_contacts", methods=['POST'])
+    async def get_contacts():
+        signed_contact_json = await request.json
+        return await wrap_in_response(app.ursula_server.endpoint_get_contacts)
 
     return app

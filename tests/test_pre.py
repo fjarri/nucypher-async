@@ -31,7 +31,7 @@ def ursula_servers(mock_middleware, ursulas):
     for i in range(10):
         # TODO: error-prone, make a Learner method
         metadatas = [server.metadata() for server in servers]
-        servers[i].learner._nodes = {metadata.id: metadata for metadata in metadatas}
+        servers[i].learner._verified_nodes = {metadata.node_id: metadata for metadata in metadatas}
 
     yield servers
 
@@ -43,14 +43,15 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_middleware
     alice = Alice()
     bob = Bob()
 
-    alice_learner = Learner(mock_middleware, seed_addresses=[(ursula_servers[0].host, ursula_servers[0].port)])
-    for _ in range(10):
+    alice_learner = Learner(mock_middleware, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    for _ in range(50):
         await alice_learner.learning_round()
 
-    policy = await alice.grant(alice_learner, [server.metadata().id for server in ursula_servers[:3]],  2, 3)
+    policy = await alice.grant(alice_learner, [server.metadata().node_id for server in ursula_servers[:3]],  2, 3)
 
-    bob_learner = Learner(mock_middleware, seed_addresses=[(ursula_servers[0].host, ursula_servers[0].port)])
-    for _ in range(10):
+    bob_learner = Learner(mock_middleware, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    for _ in range(50):
         await bob_learner.learning_round()
+
     responses = await bob.retrieve(bob_learner, policy)
     assert len(responses) >= policy.threshold

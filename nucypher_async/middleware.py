@@ -1,10 +1,10 @@
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 import http
 import httpx
 
 from .certificate import SSLCertificate, fetch_certificate
-from .metadata import FleetState, Metadata, ConnectionInfo
-from .utils import temp_file
+from .protocol import Metadata, ContactPackage, SignedContact, ContactRequest
+from .utils import temp_file, Contact, SSLContact
 
 
 class HttpError(Exception):
@@ -14,7 +14,7 @@ class HttpError(Exception):
         self.status_code = status_code
 
 
-@contextmanager
+@asynccontextmanager
 async def async_client_ssl(certificate: SSLCertificate):
     # TODO: avoid saving the certificate to disk at each request,
     # and keep them in a directory somewhere.
@@ -30,8 +30,8 @@ class NetworkMiddleware:
     depending on the status.
     """
 
-    async def fetch_certificate(self, host, port):
-        return await fetch_certificate(host, port)
+    async def fetch_certificate(self, contact):
+        return await fetch_certificate(contact.host, contact.port)
 
     @staticmethod
     def _unwrap_json(response):
@@ -39,14 +39,14 @@ class NetworkMiddleware:
             raise HttpError(response, response.status_code)
         return response.json()
 
-    async def ping(self, cinfo: ConnectionInfo, certificate: SSLCertificate):
-        async with async_client_ssl(certificate) as client:
-            response = await client.post(cinfo.url + '/ping')
+    async def ping(self, ssl_contact: SSLContact):
+        async with async_client_ssl(ssl_contact.certificate) as client:
+            response = await client.get(ssl_contact.url + '/ping')
         return self._unwrap_json(response)
 
-    async def exchange_metadata(self, cinfo: ConnectionInfo, state_json):
-        async with async_client_ssl(certificate) as client:
-            response = await client.post(cinfo.url + '/exchange_metadata', json=state.to_json())
+    async def get_contacts(self, ssl_contact: SSLContact, contact_request_json):
+        async with async_client_ssl(ssl_contact.certificate) as client:
+            response = await client.get(ssl_contact.url + '/get_contacts', json=contact_request_json)
         return self._unwrap_json(response)
 
 
@@ -59,21 +59,21 @@ class MockMiddleware:
         self._known_servers = {}
 
     def add_server(self, ursula_server):
-        self._known_servers[(ursula_server.host, ursula_server.port)] = ursula_server
+        self._known_servers[ursula_server.ssl_contact.contact] = ursula_server
 
-    async def fetch_certificate(self, host, port):
-        server = self._known_servers[(host, port)]
-        return server.ssl_certificate
+    async def fetch_certificate(self, contact: Contact):
+        server = self._known_servers[contact]
+        return server.ssl_contact.certificate
 
-    async def ping(self, cinfo):
-        server = self._known_servers[(cinfo.host, cinfo.port)]
-        assert cinfo.certificate == server.ssl_certificate
+    async def ping(self, ssl_contact: SSLContact):
+        server = self._known_servers[ssl_contact.contact]
+        assert ssl_contact.certificate == server.ssl_contact.certificate
         return await server.endpoint_ping()
 
-    async def exchange_metadata(self, cinfo, state_json):
-        server = self._known_servers[(cinfo.host, cinfo.port)]
-        assert cinfo.certificate == server.ssl_certificate
-        return await server.endpoint_exchange_metadata(state_json)
+    async def get_contacts(self, ssl_contact: SSLContact, contact_request_json):
+        server = self._known_servers[ssl_contact.contact]
+        assert ssl_contact.certificate == server.ssl_contact.certificate
+        return await server.endpoint_get_contacts(contact_request_json)
 
 
 class NetworkClient:
@@ -86,23 +86,27 @@ class NetworkClient:
     def __init__(self, middleware):
         self._middleware = middleware
 
-    async def ping(self, cinfo: ConnectionInfo) -> Metadata:
+    async def fetch_certificate(self, contact: Contact) -> SSLContact:
+        certificate = await self._middleware.fetch_certificate(contact)
+        return SSLContact(contact, certificate)
+
+    async def ping(self, ssl_contact: SSLContact) -> Metadata:
         try:
-            metadata_json = await self._middleware.ping(cinfo)
+            metadata_json = await self._middleware.ping(ssl_contact)
         except HttpError as e:
-            raise RuntimeError(e)
+            raise RuntimeError(e) from e
         return Metadata.from_json(metadata_json)
 
-    async def exchange_metadata(self, cinfo: ConnectionInfo, state: FleetState) -> FleetState:
+    async def get_contacts(self, ssl_contact: SSLContact, contact_request: ContactRequest) -> ContactPackage:
         try:
-            state_json = await self._middleware.exchange_metadata(cinfo, state.to_json())
+            contact_package_json = await self._middleware.get_contacts(ssl_contact, contact_request.to_json())
         except HttpError as e:
-            raise RuntimeError(e)
-        return FleetState.from_json(state_json)
+            raise RuntimeError(e) from e
+        return ContactPackage.from_json(contact_package_json)
 
-    async def reencrypt_dkg(self, cinfo: ConnectionInfo, capsule, key_bits):
+    async def reencrypt_dkg(self, ssl_contact: SSLContact, capsule, key_bits):
         # FIXME: DKG object serialization is not implemented yet,
         # so this request doesn't go into the middleware per se,
         # we're assuming that we have `MockMiddleware` and get an `UrsulaServer` from it.
-        server = self._middleware._known_servers[(cinfo.host, cinfo.port)]
+        server = self._middleware._known_servers[ssl_contact.contact]
         return await server.endpoint_reencrypt_dkg(capsule, key_bits)

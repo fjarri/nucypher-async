@@ -14,15 +14,15 @@ class Alice:
 
         timeout = 10
 
-        async def check_node(cinfo):
-            await learner._client.ping(cinfo)
+        async def check_node(ssl_contact):
+            await learner._client.ping(ssl_contact)
 
         try:
             with trio.fail_after(timeout):
                 nodes = await learner.knows_nodes(ursula_ids)
                 async with trio.open_nursery() as nursery:
                     for node in nodes.values():
-                        nursery.start_soon(check_node, node.connection_info)
+                        nursery.start_soon(check_node, node.ssl_contact)
 
             return Policy(threshold, ursula_ids)
 
@@ -41,7 +41,7 @@ class Bob:
 
         async def reencrypt(ursula_id):
             result = await learner.knows_nodes([ursula_id])
-            await learner._client.ping(result[ursula_id].connection_info)
+            await learner._client.ping(result[ursula_id].ssl_contact)
             responses.add(ursula_id)
             if len(responses) == policy.threshold:
                 finished.set()
@@ -54,6 +54,6 @@ class Bob:
                     await finished.wait()
 
         except trio.TooSlowError:
-            raise RuntimeError("Granting timed out")
+            raise RuntimeError("Retrieval timed out")
 
         return responses

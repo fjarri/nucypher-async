@@ -2,6 +2,7 @@ import trio
 
 from nucypher_async.ursula import Ursula, UrsulaServer
 from nucypher_async.server import start_in_nursery
+from nucypher_async.utils import Contact
 
 
 async def serve_ursulas(servers):
@@ -22,11 +23,11 @@ if __name__ == '__main__':
         ursula = Ursula()
 
         if i > 0:
-            seed_addresses = [f'localhost:{9150+i-1}']
+            seed_contacts = [Contact('127.0.0.1', 9150+i-1)]
         else:
-            seed_addresses = []
+            seed_contacts = []
 
-        server = UrsulaServer(ursula, port=9150 + i, seed_addresses=seed_addresses)
+        server = UrsulaServer(ursula, port=9150 + i, seed_contacts=seed_contacts)
 
         servers.append(server)
 

@@ -6,6 +6,7 @@ from nucypher_async.ursula import Ursula, UrsulaServer
 from nucypher_async.app import make_app
 from nucypher_async.middleware import MockMiddleware
 from nucypher_async.learner import Learner
+from nucypher_async.utils import Contact
 
 
 async def test_client_with_background_tasks():
@@ -54,11 +55,11 @@ def ursula_servers(mock_middleware, ursulas):
         # Each Ursula knows only about one other Ursula,
         # but the graph is fully connected.
         if i > 0:
-            seed_addresses = [('127.0.0.1', 9150+i-1)]
+            seed_contacts = [Contact('127.0.0.1', 9150+i-1)]
         else:
-            seed_addresses = []
+            seed_contacts = []
 
-        server = UrsulaServer(ursulas[i], port=9150 + i, seed_addresses=seed_addresses, middleware=mock_middleware)
+        server = UrsulaServer(ursulas[i], port=9150 + i, seed_contacts=seed_contacts, middleware=mock_middleware)
 
         servers.append(server)
         mock_middleware.add_server(server)
@@ -76,7 +77,7 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         await trio.sleep(100)
 
         known_nodes = {
-            handle.ursula_server.ursula.id: set(handle.ursula_server.learner._nodes)
+            handle.ursula_server.ursula.id: set(handle.ursula_server.learner._verified_nodes)
             for handle in handles}
 
         # Each Ursula should know about every other Ursula by now.

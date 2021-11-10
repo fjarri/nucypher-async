@@ -56,10 +56,10 @@ class InMemoryCertificateConfig(Config):
 def make_config(ursula_server):
 
     config = InMemoryCertificateConfig(
-        ssl_certificate=ursula_server.ssl_certificate,
-        ssl_private_key=ursula_server.ssl_private_key)
+        ssl_certificate=ursula_server._ssl_certificate,
+        ssl_private_key=ursula_server._ssl_private_key)
 
-    config.bind = [f"{ursula_server.host}:{ursula_server.port}"]
+    config.bind = [f"{ursula_server.ssl_contact.contact.host}:{ursula_server.ssl_contact.contact.port}"]
     config.worker_class = "trio"
 
     return config
