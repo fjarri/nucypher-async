@@ -77,9 +77,3 @@ class UrsulaServer:
         if contact_request.signed_contact:
             await self.learner.add_contact(contact_request.signed_contact)
         return self.learner.verified_contact_package().to_json()
-
-    async def endpoint_reencrypt_dkg(self, capsule, key_bits):
-        from .mock_nube.nube import KeyFrag, reencrypt
-        kfrag = KeyFrag.from_bits(key_bits)
-        cfrag = reencrypt(capsule, kfrag)
-        return cfrag
