@@ -7,9 +7,9 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from .app import make_app
-from .certificate import SSLCertificate, SSLPrivateKey
-from .utils import temp_file
+from .rest_app import make_app
+from .ssl import SSLCertificate, SSLPrivateKey
+from ..utils import temp_file
 
 
 class InMemoryCertificateConfig(Config):
@@ -86,18 +86,6 @@ class ServerHandle:
 
     def shutdown(self):
         self._shutdown_event.set()
-
-
-async def mock_serve_async(nursery, ursula_server, shutdown_trigger):
-    ursula_server.start(nursery)
-    await shutdown_trigger()
-    ursula_server.stop()
-
-
-def mock_start_in_nursery(nursery, ursula_server):
-    handle = ServerHandle(ursula_server)
-    nursery.start_soon(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle.shutdown_trigger()))
-    return handle
 
 
 def start_in_nursery(nursery, ursula_server):

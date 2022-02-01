@@ -4,9 +4,10 @@ from typing import Optional
 
 import trio
 
+from .drivers.rest_client import Contact
 from .protocol import ContactPackage, Metadata, NodeID, SignedContact, ContactRequest
-from .middleware import NetworkClient
-from .utils import BackgroundTask, Contact
+from .client import NetworkClient
+from .utils import BackgroundTask
 
 
 class Learner:
@@ -15,8 +16,8 @@ class Learner:
     and running the background learning task.
     """
 
-    def __init__(self, middleware, my_metadata=None, seed_contacts=None):
-        self._client = NetworkClient(middleware)
+    def __init__(self, rest_client, my_metadata=None, seed_contacts=None):
+        self._client = NetworkClient(rest_client)
 
         self._my_metadata = my_metadata
 

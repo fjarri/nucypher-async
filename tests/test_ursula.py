@@ -1,12 +1,13 @@
 import pytest
 import trio
 
-from nucypher_async.server import start_in_nursery, mock_start_in_nursery
+from nucypher_async.drivers.rest_server import start_in_nursery
+from nucypher_async.drivers.rest_app import make_app
+from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula, UrsulaServer
-from nucypher_async.app import make_app
-from nucypher_async.middleware import MockMiddleware
 from nucypher_async.learner import Learner
-from nucypher_async.utils import Contact
+
+from .mocks import MockRESTClient, mock_start_in_nursery
 
 
 async def test_client_with_background_tasks():
@@ -43,12 +44,12 @@ def ursulas():
 
 
 @pytest.fixture
-def mock_middleware():
-    yield MockMiddleware()
+def mock_rest_client():
+    yield MockRESTClient()
 
 
 @pytest.fixture
-def ursula_servers(mock_middleware, ursulas):
+def ursula_servers(mock_rest_client, ursulas):
     servers = []
     for i in range(10):
 
@@ -59,10 +60,10 @@ def ursula_servers(mock_middleware, ursulas):
         else:
             seed_contacts = []
 
-        server = UrsulaServer(ursulas[i], port=9150 + i, seed_contacts=seed_contacts, middleware=mock_middleware)
+        server = UrsulaServer(ursulas[i], port=9150 + i, seed_contacts=seed_contacts, _rest_client=mock_rest_client)
 
         servers.append(server)
-        mock_middleware.add_server(server)
+        mock_rest_client.add_server(server)
 
     yield servers
 

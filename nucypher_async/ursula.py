@@ -1,11 +1,11 @@
 import trio
 
-from .certificate import SSLPrivateKey, SSLCertificate
-from .middleware import NetworkMiddleware, HttpError
+from .drivers.ssl import SSLPrivateKey, SSLCertificate
+from .drivers.rest_client import RESTClient, Contact, SSLContact
+from .drivers.errors import HTTPError
 from .protocol import NodeID, Metadata, ContactRequest
 from .learner import Learner
-from .utils import BackgroundTask, Contact, SSLContact
-
+from .utils import BackgroundTask
 
 class Ursula:
 
@@ -15,7 +15,7 @@ class Ursula:
 
 class UrsulaServer:
 
-    def __init__(self, ursula, middleware=None, port=9151, host='127.0.0.1', seed_contacts=[]):
+    def __init__(self, ursula, _rest_client=None, port=9151, host='127.0.0.1', seed_contacts=[]):
 
         # TODO: generate the seed from some root secret material.
         self._ssl_private_key = SSLPrivateKey.from_seed(b'asdasdasd')
@@ -24,15 +24,15 @@ class UrsulaServer:
         contact = Contact(host=host, port=port)
         self.ssl_contact = SSLContact(contact, self._ssl_certificate)
 
-        if middleware is None:
-            middleware = NetworkMiddleware()
+        if _rest_client is None:
+            _rest_client = RESTClient()
 
         self.ursula = ursula
         self._metadata = Metadata(
             node_id=self.ursula.id,
             ssl_contact=self.ssl_contact)
 
-        self.learner = Learner(middleware, my_metadata=self._metadata, seed_contacts=seed_contacts)
+        self.learner = Learner(_rest_client, my_metadata=self._metadata, seed_contacts=seed_contacts)
 
         self.started = False
 

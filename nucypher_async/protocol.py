@@ -2,7 +2,7 @@ import os
 from typing import Dict, Set
 import pickle
 
-from .utils import Contact, SSLContact
+from .drivers.rest_client import Contact, SSLContact
 
 
 # A temporary mixin to avoid writing down all the JSON serialization
