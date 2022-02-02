@@ -1,3 +1,9 @@
+"""
+The job of the REST dirver is to encapsulate dealing with the specific request library
+(currently ``httpx``), extract request data and convert status codes to exceptions.
+It is the "client" countrerpart of ``rest_app``.
+"""
+
 from contextlib import asynccontextmanager
 import http
 import httpx
@@ -55,13 +61,8 @@ def unwrap_json(response):
 
 
 class RESTClient:
-    """
-    The job of a REST dirver is to encapsulate dealing with the specific request library
-    (currently ``httpx``), extract request data and convert status codes to exceptions.
-    It is the countrerpart of the REST app.
-    """
 
-    async def fetch_certificate(self, contact):
+    async def fetch_certificate(self, contact: Contact):
         return await fetch_certificate(contact.host, contact.port)
 
     async def ping(self, ssl_contact: SSLContact):

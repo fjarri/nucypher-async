@@ -1,3 +1,7 @@
+"""
+This module encapsulates a specific server running our ASGI app (currently ``hypercorn``).
+"""
+
 from functools import partial
 import os
 from ssl import SSLContext
@@ -55,6 +59,7 @@ class InMemoryCertificateConfig(Config):
 
 def make_config(ursula_server):
 
+    # TODO: expose the certificate/pkey properly, via a method
     config = InMemoryCertificateConfig(
         ssl_certificate=ursula_server._ssl_certificate,
         ssl_private_key=ursula_server._ssl_private_key)
@@ -72,16 +77,23 @@ async def serve_async(ursula_server, shutdown_trigger=None):
 
 
 def serve_forever(ursula_server):
+    """
+    Runs the Ursula web server and blocks.
+    """
     trio.run(serve_async, ursula_server)
 
 
 class ServerHandle:
+    """
+    A handle for a running web server.
+    Can be used to shut it down.
+    """
 
     def __init__(self, ursula_server):
         self.ursula_server = ursula_server
         self._shutdown_event = trio.Event()
 
-    def shutdown_trigger(self):
+    def _shutdown_trigger(self):
         return self._shutdown_event.wait
 
     def shutdown(self):
@@ -89,6 +101,10 @@ class ServerHandle:
 
 
 def start_in_nursery(nursery, ursula_server):
+    """
+    Starts an Ursula web server in an external event loop.
+    Useful for the cases when it needs to run in parallel with other servers or clients.
+    """
     handle = ServerHandle(ursula_server)
-    nursery.start_soon(partial(serve_async, ursula_server, shutdown_trigger=handle.shutdown_trigger()))
+    nursery.start_soon(partial(serve_async, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
     return handle
