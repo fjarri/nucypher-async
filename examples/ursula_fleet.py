@@ -1,8 +1,9 @@
 import trio
 
-from nucypher_async.ursula import Ursula, UrsulaServer
-from nucypher_async.server import start_in_nursery
-from nucypher_async.utils import Contact
+from nucypher_async.ursula import Ursula
+from nucypher_async.ursula_server import UrsulaServer
+from nucypher_async.drivers.rest_server import start_in_nursery
+from nucypher_async.drivers.rest_client import Contact
 
 
 async def serve_ursulas(servers):
@@ -19,7 +20,7 @@ async def serve_ursulas(servers):
 if __name__ == '__main__':
 
     servers = []
-    for i in range(10):
+    for i in range(1):
         ursula = Ursula()
 
         if i > 0:

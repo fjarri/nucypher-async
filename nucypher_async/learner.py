@@ -3,11 +3,24 @@ import random
 from typing import Optional
 
 import trio
+import maya
 
-from .drivers.rest_client import Contact
-from .protocol import ContactPackage, Metadata, NodeID, SignedContact, ContactRequest
+from nucypher_core import FleetStateChecksum
+
+from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
 from .utils import BackgroundTask
+from .ursula import RemoteUrsula
+
+
+def metadata_is_consistent(metadata1, metadata2):
+    """
+    Checks if two metadata objects could be produced by the same law-abiding node.
+    Some elements of the metadata can change over time, e.g. the host/port,
+    or the certificate.
+    """
+    fields = ['staker_address', 'domain', 'verifying_key', 'encrypting_key']
+    return all(getattr(metadata1.payload, field) == getattr(metadata2.payload, field) for field in fields)
 
 
 class Learner:
@@ -23,95 +36,129 @@ class Learner:
 
         self._seed_contacts = seed_contacts
 
-        # unverified contacts
-        self._contacts = {} # node id -> signed contact
+        # unverified contacts: node adrress -> NodeMetadata
+        self._unverified_nodes = {}
 
-        # verified contacts: node id -> node metadata
+        # verified contacts: node adrress -> RemoteUrsula
         self._verified_nodes = {}
 
-        self._nodes_updated = trio.Event()
+        self._verified_nodes_updated = trio.Event()
 
-    async def add_contact(self, signed_contact: SignedContact):
-        # Assuming here that the signature is verified on deserialization
-        # TODO: check the timestamp here, and only update if the timestamp is newer
-        if self._my_metadata and signed_contact.node_id == self._my_metadata.node_id:
+        self.fleet_state_checksum = FleetStateChecksum(this_node=self._my_metadata, other_nodes=[]) # TODO
+        self.fleet_state_timestamp = maya.now()
+
+    def add_metadata(self, metadata_list):
+        """
+        TODO:
+        - handle the cases of same host/port, but otherwise different metadata coming from differnt nodes
+        - maybe should also record where we got the info from, so we could flag the node for lying to us
+        - should we keep the whole metadata at all if we'll request it again as a part of verification?
+        """
+        for metadata in metadata_list:
+            if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
+                self._unverified_nodes[metadata.payload.staker_address] = metadata
+
+    def verified_nodes(self):
+        return self._verified_nodes
+
+    async def verified_nodes_iter(self, addresses):
+        """
+        TODO: This is a pretty simple algorithm which will fail sometimes
+        when it could have succeeded, and sometimes do more work than needed.
+        In the future there are the following considerations we want to address:
+        - A given address might be in the process of being verified already,
+          then we don't need to enqueue another verification
+        - We may not have some addresses even in the unverified list;
+          we should have an event for that to have been updated.
+        - Nodes can be de-verified; currently we assume that if node is verified, it stays that way.
+        """
+
+        addresses = set(addresses)
+
+        # Shortcut in case we already have things verified
+        for address in list(addresses):
+            if address in self._verified_nodes:
+                addresses.remove(address)
+                yield self._verified_nodes[address]
+
+        # Check first, maybe we don't need to do the whole concurrency thing
+        if not addresses:
             return
-        if signed_contact.node_id not in self._contacts and signed_contact.node_id not in self._verified_nodes:
-            self._contacts[signed_contact.node_id] = signed_contact
 
-    def verified_contact_package(self) -> ContactPackage:
-        contacts = [metadata.signed_contact for metadata in self._verified_nodes.values()]
-        assert self._my_metadata # only Ursulas are supposed to send their contacts
-        return ContactPackage(self._my_metadata, contacts)
+        async with trio.open_nursery() as nursery:
+            for address in addresses:
+                if address in self._unverified_nodes:
+                    nursery.start_soon(self._verify_metadata, self._unverified_nodes[address])
 
-    async def knows_nodes(self, ursula_ids):
-        ids_set = set(ursula_ids)
-        while True:
-            if ids_set.issubset(self._verified_nodes):
-                return {id: self._verified_nodes[id] for id in ids_set}
-            await self._nodes_updated.wait()
+            while addresses:
+                await self._verified_nodes_updated.wait()
+                for address in list(addresses):
+                    if address in self._verified_nodes:
+                        addresses.remove(address)
+                        yield self._verified_nodes[address]
 
-    def _verify_node(self, ssl_contact, metadata, expected_node_id=None):
+    async def _verify_metadata(self, metadata):
+        # NOTE: assuming this metadata is freshly obtained from the node itself
 
-        # TODO: test that metadata is signed with node id
+        # TODO: check that the address in the metadata and in the certificate matches
+        # the address we got the metadata from.
 
-        assert metadata.ssl_contact == ssl_contact
-        if expected_node_id:
-            assert metadata.node_id == expected_node_id
+        # Internal self-verification
+        assert metadata.verify()
 
-        # TODO: test that the node id is a staker etc
+        worker_address = metadata.payload.derive_worker_address()
 
-    async def _learn_from_unverified_node(self, contact: Contact, node_id=None):
-        # TODO: what if there's someone else at that address? Process certificate failure.
-        # What if someone got the SSL private key, but not the other stuff? Should we re-verify metadata?
-        ssl_contact = await self._client.fetch_certificate(contact)
-        contact_request = ContactRequest(self._my_metadata.signed_contact if self._my_metadata else None)
-        contact_package = await self._client.get_contacts(ssl_contact, contact_request)
+        # TODO: blockchain checks
+        # assert blockchain_client.worker_from_staker(metadata.payload.staker_address) == worker_address
+        # assert blockchain_client.staker_is_really_staking(metadata.payload.staker_address)
 
-        try:
-            self._verify_node(ssl_contact, contact_package.metadata, expected_node_id=node_id)
-        except Exception as e:
-            # TODO: remove from contacts?
-            raise Exception("Verification error") from e
+        node = RemoteUrsula(metadata, worker_address)
 
-        if node_id:
-            del self._contacts[node_id]
-        else:
-            node_id = contact_package.metadata.node_id
+        self._verified_nodes[node.metadata.payload.staker_address] = node
 
-        self._verified_nodes[node_id] = contact_package.metadata
+        self.fleet_state_timestamp = maya.now()
 
         # Release whoever was waiting for the state to be updated
         # TODO: only do so if there was a change in the state.
-        self._nodes_updated.set()
+        self._verified_nodes_updated.set()
         await trio.sleep(0) # TODO: is it necessary?
-        self._nodes_updated = trio.Event()
+        self._verified_nodes_updated = trio.Event()
 
-        for contact in contact_package.contacts:
-            await self.add_contact(contact)
+        return node
 
-    async def _learn_from_verified_node(self, metadata: Metadata):
-        contact_request = ContactRequest(self._my_metadata.signed_contact if self._my_metadata else None)
-        contact_package = await self._client.get_contacts(metadata.ssl_contact, contact_request)
-        # TODO: if fails, unverify the node
+    def metadata_to_announce(self):
+        my_metadata = [self._my_metadata] if self._my_metadata else []
+        return my_metadata + [node.metadata for node in self._verified_nodes.values()]
 
-        if metadata != contact_package.metadata:
-            # TODO: unverify the node or update the metadata
-            return
+    async def _learn_from_contact(self, contact: Contact):
+        ssl_contact = await self._client.fetch_certificate(contact)
+        metadata = await self._client.public_information(ssl_contact)
+        assert metadata.payload.host == ssl_contact.contact.host
+        assert metadata.payload.port == ssl_contact.contact.port
+        node = await self._verify_metadata(metadata)
+        return await self._learn_from_node(node)
 
-        for contact in contact_package.contacts:
-            await self.add_contact(contact)
+    async def _learn_from_node(self, node: RemoteUrsula):
+        ssl_contact = node.ssl_contact
+        metadata_response = await self._client.node_metadata_post(
+            ssl_contact, self.fleet_state_checksum, self.metadata_to_announce())
+
+        payload = metadata_response.verify(node.metadata.payload.verifying_key)
+
+        # TODO: make use of the returned timestamp
+
+        self.add_metadata(payload.announce_nodes)
 
     async def learning_round(self):
 
         if self._seed_contacts:
             teacher_contact = random.choice(self._seed_contacts)
-            await self._learn_from_unverified_node(teacher_contact)
+            await self._learn_from_contact(teacher_contact)
             self._seed_contacts = None
             return
 
         # Choose whether we get a verified or an unverified node to learn from
-        unverified_num = len(self._contacts)
+        unverified_num = len(self._unverified_nodes)
         verified_num = len(self._verified_nodes)
 
         if unverified_num + verified_num == 0:
@@ -122,13 +169,20 @@ class Learner:
         learn_from_verified = idx < verified_num
 
         if learn_from_verified:
-            node_ids = list(self._verified_nodes)
-            teacher_id = random.choice(node_ids)
-            teacher_metadata = self._verified_nodes[teacher_id]
-            await self._learn_from_verified_node(teacher_metadata)
+            addresses = list(self._verified_nodes)
+            teacher_address = random.choice(addresses)
+            teacher_node = self._verified_nodes[teacher_address]
+            await self._learn_from_node(teacher_node)
 
         else:
-            node_ids = list(self._contacts)
-            teacher_id = random.choice(node_ids)
-            teacher_signed_contact = self._contacts[teacher_id]
-            await self._learn_from_unverified_node(teacher_signed_contact.contact, node_id=teacher_id)
+            addresses = list(self._unverified_nodes)
+            teacher_address = random.choice(addresses)
+            teacher_metadata = self._unverified_nodes[teacher_address]
+
+            ssl_contact = SSLContact.from_metadata(teacher_metadata)
+
+            remote_metadata = await self._client.public_information(ssl_contact)
+            assert metadata_is_consistent(teacher_metadata, remote_metadata)
+            # Note that we are using the metadata we got from the node itself
+            teacher_node = await self._verify_metadata(remote_metadata)
+            await self._learn_from_node(teacher_node)

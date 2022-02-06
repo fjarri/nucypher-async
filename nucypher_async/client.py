@@ -1,9 +1,9 @@
-from contextlib import asynccontextmanager
-import http
 import httpx
 
+from nucypher_core import NodeMetadata, MetadataResponse, MetadataRequest
+
+from .drivers.errors import HTTPError
 from .drivers.rest_client import Contact, SSLContact
-from .protocol import Metadata, ContactPackage, SignedContact, ContactRequest
 
 
 class NetworkClient:
@@ -21,18 +21,31 @@ class NetworkClient:
         certificate = await self._rest_client.fetch_certificate(contact)
         return SSLContact(contact, certificate)
 
-    async def ping(self, ssl_contact: SSLContact) -> Metadata:
+    async def ping(self, ssl_contact: SSLContact):
         try:
-            metadata_json = await self._rest_client.ping(ssl_contact)
+            remote_host = await self._rest_client.ping(ssl_contact)
         except HTTPError as e:
             # TODO: diversify the errors?
             raise RuntimeError(e) from e
-        return Metadata.from_json(metadata_json)
+        return remote_host
 
-    async def get_contacts(self, ssl_contact: SSLContact, contact_request: ContactRequest) -> ContactPackage:
+    async def node_metadata_post(self, ssl_contact: SSLContact, fleet_state_checksum, announce_nodes):
+        request = MetadataRequest(fleet_state_checksum=fleet_state_checksum,
+                                  announce_nodes=announce_nodes)
+
         try:
-            contact_package_json = await self._rest_client.get_contacts(ssl_contact, contact_request.to_json())
+            response_bytes = await self._rest_client.node_metadata_post(ssl_contact, bytes(request))
         except HTTPError as e:
             # TODO: diversify the errors?
             raise RuntimeError(e) from e
-        return ContactPackage.from_json(contact_package_json)
+
+        return MetadataResponse.from_bytes(response_bytes)
+
+    async def public_information(self, ssl_contact: SSLContact):
+        try:
+            response_bytes = await self._rest_client.public_information(ssl_contact)
+        except HTTPError as e:
+            # TODO: diversify the errors?
+            raise RuntimeError(e) from e
+
+        return NodeMetadata.from_bytes(response_bytes)

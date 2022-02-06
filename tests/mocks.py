@@ -22,12 +22,17 @@ class MockRESTClient:
     async def ping(self, ssl_contact: SSLContact):
         server = self._known_servers[ssl_contact.contact]
         assert ssl_contact.certificate == server.ssl_contact.certificate
-        return await server.endpoint_ping()
+        return await server.endpoint_ping(ssl_contact.host)
 
-    async def get_contacts(self, ssl_contact: SSLContact, contact_request_json):
+    async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request_bytes):
         server = self._known_servers[ssl_contact.contact]
         assert ssl_contact.certificate == server.ssl_contact.certificate
-        return await server.endpoint_get_contacts(contact_request_json)
+        return await server.endpoint_node_metadata_post(metadata_request_bytes)
+
+    async def public_information(self, ssl_contact: SSLContact):
+        server = self._known_servers[ssl_contact.contact]
+        assert ssl_contact.certificate == server.ssl_contact.certificate
+        return await server.endpoint_public_information()
 
 
 async def mock_serve_async(nursery, ursula_server, shutdown_trigger):
@@ -38,5 +43,5 @@ async def mock_serve_async(nursery, ursula_server, shutdown_trigger):
 
 def mock_start_in_nursery(nursery, ursula_server):
     handle = ServerHandle(ursula_server)
-    nursery.start_soon(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle.shutdown_trigger()))
+    nursery.start_soon(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
     return handle

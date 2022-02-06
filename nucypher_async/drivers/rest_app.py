@@ -20,12 +20,12 @@ from .errors import HTTPError
 
 async def wrap_in_response(callable, *args, **kwds):
     try:
-        result_json = await callable(*args, **kwds)
+        result_bytes = await callable(*args, **kwds)
     # TODO: we can have a small subset of errors here that are a part of the protocol,
     # and correspond to HTTP status codes
     except HTTPError as e:
         return await make_response((str(e), e.status_code))
-    return await make_response(result_json)
+    return await make_response(result_bytes)
 
 
 def make_app(ursula_server):
@@ -48,11 +48,19 @@ def make_app(ursula_server):
 
     @app.route("/ping")
     async def ping():
-        return await wrap_in_response(ursula_server.endpoint_ping)
+        return await wrap_in_response(ursula_server.endpoint_ping, request.remote_addr)
 
-    @app.route("/get_contacts", methods=['POST'])
-    async def get_contacts():
-        signed_contact_json = await request.json
-        return await wrap_in_response(ursula_server.endpoint_get_contacts)
+    @app.route("/node_metadata")
+    async def node_metadata_get():
+        return await wrap_in_response(ursula_server.endpoint_node_metadata_get)
+
+    @app.route("/node_metadata", methods=['POST'])
+    async def node_metadata_post():
+        metadata_request_bytes = await request.data
+        return await wrap_in_response(ursula_server.endpoint_node_metadata_post, metadata_request_bytes)
+
+    @app.route("/public_information")
+    async def public_information():
+        return await wrap_in_response(ursula_server.endpoint_public_information)
 
     return app

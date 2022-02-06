@@ -13,6 +13,8 @@ setup(
         'quart-trio',
         'httpx',
         'cryptography',
+        'nucypher-core',
+        'maya',
         ],
     extras_requires={
         'dev': [
