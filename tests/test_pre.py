@@ -3,7 +3,8 @@ import trio
 
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_app import make_app
-from nucypher_async.ursula import Ursula, UrsulaServer
+from nucypher_async.ursula import Ursula
+from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob
 from nucypher_async.learner import Learner
 
@@ -30,9 +31,8 @@ def ursula_servers(mock_rest_client, ursulas):
 
     # pre-learn about other Ursulas
     for i in range(10):
-        # TODO: error-prone, make a Learner method
         metadatas = [server.metadata() for server in servers]
-        servers[i].learner._verified_nodes = {metadata.node_id: metadata for metadata in metadatas}
+        servers[i].learner._add_verified_nodes(metadatas)
 
     yield servers
 
@@ -45,14 +45,21 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_rest_clien
     bob = Bob()
 
     alice_learner = Learner(mock_rest_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
-    for _ in range(50):
-        await alice_learner.learning_round()
 
-    policy = await alice.grant(alice_learner, [server.metadata().node_id for server in ursula_servers[:3]],  2, 3)
+    policy = await alice.grant(
+        learner=alice_learner,
+        bob=bob,
+        label=b'some label',
+        threshold=2,
+        shares=3,
+        # Use preselected Ursulas since blockchain is not implemeneted yet
+        handpicked_addresses=[server.ursula.staker_address for server in ursula_servers[:3]])
+
+    """
+    message = b'a secret message'
+    message_kit = encrypt(policy.encrypting_key, message)
 
     bob_learner = Learner(mock_rest_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
-    for _ in range(50):
-        await bob_learner.learning_round()
-
-    responses = await bob.retrieve(bob_learner, policy)
-    assert len(responses) >= policy.threshold
+    message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map)
+    assert message_back == message
+    """

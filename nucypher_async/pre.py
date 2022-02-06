@@ -1,36 +1,69 @@
 import trio
 
+from nucypher_core import TreasureMap, MessageKit, HRAC
+from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags
 
 class Policy:
 
-    def __init__(self, threshold, ursula_ids):
-        self.threshold = threshold
-        self.ursula_ids = ursula_ids
+    def __init__(self, encrypted_treasure_map, encrypting_key):
+        self.encrypted_treasure_map = encrypted_treasure_map
+        self.encrypting_key = encrypting_key
 
 
 class Alice:
 
-    async def grant(self, learner, ursula_ids, threshold, shares):
+    def __init__(self):
+        self._skf = SecretKeyFactory.random()
+        self._signer = Signer(SecretKey.random())
+        self.verifying_key = self._signer.verifying_key()
 
-        timeout = 10
+    async def grant(self, learner, bob, label, threshold, shares, handpicked_addresses=None):
 
-        async def check_node(ssl_contact):
-            await learner._client.ping(ssl_contact)
+        # TODO: sample Ursulas from the blockchain here
 
-        try:
-            with trio.fail_after(timeout):
-                nodes = await learner.knows_nodes(ursula_ids)
-                async with trio.open_nursery() as nursery:
-                    for node in nodes.values():
-                        nursery.start_soon(check_node, node.ssl_contact)
+        policy_sk = self._skf.make_key(label)
 
-            return Policy(threshold, ursula_ids)
+        kfrags = generate_kfrags(
+            delegating_sk=policy_sk,
+            receiving_pk=bob.public_key,
+            signer=self._signer,
+            threshold=threshold,
+            shares=shares,
+            sign_delegating_key=True,
+            sign_receiving_key=True)
 
-        except trio.TooSlowError:
-            raise RuntimeError("Granting timed out")
+        assigned_kfrags = {}
+        async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
+            async for node in aiter:
+                assigned_kfrags[node.metadata.payload.staker_address] = (node.metadata.payload.encrypting_key, kfrags.pop())
+                if len(assigned_kfrags) == shares:
+                    break
+
+        hrac = HRAC(
+            publisher_verifying_key=self.verifying_key,
+            bob_verifying_key=bob.verifying_key,
+            label=label)
+        treasure_map = TreasureMap(
+            signer=self._signer,
+            hrac=hrac,
+            policy_encrypting_key=policy_sk.public_key(),
+            assigned_kfrags=assigned_kfrags,
+            threshold=threshold)
+        encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.public_key)
+
+        return Policy(
+            encrypted_treasure_map=encrypted_treasure_map,
+            encrypting_key=policy_sk.public_key())
 
 
 class Bob:
+
+    def __init__(self):
+        self._decrypting_key = SecretKey.random()
+        self._signer = Signer(SecretKey.random())
+
+        self.public_key = self._decrypting_key.public_key()
+        self.verifying_key = self._signer.verifying_key()
 
     async def retrieve(self, learner, policy):
 

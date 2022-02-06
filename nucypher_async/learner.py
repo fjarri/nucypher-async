@@ -1,3 +1,5 @@
+from functools import wraps, partial
+from contextlib import asynccontextmanager
 from collections import defaultdict
 import random
 from typing import Optional
@@ -11,6 +13,30 @@ from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
 from .utils import BackgroundTask
 from .ursula import RemoteUrsula
+
+
+def producer(wrapped):
+
+    @asynccontextmanager
+    @wraps(wrapped)
+    async def wrapper(*args, **kwargs):
+        if "send_channel" in kwargs:
+            raise TypeError
+
+        send_channel, receive_channel = trio.open_memory_channel(0)
+
+        async def target():
+            async with send_channel:
+                await wrapped(*args, **kwargs, send_channel=send_channel)
+
+        async with trio.open_nursery() as nursery:
+            async with receive_channel:
+                nursery.start_soon(target)
+                yield receive_channel
+                nursery.cancel_scope.cancel()
+
+    wrapper.raw = wrapped
+    return wrapper
 
 
 def metadata_is_consistent(metadata1, metadata2):
@@ -58,10 +84,19 @@ class Learner:
             if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
                 self._unverified_nodes[metadata.payload.staker_address] = metadata
 
+    def _add_verified_nodes(self, metadata_list):
+        for metadata in metadata_list:
+            worker_address = metadata.payload.derive_worker_address()
+            node = RemoteUrsula(metadata, worker_address)
+            self._verified_nodes[node.metadata.payload.staker_address] = node
+
+        # TODO: should it set off the event too? And update the fleet state?
+
     def verified_nodes(self):
         return self._verified_nodes
 
-    async def verified_nodes_iter(self, addresses):
+    @producer
+    async def verified_nodes_iter(self, addresses, send_channel):
         """
         TODO: This is a pretty simple algorithm which will fail sometimes
         when it could have succeeded, and sometimes do more work than needed.
@@ -79,23 +114,27 @@ class Learner:
         for address in list(addresses):
             if address in self._verified_nodes:
                 addresses.remove(address)
-                yield self._verified_nodes[address]
+                await send_channel.send(self._verified_nodes[address])
 
         # Check first, maybe we don't need to do the whole concurrency thing
         if not addresses:
             return
 
         async with trio.open_nursery() as nursery:
+
+            while addresses - self._unverified_nodes.keys() - self._verified_nodes.keys():
+                await self.learning_round()
+
             for address in addresses:
                 if address in self._unverified_nodes:
                     nursery.start_soon(self._verify_metadata, self._unverified_nodes[address])
 
             while addresses:
-                await self._verified_nodes_updated.wait()
                 for address in list(addresses):
                     if address in self._verified_nodes:
                         addresses.remove(address)
-                        yield self._verified_nodes[address]
+                        await send_channel.send(self._verified_nodes[address])
+                await self._verified_nodes_updated.wait()
 
     async def _verify_metadata(self, metadata):
         # NOTE: assuming this metadata is freshly obtained from the node itself
