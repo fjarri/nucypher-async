@@ -1,6 +1,6 @@
 import trio
 
-from nucypher_core import TreasureMap, MessageKit, HRAC
+from nucypher_core import TreasureMap, MessageKit, HRAC, ReencryptionRequest, ReencryptionResponse
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags
 
 class Policy:
@@ -56,6 +56,10 @@ class Alice:
             encrypting_key=policy_sk.public_key())
 
 
+def encrypt(encrypting_key, message):
+    return MessageKit(policy_encrypting_key=encrypting_key, plaintext=message)
+
+
 class Bob:
 
     def __init__(self):
@@ -65,28 +69,44 @@ class Bob:
         self.public_key = self._decrypting_key.public_key()
         self.verifying_key = self._signer.verifying_key()
 
-    async def retrieve(self, learner, policy):
+    async def retrieve(self, learner, capsule, encrypted_treasure_map, alice_verifying_key):
 
-        timeout = 10
+        publisher_verifying_key = alice_verifying_key
+        treasure_map = encrypted_treasure_map.decrypt(self._decrypting_key, publisher_verifying_key)
 
         responses = set()
-        finished = trio.Event()
 
-        async def reencrypt(ursula_id):
-            result = await learner.knows_nodes([ursula_id])
-            await learner._client.ping(result[ursula_id].ssl_contact)
-            responses.add(ursula_id)
-            if len(responses) == policy.threshold:
-                finished.set()
+        async def reencrypt(nursery, node, ekfrag):
+            request = ReencryptionRequest(
+                capsules=[capsule],
+                hrac=treasure_map.hrac,
+                encrypted_kfrag=ekfrag,
+                publisher_verifying_key=treasure_map.publisher_verifying_key,
+                bob_verifying_key=self.verifying_key)
+            response = await learner._client.reencrypt(node.ssl_contact, request)
+            verified_cfrags = response.verify(capsules=request.capsules,
+                                              alice_verifying_key=alice_verifying_key,
+                                              ursula_verifying_key=node.metadata.payload.verifying_key,
+                                              policy_encrypting_key=treasure_map.policy_encrypting_key,
+                                              bob_encrypting_key=self.public_key,
+                                              )
+            responses.add(verified_cfrags[0])
+            if len(responses) == treasure_map.threshold:
+                nursery.cancel_scope.cancel()
 
-        try:
-            with trio.fail_after(timeout):
-                async with trio.open_nursery() as nursery:
-                    for ursula_id in policy.ursula_ids:
-                        nursery.start_soon(reencrypt, ursula_id)
-                    await finished.wait()
-
-        except trio.TooSlowError:
-            raise RuntimeError("Retrieval timed out")
-
+        destinations = treasure_map.destinations
+        async with trio.open_nursery() as nursery:
+            async with learner.verified_nodes_iter(destinations) as aiter:
+                async for node in aiter:
+                    nursery.start_soon(reencrypt, nursery, node, destinations[node.metadata.payload.staker_address])
         return responses
+
+    async def retrieve_and_decrypt(self, learner, message_kit, encrypted_treasure_map, alice_verifying_key):
+        vcfrags = await self.retrieve(learner, message_kit.capsule, encrypted_treasure_map, alice_verifying_key)
+
+        publisher_verifying_key = alice_verifying_key
+        treasure_map = encrypted_treasure_map.decrypt(self._decrypting_key, publisher_verifying_key)
+
+        return message_kit.decrypt_reencrypted(self._decrypting_key,
+            treasure_map.policy_encrypting_key,
+            list(vcfrags))

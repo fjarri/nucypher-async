@@ -1,6 +1,6 @@
 import httpx
 
-from nucypher_core import NodeMetadata, MetadataResponse, MetadataRequest
+from nucypher_core import NodeMetadata, MetadataResponse, MetadataRequest, ReencryptionResponse
 
 from .drivers.errors import HTTPError
 from .drivers.rest_client import Contact, SSLContact
@@ -30,6 +30,7 @@ class NetworkClient:
         return remote_host
 
     async def node_metadata_post(self, ssl_contact: SSLContact, fleet_state_checksum, announce_nodes):
+        # TODO: move outside of this method, this is not the place to create it
         request = MetadataRequest(fleet_state_checksum=fleet_state_checksum,
                                   announce_nodes=announce_nodes)
 
@@ -49,3 +50,12 @@ class NetworkClient:
             raise RuntimeError(e) from e
 
         return NodeMetadata.from_bytes(response_bytes)
+
+    async def reencrypt(self, ssl_contact: SSLContact, reencryption_request):
+        try:
+            response_bytes = await self._rest_client.reencrypt(ssl_contact, bytes(reencryption_request))
+        except HTTPError as e:
+            # TODO: diversify the errors?
+            raise RuntimeError(e) from e
+
+        return ReencryptionResponse.from_bytes(response_bytes)

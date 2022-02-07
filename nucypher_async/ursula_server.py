@@ -2,7 +2,7 @@ import trio
 import maya
 from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
-    MetadataResponse)
+    MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact
@@ -100,3 +100,28 @@ class UrsulaServer:
 
     async def endpoint_public_information(self):
         return bytes(self._metadata)
+
+    async def endpoint_reencrypt(self, reencryption_request_bytes):
+        reencryption_request = ReencryptionRequest.from_bytes(reencryption_request_bytes)
+
+        # TODO: check if the policy is marked as revoked
+
+        verified_kfrag = self.ursula.decrypt_kfrag(
+            encrypted_kfrag=reencryption_request.encrypted_kfrag,
+            hrac=reencryption_request.hrac,
+            publisher_verifying_key=reencryption_request.publisher_verifying_key)
+
+        """
+        TODO: blockchain checks
+        - verify that the policy has been paid for (by HRAC) (`verify_policy_payment`)
+        - verify that the policy is active (`verify_active_policy`)
+        """
+
+        vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=reencryption_request.capsules)
+
+        response = ReencryptionResponse(
+            signer=self.ursula.signer,
+            capsules=reencryption_request.capsules,
+            vcfrags=vcfrags)
+
+        return bytes(response)

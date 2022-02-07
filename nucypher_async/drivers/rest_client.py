@@ -91,3 +91,8 @@ class RESTClient:
         async with async_client_ssl(ssl_contact.certificate) as client:
             response = await client.get(ssl_contact.url + '/public_information')
         return unwrap_bytes(response)
+
+    async def reencrypt(self, ssl_contact: SSLContact, reencryption_request_bytes):
+        async with async_client_ssl(ssl_contact.certificate) as client:
+            response = await client.get(ssl_contact.url + '/reencrypt', data=reencryption_request_bytes)
+        return unwrap_bytes(response)

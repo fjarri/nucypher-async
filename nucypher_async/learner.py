@@ -16,6 +16,11 @@ from .ursula import RemoteUrsula
 
 
 def producer(wrapped):
+    """
+    Trio does not allow yielding from inside open nurseries,
+    so this function is used to emulate the functionality of an async generator
+    by using a channel.
+    """
 
     @asynccontextmanager
     @wraps(wrapped)
@@ -123,6 +128,8 @@ class Learner:
         async with trio.open_nursery() as nursery:
 
             while addresses - self._unverified_nodes.keys() - self._verified_nodes.keys():
+                # TODO: use a special form of learning round here, without sending out known nodes.
+                # This is called on the client side, clients are not supposed to provide that info.
                 await self.learning_round()
 
             for address in addresses:
@@ -130,11 +137,11 @@ class Learner:
                     nursery.start_soon(self._verify_metadata, self._unverified_nodes[address])
 
             while addresses:
+                await self._verified_nodes_updated.wait()
                 for address in list(addresses):
                     if address in self._verified_nodes:
                         addresses.remove(address)
                         await send_channel.send(self._verified_nodes[address])
-                await self._verified_nodes_updated.wait()
 
     async def _verify_metadata(self, metadata):
         # NOTE: assuming this metadata is freshly obtained from the node itself

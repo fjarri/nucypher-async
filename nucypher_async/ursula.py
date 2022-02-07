@@ -1,8 +1,12 @@
+from typing import List
+
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_account._utils.signing import to_standard_signature_bytes
 
-from nucypher_core.umbral import SecretKey, Signer
+from nucypher_core import EncryptedKeyFrag, HRAC
+from nucypher_core.umbral import (
+    SecretKey, Signer, PublicKey, VerifiedKeyFrag, VerifiedCapsuleFrag, reencrypt)
 
 from .drivers.rest_client import SSLContact
 
@@ -25,6 +29,12 @@ class Ursula:
             encode_defunct(bytes(self.signer.verifying_key())))
 
         self.decentralized_identity_evidence = to_standard_signature_bytes(evidence.signature)
+
+    def decrypt_kfrag(self, encrypted_kfrag: EncryptedKeyFrag, hrac: HRAC, publisher_verifying_key: PublicKey) -> VerifiedKeyFrag:
+        return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_verifying_key)
+
+    def reencrypt(self, verified_kfrag: VerifiedKeyFrag, capsules) -> List[VerifiedCapsuleFrag]:
+        return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
 
 class RemoteUrsula:

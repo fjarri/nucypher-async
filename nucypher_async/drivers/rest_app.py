@@ -63,4 +63,9 @@ def make_app(ursula_server):
     async def public_information():
         return await wrap_in_response(ursula_server.endpoint_public_information)
 
+    @app.route("/reencrypt", methods=["POST"])
+    async def reencrypt():
+        reencryption_request_bytes = await request.data
+        return await wrap_in_response(ursula_server.endpoint_reencrypt, reencryption_request_bytes)
+
     return app

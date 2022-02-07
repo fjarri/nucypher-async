@@ -34,6 +34,11 @@ class MockRESTClient:
         assert ssl_contact.certificate == server.ssl_contact.certificate
         return await server.endpoint_public_information()
 
+    async def reencrypt(self, ssl_contact: SSLContact, reencryption_request_bytes):
+        server = self._known_servers[ssl_contact.contact]
+        assert ssl_contact.certificate == server.ssl_contact.certificate
+        return await server.endpoint_reencrypt(reencryption_request_bytes)
+
 
 async def mock_serve_async(nursery, ursula_server, shutdown_trigger):
     ursula_server.start(nursery)
