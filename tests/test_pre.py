@@ -37,9 +37,10 @@ def ursula_servers(mock_rest_client, ursulas):
     yield servers
 
 
-async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_rest_client):
+async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_rest_client, logger):
     handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
-    learner = Learner(mock_rest_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    learner = Learner(mock_rest_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
+        parent_logger=logger)
 
     addresses = [server.metadata().payload.staker_address for server in ursula_servers[:3]]
     nodes = []

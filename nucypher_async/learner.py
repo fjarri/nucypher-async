@@ -12,6 +12,7 @@ from nucypher_core import FleetStateChecksum
 from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
 from .utils import BackgroundTask
+from .utils.logging import NULL_LOGGER
 from .ursula import RemoteUrsula
 
 
@@ -60,7 +61,10 @@ class Learner:
     and running the background learning task.
     """
 
-    def __init__(self, rest_client, my_metadata=None, seed_contacts=None):
+    def __init__(self, rest_client, my_metadata=None, seed_contacts=None, parent_logger=NULL_LOGGER):
+
+        self._logger = parent_logger.get_child('Learner')
+
         self._client = NetworkClient(rest_client)
 
         self._my_metadata = my_metadata
@@ -87,6 +91,7 @@ class Learner:
         """
         for metadata in metadata_list:
             if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
+                self._logger.debug('Recording metadata for {}', metadata.payload.staker_address)
                 self._unverified_nodes[metadata.payload.staker_address] = metadata
 
     def _add_verified_nodes(self, metadata_list):

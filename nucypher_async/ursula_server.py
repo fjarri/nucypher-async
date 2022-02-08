@@ -10,11 +10,16 @@ from .drivers.errors import HTTPError
 from .learner import Learner
 from .ursula import Ursula
 from .utils import BackgroundTask
+from .utils.logging import NULL_LOGGER
 
 
 class UrsulaServer:
 
-    def __init__(self, ursula: Ursula, _rest_client=None, port=9151, host='127.0.0.1', seed_contacts=[]):
+    def __init__(
+            self, ursula: Ursula, _rest_client=None, port=9151, host='127.0.0.1', seed_contacts=[],
+            parent_logger=NULL_LOGGER):
+
+        self._logger = parent_logger.get_child('UrsulaServer')
 
         # TODO: generate the seed from some root secret material.
         self._ssl_private_key = SSLPrivateKey.from_seed(b'asdasdasd')
@@ -41,7 +46,8 @@ class UrsulaServer:
         self._metadata = NodeMetadata(signer=self.ursula.signer,
                                       payload=payload)
 
-        self.learner = Learner(_rest_client, my_metadata=self._metadata, seed_contacts=seed_contacts)
+        self.learner = Learner(_rest_client, my_metadata=self._metadata, seed_contacts=seed_contacts,
+            parent_logger=self._logger)
 
         self.started = False
 
