@@ -3,6 +3,10 @@ import trio
 from nucypher_core import TreasureMap, MessageKit, HRAC, ReencryptionRequest, ReencryptionResponse
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags
 
+from .drivers.eth_account import EthAddress
+from .master_key import MasterKey
+
+
 class Policy:
 
     def __init__(self, encrypted_treasure_map, encrypting_key):
@@ -13,15 +17,16 @@ class Policy:
 class Alice:
 
     def __init__(self):
-        self._skf = SecretKeyFactory.random()
-        self._signer = Signer(SecretKey.random())
+        self.__master_key = MasterKey.random()
+        self._signer = self.__master_key.make_signer()
         self.verifying_key = self._signer.verifying_key()
+        self._delegating_skf = self.__master_key.make_delegating_key_factory()
 
     async def grant(self, learner, bob, label, threshold, shares, handpicked_addresses=None):
 
         # TODO: sample Ursulas from the blockchain here
 
-        policy_sk = self._skf.make_key(label)
+        policy_sk = self._delegating_skf.make_key(label)
 
         kfrags = generate_kfrags(
             delegating_sk=policy_sk,
@@ -35,7 +40,7 @@ class Alice:
         assigned_kfrags = {}
         async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
             async for node in aiter:
-                assigned_kfrags[node.metadata.payload.staker_address] = (node.metadata.payload.encrypting_key, kfrags.pop())
+                assigned_kfrags[bytes(node.staker_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
                 if len(assigned_kfrags) == shares:
                     break
 
@@ -63,8 +68,9 @@ def encrypt(encrypting_key, message):
 class Bob:
 
     def __init__(self):
-        self._decrypting_key = SecretKey.random()
-        self._signer = Signer(SecretKey.random())
+        self.__master_key = MasterKey.random()
+        self._decrypting_key = self.__master_key.make_decrypting_key()
+        self._signer = self.__master_key.make_signer()
 
         self.public_key = self._decrypting_key.public_key()
         self.verifying_key = self._signer.verifying_key()
@@ -94,11 +100,11 @@ class Bob:
             if len(responses) == treasure_map.threshold:
                 nursery.cancel_scope.cancel()
 
-        destinations = treasure_map.destinations
+        destinations = {EthAddress(address): ekfrag for address, ekfrag in treasure_map.destinations.items()}
         async with trio.open_nursery() as nursery:
             async with learner.verified_nodes_iter(destinations) as aiter:
                 async for node in aiter:
-                    nursery.start_soon(reencrypt, nursery, node, destinations[node.metadata.payload.staker_address])
+                    nursery.start_soon(reencrypt, nursery, node, destinations[node.staker_address])
         return responses
 
     async def retrieve_and_decrypt(self, learner, message_kit, encrypted_treasure_map, alice_verifying_key):

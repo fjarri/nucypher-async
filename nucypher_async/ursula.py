@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
@@ -8,27 +8,40 @@ from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
     SecretKey, Signer, PublicKey, VerifiedKeyFrag, VerifiedCapsuleFrag, reencrypt)
 
+from .drivers.eth_account import EthAccount, EthAddress
 from .drivers.rest_client import SSLContact
+from .master_key import MasterKey
 
 
 class Ursula:
 
-    def __init__(self, staker_address=None, domain="mainnet"):
+    def __init__(
+            self,
+            master_key: Optional[MasterKey] = None,
+            eth_account: Optional[EthAccount] = None,
+            staker_address=None,
+            domain="mainnet"):
 
-        import os
-        self.staker_address = os.urandom(20) # staker_address
+        self.staker_address = EthAddress.random()
         self.domain = domain
 
-        # TODO: create from the main seed
-        self._worker_account = Account.create()
-        self.signer = Signer(SecretKey.random())
-        self._decrypting_key = SecretKey.random()
+        if not master_key:
+            master_key = MasterKey.random()
+        self.__master_key = master_key
+
+        if not eth_account:
+            eth_account = EthAccount.random()
+        self.__eth_account = eth_account
+
+        self.signer = self.__master_key.make_signer()
+        self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        evidence = self._worker_account.sign_message(
-            encode_defunct(bytes(self.signer.verifying_key())))
+        self.worker_address = self.__eth_account.address
+        self.decentralized_identity_evidence = self.__eth_account.sign_message(bytes(self.signer.verifying_key()))
 
-        self.decentralized_identity_evidence = to_standard_signature_bytes(evidence.signature)
+    def make_ssl_private_key(self):
+        return self.__master_key.make_ssl_private_key()
 
     def decrypt_kfrag(self, encrypted_kfrag: EncryptedKeyFrag, hrac: HRAC, publisher_verifying_key: PublicKey) -> VerifiedKeyFrag:
         return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_verifying_key)
@@ -36,11 +49,22 @@ class Ursula:
     def reencrypt(self, verified_kfrag: VerifiedKeyFrag, capsules) -> List[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
+    def __str__(self):
+        staker_short = self.staker_address.as_checksum()[:10]
+        worker_short = self.worker_address.as_checksum()[:10]
+        return f"Ursula(staker={staker_short}, worker={worker_short})"
+
 
 class RemoteUrsula:
 
     def __init__(self, metadata, worker_address):
         self.metadata = metadata
+        self.staker_address = EthAddress(self.metadata.payload.staker_address)
         self.worker_address = worker_address
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
+
+    def __str__(self):
+        staker_short = self.staker_address.as_checksum()[:10]
+        worker_short = self.worker_address.as_checksum()[:10]
+        return f"RemoteUrsula(staker={staker_short}, worker={worker_short})"

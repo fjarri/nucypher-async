@@ -21,8 +21,7 @@ class UrsulaServer:
 
         self._logger = parent_logger.get_child('UrsulaServer')
 
-        # TODO: generate the seed from some root secret material.
-        self._ssl_private_key = SSLPrivateKey.from_seed(b'asdasdasd')
+        self._ssl_private_key = ursula.make_ssl_private_key()
         self._ssl_certificate = SSLCertificate.self_signed(self._ssl_private_key, host)
 
         contact = Contact(host=host, port=port)
@@ -33,7 +32,7 @@ class UrsulaServer:
 
         self.ursula = ursula
 
-        payload = NodeMetadataPayload(staker_address=self.ursula.staker_address,
+        payload = NodeMetadataPayload(staker_address=bytes(self.ursula.staker_address),
                                       domain=self.ursula.domain,
                                       timestamp_epoch=maya.now().epoch,
                                       decentralized_identity_evidence=self.ursula.decentralized_identity_evidence,

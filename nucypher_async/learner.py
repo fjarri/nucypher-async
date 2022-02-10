@@ -9,6 +9,7 @@ import maya
 
 from nucypher_core import FleetStateChecksum
 
+from .drivers.eth_account import EthAddress
 from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
 from .utils import BackgroundTask
@@ -91,14 +92,15 @@ class Learner:
         """
         for metadata in metadata_list:
             if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
-                self._logger.debug('Recording metadata for {}', metadata.payload.staker_address)
-                self._unverified_nodes[metadata.payload.staker_address] = metadata
+                staker_address = EthAddress(metadata.payload.staker_address)
+                self._logger.debug('Recording metadata for {}', staker_address)
+                self._unverified_nodes[staker_address] = metadata
 
     def _add_verified_nodes(self, metadata_list):
         for metadata in metadata_list:
-            worker_address = metadata.payload.derive_worker_address()
+            worker_address = EthAddress(metadata.payload.derive_worker_address())
             node = RemoteUrsula(metadata, worker_address)
-            self._verified_nodes[node.metadata.payload.staker_address] = node
+            self._verified_nodes[node.staker_address] = node
 
         # TODO: should it set off the event too? And update the fleet state?
 
@@ -157,7 +159,7 @@ class Learner:
         # Internal self-verification
         assert metadata.verify()
 
-        worker_address = metadata.payload.derive_worker_address()
+        worker_address = EthAddress(metadata.payload.derive_worker_address())
 
         # TODO: blockchain checks
         # assert blockchain_client.worker_from_staker(metadata.payload.staker_address) == worker_address
@@ -165,7 +167,7 @@ class Learner:
 
         node = RemoteUrsula(metadata, worker_address)
 
-        self._verified_nodes[node.metadata.payload.staker_address] = node
+        self._verified_nodes[node.staker_address] = node
 
         self.fleet_state_timestamp = maya.now()
 
@@ -190,6 +192,7 @@ class Learner:
         return await self._learn_from_node(node)
 
     async def _learn_from_node(self, node: RemoteUrsula):
+        self._logger.debug("Learning from {}", node)
         ssl_contact = node.ssl_contact
         metadata_response = await self._client.node_metadata_post(
             ssl_contact, self.fleet_state_checksum, self.metadata_to_announce())

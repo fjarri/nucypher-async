@@ -42,7 +42,7 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
     learner = Learner(mock_rest_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
         parent_logger=logger)
 
-    addresses = [server.metadata().payload.staker_address for server in ursula_servers[:3]]
+    addresses = [server.ursula.staker_address for server in ursula_servers[:3]]
     nodes = []
     async with learner.verified_nodes_iter(addresses) as aiter:
         async for node in aiter:

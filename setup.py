@@ -15,6 +15,10 @@ setup(
         'cryptography',
         'nucypher-core',
         'maya',
+        'pynacl',
+        'mnemonic',
+        'eth_account',
+        'eth_utils',
         ],
     extras_requires={
         'dev': [
