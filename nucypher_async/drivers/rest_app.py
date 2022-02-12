@@ -15,7 +15,7 @@ In a sense, this is a "server" counterpart of ``rest_client``.
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from .errors import HTTPError
+from .rest_client import HTTPError
 
 
 async def wrap_in_response(callable, *args, **kwds):

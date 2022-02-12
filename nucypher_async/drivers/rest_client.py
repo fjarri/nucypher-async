@@ -10,9 +10,15 @@ import httpx
 
 from nucypher_core import NodeMetadata
 
-from .errors import HTTPError
 from .ssl import SSLCertificate, fetch_certificate
 from ..utils import temp_file
+
+
+class HTTPError(Exception):
+
+    def __init__(self, message, status_code):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class Contact:

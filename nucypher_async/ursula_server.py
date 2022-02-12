@@ -5,8 +5,7 @@ from nucypher_core import (
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
-from .drivers.rest_client import RESTClient, Contact, SSLContact
-from .drivers.errors import HTTPError
+from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner
 from .ursula import Ursula
 from .utils import BackgroundTask

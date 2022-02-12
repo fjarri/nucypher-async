@@ -2,8 +2,7 @@ import httpx
 
 from nucypher_core import NodeMetadata, MetadataResponse, MetadataRequest, ReencryptionResponse
 
-from .drivers.errors import HTTPError
-from .drivers.rest_client import Contact, SSLContact
+from .drivers.rest_client import Contact, SSLContact, HTTPError
 
 
 class NetworkClient:
