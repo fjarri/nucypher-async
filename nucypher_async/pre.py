@@ -89,7 +89,8 @@ class Bob:
                 encrypted_kfrag=ekfrag,
                 publisher_verifying_key=treasure_map.publisher_verifying_key,
                 bob_verifying_key=self.verifying_key)
-            response = await learner._client.reencrypt(node.ssl_contact, request)
+            # TODO: why are we calling a private method here?
+            response = await learner._rest_client.reencrypt(node.ssl_contact, request)
             verified_cfrags = response.verify(capsules=request.capsules,
                                               alice_verifying_key=alice_verifying_key,
                                               ursula_verifying_key=node.metadata.payload.verifying_key,

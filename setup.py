@@ -19,6 +19,7 @@ setup(
         'mnemonic',
         'eth_account',
         'eth_utils',
+        'web3',
         ],
     extras_requires={
         'dev': [

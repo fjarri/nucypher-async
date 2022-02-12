@@ -19,10 +19,8 @@ class Ursula:
             self,
             master_key: Optional[MasterKey] = None,
             eth_account: Optional[EthAccount] = None,
-            staker_address=None,
             domain="mainnet"):
 
-        self.staker_address = EthAddress.random()
         self.domain = domain
 
         if not master_key:
@@ -37,7 +35,7 @@ class Ursula:
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        self.worker_address = self.__eth_account.address
+        self.operator_address = self.__eth_account.address
         self.decentralized_identity_evidence = self.__eth_account.sign_message(bytes(self.signer.verifying_key()))
 
     def make_ssl_private_key(self):
@@ -50,21 +48,19 @@ class Ursula:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
     def __str__(self):
-        staker_short = self.staker_address.as_checksum()[:10]
-        worker_short = self.worker_address.as_checksum()[:10]
-        return f"Ursula(staker={staker_short}, worker={worker_short})"
+        operator_short = self.operator_address.as_checksum()[:10]
+        return f"Ursula(operator={operator_short})"
 
 
 class RemoteUrsula:
 
-    def __init__(self, metadata, worker_address):
+    def __init__(self, metadata, operator_address):
         self.metadata = metadata
         self.staker_address = EthAddress(self.metadata.payload.staker_address)
-        self.worker_address = worker_address
+        self.operator_address = operator_address
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
 
     def __str__(self):
         staker_short = self.staker_address.as_checksum()[:10]
-        worker_short = self.worker_address.as_checksum()[:10]
-        return f"RemoteUrsula(staker={staker_short}, worker={worker_short})"
+        return f"RemoteUrsula(staker={staker_short})"

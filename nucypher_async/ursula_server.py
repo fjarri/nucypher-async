@@ -4,6 +4,8 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
+from .drivers.eth_client import BaseEthClient
+from .drivers.eth_account import EthAddress
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner
@@ -14,8 +16,28 @@ from .utils.logging import NULL_LOGGER
 
 class UrsulaServer:
 
+    @classmethod
+    async def async_init(
+            self,
+            ursula: Ursula,
+            eth_client: BaseEthClient,
+            **kwds):
+
+        staker_address = await eth_client.get_staker_address(ursula.operator_address)
+        eth_balance = await eth_client.get_eth_balance(ursula.operator_address)
+        # TODO: how much eth do we need to run a node?
+
+        return cls(ursula, eth_client, staker_address=staker_address, **kwds)
+
     def __init__(
-            self, ursula: Ursula, _rest_client=None, port=9151, host='127.0.0.1', seed_contacts=[],
+            self,
+            ursula: Ursula,
+            eth_client: BaseEthClient,
+            staker_address: EthAddress,
+            _rest_client=None,
+            port=9151,
+            host='127.0.0.1',
+            seed_contacts=[],
             parent_logger=NULL_LOGGER):
 
         self._logger = parent_logger.get_child('UrsulaServer')
@@ -30,8 +52,9 @@ class UrsulaServer:
             _rest_client = RESTClient()
 
         self.ursula = ursula
+        self.staker_address = staker_address
 
-        payload = NodeMetadataPayload(staker_address=bytes(self.ursula.staker_address),
+        payload = NodeMetadataPayload(staker_address=bytes(self.staker_address),
                                       domain=self.ursula.domain,
                                       timestamp_epoch=maya.now().epoch,
                                       decentralized_identity_evidence=self.ursula.decentralized_identity_evidence,
@@ -44,8 +67,13 @@ class UrsulaServer:
         self._metadata = NodeMetadata(signer=self.ursula.signer,
                                       payload=payload)
 
-        self.learner = Learner(_rest_client, my_metadata=self._metadata, seed_contacts=seed_contacts,
+        self.learner = Learner(
+            _rest_client, eth_client,
+            my_metadata=self._metadata,
+            seed_contacts=seed_contacts,
             parent_logger=self._logger)
+
+        self._eth_client = eth_client
 
         self.started = False
 

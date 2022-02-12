@@ -62,11 +62,12 @@ class Learner:
     and running the background learning task.
     """
 
-    def __init__(self, rest_client, my_metadata=None, seed_contacts=None, parent_logger=NULL_LOGGER):
+    def __init__(self, rest_client, eth_client, my_metadata=None, seed_contacts=None, parent_logger=NULL_LOGGER):
 
         self._logger = parent_logger.get_child('Learner')
 
-        self._client = NetworkClient(rest_client)
+        self._rest_client = NetworkClient(rest_client)
+        self._eth_client = eth_client
 
         self._my_metadata = my_metadata
 
@@ -98,8 +99,8 @@ class Learner:
 
     def _add_verified_nodes(self, metadata_list):
         for metadata in metadata_list:
-            worker_address = EthAddress(metadata.payload.derive_worker_address())
-            node = RemoteUrsula(metadata, worker_address)
+            operator_address = EthAddress(metadata.payload.derive_operator_address())
+            node = RemoteUrsula(metadata, operator_address)
             self._verified_nodes[node.staker_address] = node
 
         # TODO: should it set off the event too? And update the fleet state?
@@ -159,13 +160,17 @@ class Learner:
         # Internal self-verification
         assert metadata.verify()
 
-        worker_address = EthAddress(metadata.payload.derive_worker_address())
+        derived_operator_address = EthAddress(metadata.payload.derive_operator_address())
 
-        # TODO: blockchain checks
-        # assert blockchain_client.worker_from_staker(metadata.payload.staker_address) == worker_address
-        # assert blockchain_client.staker_is_really_staking(metadata.payload.staker_address)
+        staker_address = EthAddress(metadata.payload.staker_address)
+        bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
+        if derived_operator_address != bonded_operator_address:
+            raise RuntimeError("Invalid decentralized identity evidence")
 
-        node = RemoteUrsula(metadata, worker_address)
+        if not await self._eth_client.is_staker_authorized(staker_address):
+            raise RuntimeError("Staker is not authorized")
+
+        node = RemoteUrsula(metadata, derived_operator_address)
 
         self._verified_nodes[node.staker_address] = node
 
@@ -184,8 +189,8 @@ class Learner:
         return my_metadata + [node.metadata for node in self._verified_nodes.values()]
 
     async def _learn_from_contact(self, contact: Contact):
-        ssl_contact = await self._client.fetch_certificate(contact)
-        metadata = await self._client.public_information(ssl_contact)
+        ssl_contact = await self._rest_client.fetch_certificate(contact)
+        metadata = await self._rest_client.public_information(ssl_contact)
         assert metadata.payload.host == ssl_contact.contact.host
         assert metadata.payload.port == ssl_contact.contact.port
         node = await self._verify_metadata(metadata)
@@ -194,7 +199,7 @@ class Learner:
     async def _learn_from_node(self, node: RemoteUrsula):
         self._logger.debug("Learning from {}", node)
         ssl_contact = node.ssl_contact
-        metadata_response = await self._client.node_metadata_post(
+        metadata_response = await self._rest_client.node_metadata_post(
             ssl_contact, self.fleet_state_checksum, self.metadata_to_announce())
 
         payload = metadata_response.verify(node.metadata.payload.verifying_key)
@@ -235,7 +240,7 @@ class Learner:
 
             ssl_contact = SSLContact.from_metadata(teacher_metadata)
 
-            remote_metadata = await self._client.public_information(ssl_contact)
+            remote_metadata = await self._rest_client.public_information(ssl_contact)
             assert metadata_is_consistent(teacher_metadata, remote_metadata)
             # Note that we are using the metadata we got from the node itself
             teacher_node = await self._verify_metadata(remote_metadata)

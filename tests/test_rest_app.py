@@ -3,13 +3,17 @@ from http import HTTPStatus
 import pytest
 import trio
 
+from nucypher_async.drivers.eth_account import EthAddress
 from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 
+from .mocks import MockEthClient
+
 
 async def test_client_with_background_tasks():
-    server = UrsulaServer(Ursula())
+    eth_client = MockEthClient()
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=EthAddress.random())
     app = make_app(server)
 
     async with app.test_app() as test_app:
@@ -29,7 +33,8 @@ async def test_client_with_background_tasks():
 
 
 async def test_client_no_background_tasks():
-    server = UrsulaServer(Ursula())
+    eth_client = MockEthClient()
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=EthAddress.random())
     app = make_app(server)
 
     test_client = app.test_client()

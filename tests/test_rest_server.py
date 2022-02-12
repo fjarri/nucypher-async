@@ -3,14 +3,18 @@ from http import HTTPStatus
 import pytest
 import trio
 
+from nucypher_async.drivers.eth_account import EthAddress
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import async_client_ssl
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 
+from .mocks import MockEthClient
+
 
 async def test_client_real_server(nursery, capsys):
-    server = UrsulaServer(Ursula())
+    eth_client = MockEthClient()
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=EthAddress.random())
     handle = start_in_nursery(nursery, server)
 
     # TODO: have some event in the server that could be waited for to ensure finished startup?
