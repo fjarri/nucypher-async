@@ -138,10 +138,12 @@ class Learner:
             while addresses - self._unverified_nodes.keys() - self._verified_nodes.keys():
                 # TODO: use a special form of learning round here, without sending out known nodes.
                 # This is called on the client side, clients are not supposed to provide that info.
+                self._logger.debug("Scheduling a learning round")
                 await self.learning_round()
 
             for address in addresses:
                 if address in self._unverified_nodes:
+                    self._logger.debug("Scheduling a verification for {}", address)
                     nursery.start_soon(self._verify_metadata, self._unverified_nodes[address])
 
             while addresses:
