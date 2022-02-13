@@ -22,11 +22,11 @@ class EthAddress:
     def __bytes__(self):
         return self._address
 
-    def as_checksum(self):
+    def to_checksum(self):
         return to_checksum_address(self._address)
 
     def __str__(self):
-        return self.as_checksum()
+        return self.to_checksum()
 
     def __eq__(self, other):
         return type(self) == type(other) and self._address == other._address
