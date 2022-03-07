@@ -44,7 +44,10 @@ class Contact:
 class SSLContact:
 
     def __init__(self, contact: Contact, certificate: SSLCertificate):
-        assert certificate.declared_host == contact.host
+        if certificate.declared_host != contact.host:
+            raise ValueError(
+                f"Host mismatch: contact has {contact.host}, "
+                f"but certificate has {certificate.declared_host}")
 
         self.contact = contact
         self.certificate = certificate
@@ -75,7 +78,7 @@ async def async_client_ssl(certificate: SSLCertificate):
 def unwrap_bytes(response):
     if not response.status_code == http.HTTPStatus.OK:
         raise HTTPError(response, response.status_code)
-    return response.data()
+    return response.read()
 
 
 class RESTClient:
@@ -90,7 +93,7 @@ class RESTClient:
 
     async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request_bytes):
         async with async_client_ssl(ssl_contact.certificate) as client:
-            response = await client.get(ssl_contact.url + '/node_metadata', data=metadata_request_bytes)
+            response = await client.post(ssl_contact.url + '/node_metadata', data=metadata_request_bytes)
         return unwrap_bytes(response)
 
     async def public_information(self, ssl_contact):
@@ -100,5 +103,5 @@ class RESTClient:
 
     async def reencrypt(self, ssl_contact: SSLContact, reencryption_request_bytes):
         async with async_client_ssl(ssl_contact.certificate) as client:
-            response = await client.get(ssl_contact.url + '/reencrypt', data=reencryption_request_bytes)
+            response = await client.post(ssl_contact.url + '/reencrypt', data=reencryption_request_bytes)
         return unwrap_bytes(response)
