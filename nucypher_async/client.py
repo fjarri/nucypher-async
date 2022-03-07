@@ -1,4 +1,5 @@
 import httpx
+import trio
 
 from nucypher_core import NodeMetadata, MetadataResponse, MetadataRequest, ReencryptionResponse
 
@@ -18,7 +19,19 @@ class NetworkClient:
 
     async def fetch_certificate(self, contact: Contact) -> SSLContact:
         certificate = await self._rest_client.fetch_certificate(contact)
-        return SSLContact(contact, certificate)
+
+        # If host is not an IP address, resolve it to an IP.
+        # Nucypher nodes have their IPs included in the certificates,
+        # so we will need it to make a self-consistent `SSLContact`.
+        # TODO: only do that if it's not already an IP
+        addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+
+        # TODO: or should we select a specific entry?
+        family, type_, proto, canonname, sockaddr = addrinfo[0]
+        ip_addr, port = sockaddr
+        assert port == contact.port
+
+        return SSLContact(Contact(ip_addr, port), certificate)
 
     async def ping(self, ssl_contact: SSLContact):
         try:
