@@ -91,11 +91,19 @@ class Learner:
         - maybe should also record where we got the info from, so we could flag the node for lying to us
         - should we keep the whole metadata at all if we'll request it again as a part of verification?
         """
+        my_staker_address = self._my_metadata.payload.staker_address if self._my_metadata else None
+
         for metadata in metadata_list:
-            if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
-                staker_address = Address(metadata.payload.staker_address)
-                self._logger.debug('Recording metadata for {}', staker_address)
-                self._unverified_nodes[staker_address] = metadata
+            staker_address = Address(metadata.payload.staker_address)
+
+            if my_staker_address and staker_address == my_staker_address:
+                continue
+
+            if staker_address in self._unverified_nodes or staker_address in self._verified_nodes:
+                continue
+
+            self._logger.debug('Recording metadata for {}', staker_address)
+            self._unverified_nodes[staker_address] = metadata
 
     def _add_verified_nodes(self, metadata_list):
         for metadata in metadata_list:
