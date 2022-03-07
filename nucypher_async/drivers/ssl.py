@@ -94,7 +94,13 @@ class SSLCertificate:
 
 
 async def fetch_certificate(host: str, port: int) -> SSLCertificate:
-    stream = await trio.open_ssl_over_tcp_stream(host, port)
+
+    # Do not verify the certificate, it is self-signed
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    stream = await trio.open_ssl_over_tcp_stream(host, port, ssl_context=context)
     await stream.do_handshake()
     certificate_der = stream.getpeercert(True)
     return SSLCertificate.from_der_bytes(certificate_der)
