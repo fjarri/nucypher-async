@@ -1,3 +1,5 @@
+import sys
+
 import trio
 import maya
 from nucypher_core import (
@@ -99,9 +101,8 @@ class UrsulaServer:
             # Better luck next time
             pass
         except Exception as e:
-            # TODO: log the error here
-            raise
-            pass
+            self._logger.error("Uncaught exception during learning:", exc_info=sys.exc_info())
+
         await this_task.restart_in(10)
 
     def stop(self):
