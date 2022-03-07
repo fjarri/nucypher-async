@@ -80,4 +80,8 @@ def make_app(ursula_server):
         reencryption_request_bytes = await request.data
         return await wrap_in_response(logger, ursula_server.endpoint_reencrypt, reencryption_request_bytes)
 
+    @app.route("/status")
+    async def status():
+        return await wrap_in_response(logger, ursula_server.endpoint_status)
+
     return app

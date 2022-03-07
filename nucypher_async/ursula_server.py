@@ -160,3 +160,9 @@ class UrsulaServer:
             vcfrags=vcfrags)
 
         return bytes(response)
+
+    async def endpoint_status(self):
+        return f"""
+        Staker: {self.ursula.staker_address}
+        Operator: {self.ursula.operator_address}
+        """
