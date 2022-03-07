@@ -1,7 +1,9 @@
+import os
+
 import pytest
 import trio
 
-from nucypher_async.drivers.eth_account import EthAddress
+from nucypher_async.drivers.eth_client import Address
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula
@@ -38,7 +40,7 @@ def ursula_servers(mock_rest_client, mock_eth_client, ursulas):
         else:
             seed_contacts = []
 
-        staker_address = EthAddress.random()
+        staker_address = Address(os.urandom(20))
 
         server = UrsulaServer(
             ursula=ursulas[i],

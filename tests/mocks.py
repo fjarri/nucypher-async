@@ -1,6 +1,6 @@
 from functools import partial
 
-from nucypher_async.drivers.eth_account import EthAddress
+from nucypher_async.drivers.eth_client import Address
 from nucypher_async.drivers.rest_client import Contact, SSLContact
 from nucypher_async.drivers.rest_server import ServerHandle
 
@@ -49,27 +49,27 @@ class MockEthClient:
         self.eth_balances = {}
         self.staker_authorization = set()
 
-    def authorize_staker(self, staker_address: EthAddress):
+    def authorize_staker(self, staker_address: Address):
         self.staker_authorization.add(staker_address)
 
-    def bond_operator(self, staker_address: EthAddress, operator_address: EthAddress):
+    def bond_operator(self, staker_address: Address, operator_address: Address):
         self.staker_to_operator[staker_address] = operator_address
         self.operator_to_staker[operator_address] = staker_address
 
-    async def get_staker_address(self, operator_address: EthAddress):
+    async def get_staker_address(self, operator_address: Address):
         if operator_address not in self.operator_to_staker:
             raise RuntimeError("Operator is not bonded")
         return self.operator_to_staker[operator_address]
 
-    async def get_operator_address(self, staker_address: EthAddress):
+    async def get_operator_address(self, staker_address: Address):
         if staker_address not in self.staker_to_operator:
             raise RuntimeError("Operator is not bonded")
         return self.staker_to_operator[staker_address]
 
-    async def is_staker_authorized(self, staker_address: EthAddress):
+    async def is_staker_authorized(self, staker_address: Address):
         return staker_address in self.staker_authorization
 
-    async def get_eth_balance(self, address: EthAddress):
+    async def get_eth_balance(self, address: Address):
         return self.eth_balances.get(address, 0)
 
 

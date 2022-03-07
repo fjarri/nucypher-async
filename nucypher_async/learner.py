@@ -9,7 +9,7 @@ import maya
 
 from nucypher_core import FleetStateChecksum
 
-from .drivers.eth_account import EthAddress
+from .drivers.eth_client import Address
 from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
 from .utils import BackgroundTask
@@ -93,13 +93,13 @@ class Learner:
         """
         for metadata in metadata_list:
             if not self._my_metadata or metadata.payload.staker_address != self._my_metadata.payload.staker_address:
-                staker_address = EthAddress(metadata.payload.staker_address)
+                staker_address = Address(metadata.payload.staker_address)
                 self._logger.debug('Recording metadata for {}', staker_address)
                 self._unverified_nodes[staker_address] = metadata
 
     def _add_verified_nodes(self, metadata_list):
         for metadata in metadata_list:
-            operator_address = EthAddress(metadata.payload.derive_operator_address())
+            operator_address = Address(metadata.payload.derive_operator_address())
             node = RemoteUrsula(metadata, operator_address)
             self._verified_nodes[node.staker_address] = node
 
@@ -162,9 +162,9 @@ class Learner:
         # Internal self-verification
         assert metadata.verify()
 
-        derived_operator_address = EthAddress(metadata.payload.derive_operator_address())
+        derived_operator_address = Address(metadata.payload.derive_operator_address())
 
-        staker_address = EthAddress(metadata.payload.staker_address)
+        staker_address = Address(metadata.payload.staker_address)
         bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
         if derived_operator_address != bonded_operator_address:
             raise RuntimeError("Invalid decentralized identity evidence")
@@ -191,6 +191,7 @@ class Learner:
         return my_metadata + [node.metadata for node in self._verified_nodes.values()]
 
     async def _learn_from_contact(self, contact: Contact):
+        self._logger.debug("Resolving a contact {}", contact)
         ssl_contact = await self._rest_client.fetch_certificate(contact)
         metadata = await self._rest_client.public_information(ssl_contact)
         assert metadata.payload.host == ssl_contact.contact.host

@@ -3,7 +3,7 @@ import trio
 from nucypher_core import TreasureMap, MessageKit, HRAC, ReencryptionRequest, ReencryptionResponse
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags
 
-from .drivers.eth_account import EthAddress
+from .drivers.eth_client import Address
 from .master_key import MasterKey
 
 
@@ -101,7 +101,7 @@ class Bob:
             if len(responses) == treasure_map.threshold:
                 nursery.cancel_scope.cancel()
 
-        destinations = {EthAddress(address): ekfrag for address, ekfrag in treasure_map.destinations.items()}
+        destinations = {Address(address): ekfrag for address, ekfrag in treasure_map.destinations.items()}
         async with trio.open_nursery() as nursery:
             async with learner.verified_nodes_iter(destinations) as aiter:
                 async for node in aiter:

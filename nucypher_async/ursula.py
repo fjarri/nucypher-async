@@ -8,7 +8,8 @@ from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
     SecretKey, Signer, PublicKey, VerifiedKeyFrag, VerifiedCapsuleFrag, reencrypt)
 
-from .drivers.eth_account import EthAccount, EthAddress
+from .drivers.eth_account import EthAccount
+from .drivers.eth_client import Address
 from .drivers.rest_client import SSLContact
 from .master_key import MasterKey
 
@@ -48,7 +49,7 @@ class Ursula:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
     def __str__(self):
-        operator_short = self.operator_address.to_checksum()[:10]
+        operator_short = self.operator_address.as_checksum()[:10]
         return f"Ursula(operator={operator_short})"
 
 
@@ -56,11 +57,11 @@ class RemoteUrsula:
 
     def __init__(self, metadata, operator_address):
         self.metadata = metadata
-        self.staker_address = EthAddress(self.metadata.payload.staker_address)
+        self.staker_address = Address(self.metadata.payload.staker_address)
         self.operator_address = operator_address
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
 
     def __str__(self):
-        staker_short = self.staker_address.to_checksum()[:10]
+        staker_short = self.staker_address.as_checksum()[:10]
         return f"RemoteUrsula(staker={staker_short})"

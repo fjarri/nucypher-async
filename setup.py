@@ -18,8 +18,7 @@ setup(
         'pynacl',
         'mnemonic',
         'eth_account',
-        'eth_utils',
-        'web3',
+        'pons'
         ],
     extras_requires={
         'dev': [

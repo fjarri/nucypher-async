@@ -4,8 +4,7 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .drivers.eth_client import BaseEthClient
-from .drivers.eth_account import EthAddress
+from .drivers.eth_client import BaseEthClient, Address
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner
@@ -18,22 +17,26 @@ class UrsulaServer:
 
     @classmethod
     async def async_init(
-            self,
+            cls,
             ursula: Ursula,
             eth_client: BaseEthClient,
+            parent_logger=NULL_LOGGER,
             **kwds):
 
         staker_address = await eth_client.get_staker_address(ursula.operator_address)
+        parent_logger.info("Operator bonded to {}", staker_address.as_checksum())
+
         eth_balance = await eth_client.get_eth_balance(ursula.operator_address)
+        parent_logger.info("Operator balance: {}", eth_balance)
         # TODO: how much eth do we need to run a node?
 
-        return cls(ursula, eth_client, staker_address=staker_address, **kwds)
+        return cls(ursula, eth_client, staker_address=staker_address, parent_logger=parent_logger, **kwds)
 
     def __init__(
             self,
             ursula: Ursula,
             eth_client: BaseEthClient,
-            staker_address: EthAddress,
+            staker_address: Address,
             _rest_client=None,
             port=9151,
             host='127.0.0.1',
