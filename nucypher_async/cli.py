@@ -11,7 +11,7 @@ from .drivers.eth_client import EthClient
 from .master_key import EncryptedMasterKey
 from .ursula import Ursula
 from .ursula_server import UrsulaServer
-from .utils.logging import Logger, ConsoleHandler
+from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
 
 
 async def make_server():
@@ -48,7 +48,7 @@ async def make_server():
         eth_client=EthClient.from_http_endpoint(config['eth_provider_uri']),
         port=config['rest_port'],
         host=config['rest_host'],
-        seed_contacts=[Contact('https://ibex.nucypher.network', 9151)],
+        seed_contacts=[Contact('ibex.nucypher.network', 9151)],
         parent_logger=logger)
 
     return server
