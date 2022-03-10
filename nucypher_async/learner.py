@@ -91,7 +91,7 @@ class Learner:
         - maybe should also record where we got the info from, so we could flag the node for lying to us
         - should we keep the whole metadata at all if we'll request it again as a part of verification?
         """
-        my_staker_address = self._my_metadata.payload.staker_address if self._my_metadata else None
+        my_staker_address = Address(self._my_metadata.payload.staker_address) if self._my_metadata else None
 
         for metadata in metadata_list:
             staker_address = Address(metadata.payload.staker_address)
