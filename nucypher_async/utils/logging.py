@@ -10,9 +10,11 @@ from enum import IntEnum
 import io
 import time
 import traceback
-from typing import NamedTuple, List, Any, Tuple, Type
+from typing import NamedTuple, List, Any, Tuple, Type, Optional
 from pathlib import Path
 import sys
+
+import trio
 
 
 class Level(IntEnum):
@@ -46,16 +48,30 @@ class LogRecord(NamedTuple):
     message: str
     args: List[Any]
     exc_info: Tuple[Type, Exception, Any]
+    task_id: Optional[int]
 
     @staticmethod
     def make(logger_name, level, message, args, exc_info=False):
+        try:
+            task_id = trio.lowlevel.current_task()
+        except RuntimeError:
+            # Not in trio event loop.
+            task_id = None
+
+        if task_id is not None:
+            # Generates a number in range 1000-9998,
+            # we won't have that many tasks, so it'll be enough for debugging purposes.
+            # (using 8999 since it's a prime, so the range will be more uniformly covered)
+            task_id = id(task_id) % 8999 + 1000
+
         return LogRecord(
             timestamp=time.time(),
             logger_name=logger_name,
             level=level,
             message=message,
             args=args,
-            exc_info=sys.exc_info() if exc_info else None)
+            exc_info=sys.exc_info() if exc_info else None,
+            task_id=task_id)
 
 
 class Logger:
@@ -115,6 +131,7 @@ class Formatter:
         asctime = time.asctime(time.localtime(record.timestamp))
 
         full_message = self.format_str.format(
+            task_id=("" if record.task_id is None else ("[" + str(record.task_id) + "] ")),
             asctime=asctime,
             name=record.logger_name,
             levelname=_LEVEL_NAMES[record.level],
@@ -128,7 +145,7 @@ class Formatter:
         return full_message
 
 
-DEFAULT_FORMATTER = Formatter('{asctime} [{levelname}] [{name}] {message}')
+DEFAULT_FORMATTER = Formatter('{asctime} {task_id}[{levelname}] [{name}] {message}')
 
 
 class ConsoleHandler:
