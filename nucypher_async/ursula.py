@@ -56,9 +56,12 @@ class Ursula:
 class RemoteUrsula:
 
     def __init__(self, metadata, operator_address):
+        payload = metadata.payload
+
         self.metadata = metadata
-        self.staker_address = Address(self.metadata.payload.staker_address)
+        self.staker_address = Address(payload.staker_address)
         self.operator_address = operator_address
+        self.verifying_key = payload.verifying_key
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
 

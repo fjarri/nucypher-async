@@ -12,9 +12,23 @@ from nucypher_core import FleetStateChecksum
 from .drivers.eth_client import Address
 from .drivers.rest_client import Contact, SSLContact
 from .client import NetworkClient
+from .p2p.fleet_sensor import FleetSensor
+from .p2p.fleet_state import FleetState
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 from .ursula import RemoteUrsula
+
+
+class LearningError(Exception):
+    pass
+
+
+class ConnectionError(LearningError):
+    pass
+
+
+class VerificationError(LearningError):
+    pass
 
 
 def producer(wrapped):
@@ -73,48 +87,10 @@ class Learner:
 
         self._seed_contacts = seed_contacts
 
-        # unverified contacts: node adrress -> NodeMetadata
-        self._unverified_nodes = {}
+        self.fleet_state = FleetState(self._my_metadata)
 
-        # verified contacts: node adrress -> RemoteUrsula
-        self._verified_nodes = {}
-
-        self._verified_nodes_updated = trio.Event()
-
-        self.fleet_state_checksum = FleetStateChecksum(this_node=self._my_metadata, other_nodes=[]) # TODO
-        self.fleet_state_timestamp = maya.now()
-
-    def add_metadata(self, metadata_list):
-        """
-        TODO:
-        - handle the cases of same host/port, but otherwise different metadata coming from differnt nodes
-        - maybe should also record where we got the info from, so we could flag the node for lying to us
-        - should we keep the whole metadata at all if we'll request it again as a part of verification?
-        """
-        my_staker_address = Address(self._my_metadata.payload.staker_address) if self._my_metadata else None
-
-        for metadata in metadata_list:
-            staker_address = Address(metadata.payload.staker_address)
-
-            if my_staker_address and staker_address == my_staker_address:
-                continue
-
-            if staker_address in self._unverified_nodes or staker_address in self._verified_nodes:
-                continue
-
-            self._logger.debug('Recording metadata for {}', staker_address)
-            self._unverified_nodes[staker_address] = metadata
-
-    def _add_verified_nodes(self, metadata_list):
-        for metadata in metadata_list:
-            operator_address = Address(metadata.payload.derive_operator_address())
-            node = RemoteUrsula(metadata, operator_address)
-            self._verified_nodes[node.staker_address] = node
-
-        # TODO: should it set off the event too? And update the fleet state?
-
-    def verified_nodes(self):
-        return self._verified_nodes
+        my_address = Address(self._my_metadata.payload.staker_address) if my_metadata else None
+        self.fleet_sensor = FleetSensor(my_address, seed_contacts=seed_contacts)
 
     @producer
     async def verified_nodes_iter(self, addresses, send_channel):
@@ -133,9 +109,9 @@ class Learner:
 
         # Shortcut in case we already have things verified
         for address in list(addresses):
-            if address in self._verified_nodes:
+            if address in self.fleet_sensor._verified_nodes:
                 addresses.remove(address)
-                await send_channel.send(self._verified_nodes[address])
+                await send_channel.send(self.fleet_sensor._verified_nodes[address])
 
         # Check first, maybe we don't need to do the whole concurrency thing
         if not addresses:
@@ -143,116 +119,146 @@ class Learner:
 
         async with trio.open_nursery() as nursery:
 
-            while addresses - self._unverified_nodes.keys() - self._verified_nodes.keys():
+            while addresses - self.fleet_sensor._addresses_to_contacts.keys() - self.fleet_sensor._verified_nodes.keys():
                 # TODO: use a special form of learning round here, without sending out known nodes.
                 # This is called on the client side, clients are not supposed to provide that info.
-                self._logger.debug("Scheduling a learning round")
+
+                # TODO: we can run several instances here, learning rounds are supposed to be reentrable
                 await self.learning_round()
 
             for address in addresses:
-                if address in self._unverified_nodes:
-                    self._logger.debug("Scheduling a verification for {}", address)
-                    nursery.start_soon(self._verify_metadata, self._unverified_nodes[address])
+                if (address in self.fleet_sensor._addresses_to_contacts
+                        and address not in self.fleet_sensor._locked_contacts):
+                    possible_contacts = self.fleet_sensor._addresses_to_contacts[address]
+                    for contact in possible_contacts:
+                        nursery.start_soon(self._learn_from_contact_and_update_sensor, contact)
 
             while addresses:
-                await self._verified_nodes_updated.wait()
                 for address in list(addresses):
-                    if address in self._verified_nodes:
+                    if address in self.fleet_sensor._verified_nodes:
                         addresses.remove(address)
-                        await send_channel.send(self._verified_nodes[address])
+                        await send_channel.send(self.fleet_sensor._verified_nodes[address])
 
-    async def _verify_metadata(self, metadata):
+                if addresses:
+                    await self.fleet_sensor._verified_nodes_updated.wait()
+
+    async def _verify_metadata(self, ssl_contact, metadata):
         # NOTE: assuming this metadata is freshly obtained from the node itself
 
-        # TODO: check that the address in the metadata and in the certificate matches
-        # the address we got the metadata from.
-
         # Internal self-verification
-        assert metadata.verify()
+        if not metadata.verify():
+            raise VerificationError("Failed to verify node metadata")
 
-        derived_operator_address = Address(metadata.payload.derive_operator_address())
+        payload = metadata.payload
 
-        staker_address = Address(metadata.payload.staker_address)
+        if payload.host != ssl_contact.contact.host:
+            raise VerificationError(
+                f"Host mismatch: contact has {ssl_contact.contact.host}, "
+                f"but metadata has {payload.host}")
+
+        if payload.port != ssl_contact.contact.port:
+            raise VerificationError(
+                f"Port mismatch: contact has {ssl_contact.contact.port}, "
+                f"but metadata has {payload.port}")
+
+        certificate_bytes = ssl_contact.certificate.to_pem_bytes()
+        if payload.certificate_bytes != certificate_bytes:
+            raise VerificationError(
+                f"Certificate mismatch: contact has {certificate_bytes}, "
+                f"but metadata has {payload.certificate_bytes}")
+
+        try:
+            address_bytes = payload.derive_operator_address()
+        except Exception as e:
+            raise VerificationError(f"Failed to derive operator address: {e}") from e
+
+        derived_operator_address = Address(address_bytes)
+        staker_address = Address(payload.staker_address)
+
         bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
         if derived_operator_address != bonded_operator_address:
-            raise RuntimeError("Invalid decentralized identity evidence")
+            raise VerificationError(
+                f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
+                f"but the bonded address is {bonded_operator_address}")
 
         if not await self._eth_client.is_staker_authorized(staker_address):
-            raise RuntimeError("Staker is not authorized")
+            raise VerificationError("Staker is not authorized")
 
-        node = RemoteUrsula(metadata, derived_operator_address)
-
-        self._verified_nodes[node.staker_address] = node
-
-        self.fleet_state_timestamp = maya.now()
-
-        # Release whoever was waiting for the state to be updated
-        # TODO: only do so if there was a change in the state.
-        self._verified_nodes_updated.set()
-        await trio.sleep(0) # TODO: is it necessary?
-        self._verified_nodes_updated = trio.Event()
-
-        return node
+        return RemoteUrsula(metadata, derived_operator_address)
 
     def metadata_to_announce(self):
         my_metadata = [self._my_metadata] if self._my_metadata else []
-        return my_metadata + [node.metadata for node in self._verified_nodes.values()]
+        return my_metadata + self.fleet_sensor.verified_metadata()
 
     async def _learn_from_contact(self, contact: Contact):
         self._logger.debug("Resolving a contact {}", contact)
-        ssl_contact = await self._rest_client.fetch_certificate(contact)
-        metadata = await self._rest_client.public_information(ssl_contact)
-        assert metadata.payload.host == ssl_contact.contact.host
-        assert metadata.payload.port == ssl_contact.contact.port
-        node = await self._verify_metadata(metadata)
-        return await self._learn_from_node(node)
+        try:
+            ssl_contact = await self._rest_client.fetch_certificate(contact)
+        # TODO: catch an error where the host in the cert is not the same as the host in the contact
+        except OSError:
+            raise ConnectionError(f"Failed to fetch the certificate from {contact}")
+
+        try:
+            metadata = await self._rest_client.public_information(ssl_contact)
+        # TODO: what other errors can be thrown? E.g. if there's a server on the other side,
+        # but it doesn't have this endpoint?
+        except OSError:
+            raise ConnectionError(f"Failed to get metadata from {contact}")
+
+        node = await self._verify_metadata(ssl_contact, metadata)
+        metadatas = await self._learn_from_node(node)
+        return node, metadatas
 
     async def _learn_from_node(self, node: RemoteUrsula):
         self._logger.debug("Learning from {}", node)
         ssl_contact = node.ssl_contact
         metadata_response = await self._rest_client.node_metadata_post(
-            ssl_contact, self.fleet_state_checksum, self.metadata_to_announce())
+            ssl_contact, self.fleet_state.checksum, self.metadata_to_announce())
 
-        payload = metadata_response.verify(node.metadata.payload.verifying_key)
+        try:
+            payload = metadata_response.verify(node.verifying_key)
+        except Exception as e: # TODO: can we narrow it down?
+            raise VerificationError(f"Failed to verify MetadataResponse: {e}") from e
 
-        # TODO: make use of the returned timestamp
+        # TODO: make use of the returned timestamp?
 
-        self.add_metadata(payload.announce_nodes)
+        return payload.announce_nodes
+
+    async def _learn_from_contact_and_update_sensor(self, contact):
+        try:
+            node, metadatas = await self._learn_from_contact(contact)
+        except LearningError:
+            self.fleet_sensor.remove_contact(contact)
+        else:
+            self.fleet_sensor.add_verified_node(node)
+            self.fleet_sensor.add_contacts(metadatas)
+            self.fleet_state.update(nodes_to_add=metadatas)
+
+    async def _learn_from_node_and_update_sensor(self, node):
+        try:
+            metadatas = await self._learn_from_node(node)
+        except ConnectionError as e:
+            self.fleet_sensor.report_verified_node(node, e)
+        except VerificationError:
+            # TODO: do we remove it from the fleet state here too? Other nodes don't.
+            self.fleet_sensor.remove_verified_node(node)
+        else:
+            self.fleet_sensor.add_contacts(metadatas)
+            self.fleet_state.update(nodes_to_add=metadatas)
 
     async def learning_round(self):
+        self._logger.debug("In the learning round")
+        if self.fleet_sensor.has_unchecked_contacts():
+            with self.fleet_sensor.lock_unchecked_contact() as contact:
+                await self._learn_from_contact_and_update_sensor(contact)
+        elif self.fleet_sensor.has_verified_nodes():
+            with self.fleet_sensor.lock_verified_node() as node:
+                await self._learn_from_node_and_update_sensor(node)
+        self._logger.debug("Finished the learning round")
 
-        if self._seed_contacts:
-            teacher_contact = random.choice(self._seed_contacts)
-            await self._learn_from_contact(teacher_contact)
-            self._seed_contacts = None
-            return
-
-        # Choose whether we get a verified or an unverified node to learn from
-        unverified_num = len(self._unverified_nodes)
-        verified_num = len(self._verified_nodes)
-
-        if unverified_num + verified_num == 0:
-            # No nodes to learn from, have to wait until someone leaves us a contact.
-            return
-
-        idx = random.randrange(verified_num + unverified_num)
-        learn_from_verified = idx < verified_num
-
-        if learn_from_verified:
-            addresses = list(self._verified_nodes)
-            teacher_address = random.choice(addresses)
-            teacher_node = self._verified_nodes[teacher_address]
-            await self._learn_from_node(teacher_node)
-
-        else:
-            addresses = list(self._unverified_nodes)
-            teacher_address = random.choice(addresses)
-            teacher_metadata = self._unverified_nodes[teacher_address]
-
-            ssl_contact = SSLContact.from_metadata(teacher_metadata)
-
-            remote_metadata = await self._rest_client.public_information(ssl_contact)
-            assert metadata_is_consistent(teacher_metadata, remote_metadata)
-            # Note that we are using the metadata we got from the node itself
-            teacher_node = await self._verify_metadata(remote_metadata)
-            await self._learn_from_node(teacher_node)
+    def _add_verified_nodes(self, metadatas):
+        for metadata in metadatas:
+            if metadata.payload.staker_address != self._my_metadata.payload.staker_address:
+                node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
+                self.fleet_sensor.add_verified_node(node)
+                self.fleet_state.update(nodes_to_add=[metadata])

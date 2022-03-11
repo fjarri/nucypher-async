@@ -116,7 +116,7 @@ class UrsulaServer:
         return remote_address
 
     async def endpoint_node_metadata_get(self):
-        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state_timestamp.epoch,
+        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp.epoch,
                                                    announce_nodes=self.learner.metadata_to_announce())
         response = MetadataResponse(self.ursula.signer, response_payload)
         return bytes(response)
@@ -124,13 +124,15 @@ class UrsulaServer:
     async def endpoint_node_metadata_post(self, metadata_request_bytes):
         metadata_request = MetadataRequest.from_bytes(metadata_request_bytes)
 
-        if metadata_request.fleet_state_checksum == self.learner.fleet_state_checksum:
+        if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
-            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state_timestamp.epoch,
+            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp.epoch,
                                                        announce_nodes=[])
             return bytes(MetadataResponse(self.ursula.signer, response_payload))
 
-        self.learner.add_metadata(metadata_request.announce_nodes)
+        # TODO: should we trust the remote node? Or should we just add its own contact,
+        # and ignore anything else?
+        self.learner.fleet_sensor.add_contacts(metadata_request.announce_nodes)
 
         return await self.endpoint_node_metadata_get()
 
