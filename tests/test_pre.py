@@ -30,7 +30,7 @@ def mock_eth_client():
 
 
 @pytest.fixture
-def ursula_servers(mock_rest_client, mock_eth_client, ursulas):
+def ursula_servers(mock_rest_client, mock_eth_client, ursulas, logger):
     servers = []
 
     for i in range(10):
@@ -39,6 +39,7 @@ def ursula_servers(mock_rest_client, mock_eth_client, ursulas):
             ursula=ursulas[i],
             eth_client=mock_eth_client,
             staker_address=staker_address,
+            parent_logger=logger,
             port=9150 + i, _rest_client=mock_rest_client)
         servers.append(server)
         mock_rest_client.add_server(server)
