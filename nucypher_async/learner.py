@@ -60,16 +60,6 @@ def producer(wrapped):
     return wrapper
 
 
-def metadata_is_consistent(metadata1, metadata2):
-    """
-    Checks if two metadata objects could be produced by the same law-abiding node.
-    Some elements of the metadata can change over time, e.g. the host/port,
-    or the certificate.
-    """
-    fields = ['staker_address', 'domain', 'verifying_key', 'encrypting_key']
-    return all(getattr(metadata1.payload, field) == getattr(metadata2.payload, field) for field in fields)
-
-
 class Learner:
     """
     The client for P2P network of Ursulas, keeping the metadata of known nodes
@@ -109,35 +99,35 @@ class Learner:
 
         # Shortcut in case we already have things verified
         for address in list(addresses):
-            if address in self.fleet_sensor._verified_nodes:
+            node = self.fleet_sensor.try_get_verified_node(address)
+            if node is not None:
                 addresses.remove(address)
-                await send_channel.send(self.fleet_sensor._verified_nodes[address])
+                await send_channel.send(node)
 
         # Check first, maybe we don't need to do the whole concurrency thing
         if not addresses:
             return
 
         async with trio.open_nursery() as nursery:
+            while addresses:
+                if not self.fleet_sensor.addresses_are_known(addresses):
 
-            while addresses - self.fleet_sensor._addresses_to_contacts.keys() - self.fleet_sensor._verified_nodes.keys():
-                # TODO: use a special form of learning round here, without sending out known nodes.
-                # This is called on the client side, clients are not supposed to provide that info.
+                    # TODO: use a special form of learning round here, without sending out known nodes.
+                    # This is called on the client side, clients are not supposed to provide that info.
 
-                # TODO: we can run several instances here, learning rounds are supposed to be reentrable
-                await self.learning_round()
+                    # TODO: we can run several instances here, learning rounds are supposed to be reentrable
+                    await self.learning_round()
 
-            for address in addresses:
-                if (address in self.fleet_sensor._addresses_to_contacts
-                        and address not in self.fleet_sensor._locked_contacts):
-                    possible_contacts = self.fleet_sensor._addresses_to_contacts[address]
+                for address in addresses:
+                    possible_contacts = self.fleet_sensor.try_get_possible_contacts(address)
                     for contact in possible_contacts:
                         nursery.start_soon(self._learn_from_contact_and_update_sensor, contact)
 
-            while addresses:
                 for address in list(addresses):
-                    if address in self.fleet_sensor._verified_nodes:
+                    node = self.fleet_sensor.try_get_verified_node(address)
+                    if node is not None:
                         addresses.remove(address)
-                        await send_channel.send(self.fleet_sensor._verified_nodes[address])
+                        await send_channel.send(node)
 
                 if addresses:
                     await self.fleet_sensor._verified_nodes_updated.wait()
@@ -224,36 +214,41 @@ class Learner:
 
         return payload.announce_nodes
 
-    async def _learn_from_contact_and_update_sensor(self, contact):
-        try:
-            node, metadatas = await self._learn_from_contact(contact)
-        except LearningError:
-            self.fleet_sensor.remove_contact(contact)
-        else:
+    async def _learn_from_contact_and_update_sensor(self, contact=None):
+        with self.fleet_sensor.try_lock_unchecked_contact(contact=contact) as contact:
+            if contact is None:
+                return
+            try:
+                node, metadatas = await self._learn_from_contact(contact)
+            except LearningError:
+                self.fleet_sensor.remove_contact(contact)
+
             self.fleet_sensor.add_verified_node(node)
             self.fleet_sensor.add_contacts(metadatas)
             self.fleet_state.update(nodes_to_add=metadatas)
+            return contact
 
-    async def _learn_from_node_and_update_sensor(self, node):
-        try:
-            metadatas = await self._learn_from_node(node)
-        except ConnectionError as e:
-            self.fleet_sensor.report_verified_node(node, e)
-        except VerificationError:
-            # TODO: do we remove it from the fleet state here too? Other nodes don't.
-            self.fleet_sensor.remove_verified_node(node)
-        else:
+    async def _learn_from_node_and_update_sensor(self):
+        with self.fleet_sensor.try_lock_verified_node() as node:
+            if node is None:
+                return
+            try:
+                metadatas = await self._learn_from_node(node)
+            except ConnectionError as e:
+                self.fleet_sensor.report_verified_node(node, e)
+            except VerificationError:
+                # TODO: do we remove it from the fleet state here too? Other nodes don't.
+                self.fleet_sensor.remove_verified_node(node)
+
             self.fleet_sensor.add_contacts(metadatas)
             self.fleet_state.update(nodes_to_add=metadatas)
+            return node
 
     async def learning_round(self):
         self._logger.debug("In the learning round")
-        if self.fleet_sensor.has_unchecked_contacts():
-            with self.fleet_sensor.lock_unchecked_contact() as contact:
-                await self._learn_from_contact_and_update_sensor(contact)
-        elif self.fleet_sensor.has_verified_nodes():
-            with self.fleet_sensor.lock_verified_node() as node:
-                await self._learn_from_node_and_update_sensor(node)
+        contact = await self._learn_from_contact_and_update_sensor()
+        if not contact:
+            await self._learn_from_node_and_update_sensor()
         self._logger.debug("Finished the learning round")
 
     def _add_verified_nodes(self, metadatas):

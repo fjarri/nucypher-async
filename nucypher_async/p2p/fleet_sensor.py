@@ -28,24 +28,44 @@ class FleetSensor:
             for contact in seed_contacts:
                 self._contacts_to_addresses[contact] = set()
 
-    def has_unchecked_contacts(self):
-        return bool(self._contacts_to_addresses.keys() - self._locked_contacts)
+    def addresses_are_known(self, addresses: set):
+        return not bool(
+            addresses
+            - self._addresses_to_contacts.keys()
+            - self._verified_nodes.keys())
 
-    def has_verified_nodes(self):
-        return bool(self._verified_nodes.keys() - self._locked_nodes)
+    def try_get_verified_node(self, address):
+        return self._verified_nodes.get(address, None)
+
+    def try_get_possible_contacts(self, address):
+        contacts = self._addresses_to_contacts.get(address, [])
+        return set(contacts) - self._locked_contacts
 
     @contextmanager
-    def lock_unchecked_contact(self):
-        # TODO: here we may pick a contact that was supplied by the most nodes
-        contact = random.choice(list(self._contacts_to_addresses.keys() - self._locked_contacts))
+    def try_lock_unchecked_contact(self, contact=None):
+        if not contact:
+            contacts = list(self._contacts_to_addresses.keys() - self._locked_contacts)
+            if not contacts:
+                yield None
+                return
+            # TODO: here we may pick a contact that was supplied by the most nodes
+            contact = random.choice(contacts)
+        else:
+            if contact in self._locked_contacts:
+                yield None
+                return
         self._locked_contacts.add(contact)
         yield contact
         self._locked_contacts.remove(contact)
 
     @contextmanager
-    def lock_verified_node(self):
+    def try_lock_verified_node(self):
+        addresses = list(self._verified_nodes.keys() - self._locked_nodes)
+        if not addresses:
+            yield None
+            return
         # TODO: here we can pick a node that hasn't been re-verified for a long time
-        address = random.choice(list(self._verified_nodes.keys() - self._locked_nodes))
+        address = random.choice(addresses)
         node = self._verified_nodes[address]
         self._locked_nodes.add(address)
         yield node
