@@ -55,8 +55,10 @@ class FleetSensor:
                 yield None
                 return
         self._locked_contacts.add(contact)
-        yield contact
-        self._locked_contacts.remove(contact)
+        try:
+            yield contact
+        finally:
+            self._locked_contacts.remove(contact)
 
     @contextmanager
     def try_lock_verified_node(self):
@@ -68,12 +70,16 @@ class FleetSensor:
         address = random.choice(addresses)
         node = self._verified_nodes[address]
         self._locked_nodes.add(address)
-        yield node
-        self._locked_nodes.remove(address)
+        try:
+            yield node
+        finally:
+            self._locked_nodes.remove(address)
 
     def _add_contact(self, contact, staker_address):
         if staker_address in self._verified_nodes:
             return
+
+        # TODO: check if we already have a verified node with the given contact
 
         address_updated = (
             staker_address not in self._addresses_to_contacts
@@ -108,23 +114,30 @@ class FleetSensor:
             contact = node.ssl_contact.contact
             address = node.staker_address
 
-            if contact in self._contacts_to_addresses:
-                associated_addresses = self._contacts_to_addresses[contact]
-                for address in associated_addresses:
-                    self._addresses_to_contacts[address].remove(contact)
-                del self._contacts_to_addresses[contact]
-
-            if address in self._addresses_to_contacts:
-                associated_contacts = self._addresses_to_contacts[address]
-                for contact in associated_contacts:
-                    self._contacts_to_addresses[contact].remove(address)
-                del self._addresses_to_contacts[address]
+            self.remove_contact(contact)
+            self.remove_address(address)
 
             self._verified_nodes_updated.set()
             self._verified_nodes_updated = trio.Event()
 
         # This is the most recent metadata we got from the node, add it.
         self._verified_nodes[node.staker_address] = node
+
+    def remove_contact(self, contact):
+        if contact in self._contacts_to_addresses:
+            associated_addresses = self._contacts_to_addresses[contact]
+            for address in associated_addresses:
+                self._addresses_to_contacts[address].remove(contact)
+                if len(self._addresses_to_contacts[address]) == 0:
+                    del self._addresses_to_contacts[address]
+            del self._contacts_to_addresses[contact]
+
+    def remove_address(self, address):
+        if address in self._addresses_to_contacts:
+            associated_contacts = self._addresses_to_contacts[address]
+            for contact in associated_contacts:
+                self._contacts_to_addresses[contact].remove(address)
+            del self._addresses_to_contacts[address]
 
     def remove_verified_node(self, node):
         if node.staker_address not in self._verified_nodes:

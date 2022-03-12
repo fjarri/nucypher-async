@@ -210,13 +210,18 @@ class Learner:
                 return
             try:
                 node, metadatas = await self._learn_from_contact(contact)
-            except LearningError:
+            except ConnectionError as e:
+                self._logger.debug("Connection error when trying to learn from {}: {}", contact, e)
+            except VerificationError as e:
+                self._logger.debug("Verification error when trying to learn from {}: {}", contact, e)
+            else:
+                self.fleet_sensor.add_verified_node(node)
+                self.fleet_sensor.add_contacts(metadatas)
+                self.fleet_state.update(nodes_to_add=metadatas)
+                return contact
+            finally:
+                self._logger.debug("Removing contact {}", contact)
                 self.fleet_sensor.remove_contact(contact)
-
-            self.fleet_sensor.add_verified_node(node)
-            self.fleet_sensor.add_contacts(metadatas)
-            self.fleet_state.update(nodes_to_add=metadatas)
-            return contact
 
     async def _learn_from_node_and_update_sensor(self):
         with self.fleet_sensor.try_lock_verified_node() as node:
@@ -225,14 +230,16 @@ class Learner:
             try:
                 metadatas = await self._learn_from_node(node)
             except ConnectionError as e:
+                self._logger.debug("Connection error when trying to learn from {}: {}", node, e)
                 self.fleet_sensor.report_verified_node(node, e)
             except VerificationError:
+                self._logger.debug("Verification error when trying to learn from {}: {}", node, e)
                 # TODO: do we remove it from the fleet state here too? Other nodes don't.
                 self.fleet_sensor.remove_verified_node(node)
-
-            self.fleet_sensor.add_contacts(metadatas)
-            self.fleet_state.update(nodes_to_add=metadatas)
-            return node
+            else:
+                self.fleet_sensor.add_contacts(metadatas)
+                self.fleet_state.update(nodes_to_add=metadatas)
+                return node
 
     async def learning_round(self):
         self._logger.debug("In the learning round")
