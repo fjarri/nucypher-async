@@ -32,6 +32,12 @@ class UrsulaServer:
         parent_logger.info("Operator balance: {}", eth_balance)
         # TODO: how much eth do we need to run a node?
 
+        # TODO: we can call confirm_operator_address() here if the operator is not confirmed
+        confirmed = await eth_client.is_operator_confirmed(ursula.operator_address)
+        if not confirmed:
+            parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
+            raise RuntimeError("Operator is not confirmed")
+
         return cls(ursula, eth_client, staker_address=staker_address, parent_logger=parent_logger, **kwds)
 
     def __init__(

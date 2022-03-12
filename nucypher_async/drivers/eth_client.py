@@ -122,5 +122,12 @@ class EthClient(BaseEthClient):
         assert isinstance(result, bool)
         return result
 
+    async def is_operator_confirmed(self, operator_address: Address):
+        result = await self._client.call(
+            self._pre_application.address,
+            self._pre_application.abi.isOperatorConfirmed(bytes(operator_address)))
+        assert isinstance(result, bool)
+        return result
+
     async def get_eth_balance(self, address: Address) -> Wei:
         return await self._client.get_balance(address)

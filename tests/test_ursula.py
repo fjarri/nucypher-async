@@ -55,6 +55,7 @@ def ursula_servers(mock_rest_client, mock_eth_client, ursulas, logger):
         mock_rest_client.add_server(server)
         mock_eth_client.authorize_staker(staker_address)
         mock_eth_client.bond_operator(staker_address, ursulas[i].operator_address)
+        mock_eth_client.confirm_operator_address(ursulas[i].operator_address)
 
     yield servers
 

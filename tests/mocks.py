@@ -46,6 +46,7 @@ class MockEthClient:
     def __init__(self):
         self.staker_to_operator = {}
         self.operator_to_staker = {}
+        self.operator_confirmed = set()
         self.eth_balances = {}
         self.staker_authorization = set()
 
@@ -55,6 +56,14 @@ class MockEthClient:
     def bond_operator(self, staker_address: Address, operator_address: Address):
         self.staker_to_operator[staker_address] = operator_address
         self.operator_to_staker[operator_address] = staker_address
+
+    def confirm_operator_address(self, operator_address: Address):
+        if operator_address not in self.operator_to_staker:
+            raise RuntimeError("No stake associated with the operator")
+        staker_address = self.operator_to_staker[operator_address]
+        if operator_address in self.operator_confirmed:
+            raise RuntimeError("Operator address is already confirmed")
+        self.operator_confirmed.add(operator_address)
 
     async def get_staker_address(self, operator_address: Address):
         if operator_address not in self.operator_to_staker:
@@ -68,6 +77,9 @@ class MockEthClient:
 
     async def is_staker_authorized(self, staker_address: Address):
         return staker_address in self.staker_authorization
+
+    async def is_operator_confirmed(self, operator_address: Address):
+        return operator_address in self.operator_confirmed
 
     async def get_eth_balance(self, address: Address):
         return self.eth_balances.get(address, 0)
