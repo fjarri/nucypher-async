@@ -109,7 +109,7 @@ class UrsulaServer:
         except Exception as e:
             self._logger.error("Uncaught exception during learning:", exc_info=sys.exc_info())
 
-        await this_task.restart_in(10)
+        await this_task.restart_in(60)
 
     def stop(self):
         assert self.started
@@ -171,7 +171,19 @@ class UrsulaServer:
         return bytes(response)
 
     async def endpoint_status(self):
-        return f"""
+
+        verified_nodes = self.learner.fleet_sensor._verified_nodes
+        contacts = self.learner.fleet_sensor._contacts_to_addresses
+
+        stats = (f"""
         Staker: {self.staker_address}
         Operator: {self.ursula.operator_address}
-        """
+        """ +
+        "Verified nodes:\n" +
+        "\n".join(str(node) for node in verified_nodes) +
+        "\n" +
+        "Contacts:\n" +
+        "\n".join(f"{contact}: {list(addresses)}" for contact, addresses in contacts.items())
+        )
+
+        return stats.replace('\n', '<br/>')
