@@ -244,6 +244,9 @@ class Learner:
     async def learning_round(self):
         self._logger.debug("In the learning round")
         contact = await self._learn_from_contact_and_update_sensor()
+        # TODO: if learning from the contact failed, we get None here as well.
+        # Need to distinguish between cases when there were no contacts to learn from
+        # and a failed learning.
         if not contact:
             await self._learn_from_node_and_update_sensor()
         self._logger.debug("Finished the learning round")

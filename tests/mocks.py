@@ -23,6 +23,9 @@ class MockRESTClient:
     async def ping(self, ssl_contact: SSLContact):
         server = self._known_servers[ssl_contact.contact]
         assert ssl_contact.certificate == server.ssl_contact.certificate
+        # TODO: actually we need to pass the caller's host here, not the target's host.
+        # How do we do that? In production, the host is a global state,
+        # if we start passing it explicitly to the client, it'll look weird.
         return await server.endpoint_ping(ssl_contact.host)
 
     async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request_bytes):
