@@ -84,16 +84,6 @@ class Learner:
 
     @producer
     async def verified_nodes_iter(self, addresses, send_channel):
-        """
-        TODO: This is a pretty simple algorithm which will fail sometimes
-        when it could have succeeded, and sometimes do more work than needed.
-        In the future there are the following considerations we want to address:
-        - A given address might be in the process of being verified already,
-          then we don't need to enqueue another verification
-        - We may not have some addresses even in the unverified list;
-          we should have an event for that to have been updated.
-        - Nodes can be de-verified; currently we assume that if node is verified, it stays that way.
-        """
 
         addresses = set(addresses)
 
