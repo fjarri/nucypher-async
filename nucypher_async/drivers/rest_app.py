@@ -69,7 +69,9 @@ def make_app(ursula_server):
     @app.route("/node_metadata", methods=['POST'])
     async def node_metadata_post():
         metadata_request_bytes = await request.data
-        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_post, metadata_request_bytes)
+        return await wrap_in_response(
+            logger, ursula_server.endpoint_node_metadata_post,
+            request.remote_addr, metadata_request_bytes)
 
     @app.route("/public_information")
     async def public_information():

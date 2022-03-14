@@ -41,7 +41,7 @@ class MockRESTClient:
     async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request_bytes):
         server = self._mock_network.known_servers[ssl_contact.contact]
         assert ssl_contact.certificate == server.ssl_contact.certificate
-        return await server.endpoint_node_metadata_post(metadata_request_bytes)
+        return await server.endpoint_node_metadata_post(self._remote_addr, metadata_request_bytes)
 
     async def public_information(self, ssl_contact: SSLContact):
         server = self._mock_network.known_servers[ssl_contact.contact]
