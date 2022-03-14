@@ -29,6 +29,8 @@ class NetworkClient:
         # TODO: or should we select a specific entry?
         family, type_, proto, canonname, sockaddr = addrinfo[0]
         ip_addr, port = sockaddr
+
+        # Sanity check. When would it not be the case?
         assert port == contact.port
 
         return SSLContact(Contact(ip_addr, port), certificate)

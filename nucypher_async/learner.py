@@ -10,7 +10,7 @@ import maya
 from nucypher_core import FleetStateChecksum
 
 from .drivers.eth_client import Address
-from .drivers.rest_client import Contact, SSLContact
+from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError
 from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
@@ -19,15 +19,7 @@ from .utils.logging import NULL_LOGGER
 from .ursula import RemoteUrsula
 
 
-class LearningError(Exception):
-    pass
-
-
-class ConnectionError(LearningError):
-    pass
-
-
-class VerificationError(LearningError):
+class NodeVerificationError(Exception):
     pass
 
 
@@ -65,6 +57,9 @@ class Learner:
     The client for P2P network of Ursulas, keeping the metadata of known nodes
     and running the background learning task.
     """
+
+    CONTACT_LEARNING_TIMEOUT = 10
+    NODE_LEARNING_TIMEOUT = 10
 
     def __init__(self, rest_client, eth_client, my_metadata=None, seed_contacts=None, parent_logger=NULL_LOGGER):
 
@@ -127,42 +122,42 @@ class Learner:
 
         # Internal self-verification
         if not metadata.verify():
-            raise VerificationError("Failed to verify node metadata")
+            raise NodeVerificationError("Failed to verify node metadata")
 
         payload = metadata.payload
 
         if payload.host != ssl_contact.contact.host:
-            raise VerificationError(
+            raise NodeVerificationError(
                 f"Host mismatch: contact has {ssl_contact.contact.host}, "
                 f"but metadata has {payload.host}")
 
         if payload.port != ssl_contact.contact.port:
-            raise VerificationError(
+            raise NodeVerificationError(
                 f"Port mismatch: contact has {ssl_contact.contact.port}, "
                 f"but metadata has {payload.port}")
 
         certificate_bytes = ssl_contact.certificate.to_pem_bytes()
         if payload.certificate_bytes != certificate_bytes:
-            raise VerificationError(
+            raise NodeVerificationError(
                 f"Certificate mismatch: contact has {certificate_bytes}, "
                 f"but metadata has {payload.certificate_bytes}")
 
         try:
             address_bytes = payload.derive_operator_address()
         except Exception as e:
-            raise VerificationError(f"Failed to derive operator address: {e}") from e
+            raise NodeVerificationError(f"Failed to derive operator address: {e}") from e
 
         derived_operator_address = Address(address_bytes)
         staker_address = Address(payload.staker_address)
 
         bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
         if derived_operator_address != bonded_operator_address:
-            raise VerificationError(
+            raise NodeVerificationError(
                 f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
                 f"but the bonded address is {bonded_operator_address}")
 
         if not await self._eth_client.is_staker_authorized(staker_address):
-            raise VerificationError("Staker is not authorized")
+            raise NodeVerificationError("Staker is not authorized")
 
         return RemoteUrsula(metadata, derived_operator_address)
 
@@ -198,7 +193,7 @@ class Learner:
         try:
             payload = metadata_response.verify(node.verifying_key)
         except Exception as e: # TODO: can we narrow it down?
-            raise VerificationError(f"Failed to verify MetadataResponse: {e}") from e
+            raise NodeVerificationError(f"Failed to verify MetadataResponse: {e}") from e
 
         # TODO: make use of the returned timestamp?
 
@@ -209,18 +204,16 @@ class Learner:
             if contact is None:
                 return
             try:
-                node, metadatas = await self._learn_from_contact(contact)
-            except ConnectionError as e:
-                self._logger.debug("Connection error when trying to learn from {}: {}", contact, e)
-            except VerificationError as e:
-                self._logger.debug("Verification error when trying to learn from {}: {}", contact, e)
+                with trio.fail_after(self.CONTACT_LEARNING_TIMEOUT):
+                    node, metadatas = await self._learn_from_contact(contact)
+            except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
+                self._logger.debug("Error when trying to learn from {}: {}", contact, e)
             else:
                 self.fleet_sensor.add_verified_node(node)
                 self.fleet_sensor.add_contacts(metadatas)
                 self.fleet_state.update(nodes_to_add=metadatas)
                 return contact
             finally:
-                self._logger.debug("Removing contact {}", contact)
                 self.fleet_sensor.remove_contact(contact)
 
     async def _learn_from_node_and_update_sensor(self):
@@ -228,12 +221,10 @@ class Learner:
             if node is None:
                 return
             try:
-                metadatas = await self._learn_from_node(node)
-            except ConnectionError as e:
-                self._logger.debug("Connection error when trying to learn from {}: {}", node, e)
-                self.fleet_sensor.report_verified_node(node, e)
-            except VerificationError:
-                self._logger.debug("Verification error when trying to learn from {}: {}", node, e)
+                with trio.fail_after(self.NODE_LEARNING_TIMEOUT):
+                    metadatas = await self._learn_from_node(node)
+            except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
+                self._logger.debug("Error when trying to learn from {}: {}", node, e)
                 # TODO: do we remove it from the fleet state here too? Other nodes don't.
                 self.fleet_sensor.remove_verified_node(node)
             else:

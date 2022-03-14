@@ -21,6 +21,10 @@ class HTTPError(Exception):
         self.status_code = status_code
 
 
+class ConnectionError(Exception):
+    pass
+
+
 class Contact:
 
     def __init__(self, host: str, port: int):
@@ -71,8 +75,12 @@ async def async_client_ssl(certificate: SSLCertificate):
     # TODO: avoid saving the certificate to disk at each request,
     # and keep them in a directory somewhere.
     with temp_file(certificate.to_pem_bytes()) as filename:
-        async with httpx.AsyncClient(verify=filename) as client:
-            yield client
+        # Timeouts are caught at top level, as per `trio` style.
+        async with httpx.AsyncClient(verify=filename, timeout=None) as client:
+            try:
+                yield client
+            except httpx.HTTPError as e:
+                raise ConnectionError(str(e)) from e
 
 
 def unwrap_bytes(response):
@@ -84,7 +92,10 @@ def unwrap_bytes(response):
 class RESTClient:
 
     async def fetch_certificate(self, contact: Contact):
-        return await fetch_certificate(contact.host, contact.port)
+        try:
+            return await fetch_certificate(contact.host, contact.port)
+        except OsError as e:
+            raise ConnectionError(str(e)) from e
 
     async def ping(self, ssl_contact: SSLContact):
         async with async_client_ssl(ssl_contact.certificate) as client:

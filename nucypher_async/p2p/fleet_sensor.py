@@ -145,9 +145,5 @@ class FleetSensor:
 
         del self._verified_nodes[node.staker_address]
 
-    def report_verified_node(self, node):
-        # TODO
-        pass
-
     def verified_metadata(self):
         return [node.metadata for node in self._verified_nodes.values()]
