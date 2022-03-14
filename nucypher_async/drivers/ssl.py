@@ -67,6 +67,9 @@ class SSLCertificate:
     def to_pem_bytes(self) -> bytes:
         return self._certificate.public_bytes(serialization.Encoding.PEM)
 
+    def to_der_bytes(self) -> bytes:
+        return self._certificate.public_bytes(serialization.Encoding.DER)
+
     @classmethod
     def from_pem_bytes(cls, data) -> 'SSLCertificate':
         return cls(x509.load_pem_x509_certificate(data, backend=default_backend()))
