@@ -37,11 +37,11 @@ class NetworkClient:
 
     async def ping(self, ssl_contact: SSLContact):
         try:
-            remote_host = await self._rest_client.ping(ssl_contact)
+            my_address = await self._rest_client.ping(ssl_contact)
         except HTTPError as e:
             # TODO: diversify the errors?
             raise RuntimeError(e) from e
-        return remote_host
+        return my_address
 
     async def node_metadata_post(self, ssl_contact: SSLContact, fleet_state_checksum, announce_nodes):
         # TODO: move outside of this method, this is not the place to create it
