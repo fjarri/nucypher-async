@@ -78,23 +78,6 @@ class SSLCertificate:
     def from_der_bytes(cls, data) -> 'SSLCertificate':
         return cls(x509.load_der_x509_certificate(data, backend=default_backend()))
 
-    def to_json(self):
-        return self.to_pem_bytes().decode()
-
-    @classmethod
-    def from_json(cls, data):
-        return cls.from_pem_bytes(data.encode())
-
-    # FIXME: temporary support for pickling. Remove when we switch to JSON
-
-    def __getstate__(self):
-        return self.to_pem_bytes()
-
-    def __setstate__(self, state):
-        obj = SSLCertificate.from_pem_bytes(state)
-        self._certificate = obj._certificate
-        self.declared_host = obj.declared_host
-
 
 async def fetch_certificate(host: str, port: int) -> SSLCertificate:
 
