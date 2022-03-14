@@ -10,7 +10,7 @@ from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.learner import Learner
 
-from .mocks import MockRESTClient, MockEthClient, mock_start_in_nursery
+from .mocks import MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery
 
 
 @pytest.fixture
@@ -19,8 +19,8 @@ def ursulas():
 
 
 @pytest.fixture
-def mock_rest_client():
-    yield MockRESTClient()
+def mock_network():
+    yield MockNetwork()
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def mock_eth_client():
 
 
 @pytest.fixture
-def ursula_servers(mock_rest_client, mock_eth_client, ursulas, logger):
+def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
     servers = []
     for i in range(10):
 
@@ -49,10 +49,10 @@ def ursula_servers(mock_rest_client, mock_eth_client, ursulas, logger):
             port=9150 + i,
             seed_contacts=seed_contacts,
             parent_logger=logger,
-            _rest_client=mock_rest_client)
+            _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
 
         servers.append(server)
-        mock_rest_client.add_server(server)
+        mock_network.add_server(server)
         mock_eth_client.authorize_staker(staker_address)
         mock_eth_client.bond_operator(staker_address, ursulas[i].operator_address)
         mock_eth_client.confirm_operator_address(ursulas[i].operator_address)
