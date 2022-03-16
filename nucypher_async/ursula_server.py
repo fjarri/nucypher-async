@@ -9,10 +9,60 @@ from nucypher_core import (
 from .drivers.eth_client import BaseEthClient, Address
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
-from .learner import Learner
+from .learner import Learner, verify_metadata_shared
+from .storage import InMemoryStorage
 from .ursula import Ursula
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
+
+
+def generate_metadata(ssl_private_key, ursula, staker_address, contact):
+    ssl_certificate = SSLCertificate.self_signed(ssl_private_key, contact.host)
+    payload = NodeMetadataPayload(staker_address=bytes(staker_address),
+                                  domain=ursula.domain,
+                                  timestamp_epoch=maya.now().epoch,
+                                  decentralized_identity_evidence=ursula.decentralized_identity_evidence,
+                                  verifying_key=ursula.signer.verifying_key(),
+                                  encrypting_key=ursula.encrypting_key,
+                                  certificate_bytes=ssl_certificate.to_pem_bytes(),
+                                  host=contact.host,
+                                  port=contact.port,
+                                  )
+    return NodeMetadata(signer=ursula.signer, payload=payload)
+
+
+def verify_metadata(metadata, ssl_private_key, ursula, staker_address, contact):
+
+    derived_operator_address = verify_metadata_shared(metadata, contact, ursula.domain)
+
+    payload = metadata.payload
+
+    certificate = SSLCertificate.from_pem_bytes(payload.certificate_bytes)
+    if certificate.public_key() != ssl_private_key.public_key():
+        raise NodeVerificationError(
+            f"Certificate public key mismatch: expected {ssl_private_key.public_key()},"
+            f"{certificate.public_key()} in the certificate")
+
+    payload_staker_address = Address(payload.staker_address)
+    if payload_staker_address != staker_address:
+        raise ValueError(
+            f"Staker address mismatch: {payload_staker_address} in the metadata, "
+            f"{staker_address} recorded in the blockchain")
+
+    if derived_operator_address != ursula.operator_address:
+        raise ValueError(
+            f"Operator address mismatch: {derived_operator_address} derived from the metadata, "
+            f"{ursula.operator_address} supplied on start")
+
+    if payload.verifying_key != ursula.signer.verifying_key():
+        raise ValueError(
+            f"Verifying key mismatch: {payload.verifying_key} in the metadata, "
+            f"{ursula.signer.verifying_key()} derived from the master key")
+
+    if payload.encrypting_key != ursula.encrypting_key:
+        raise ValueError(
+            f"Encrypting key mismatch: {payload.encrypting_key} in the metadata, "
+            f"{ursula.encrypting_key} derived from the master key")
 
 
 class UrsulaServer:
@@ -49,40 +99,66 @@ class UrsulaServer:
             port=9151,
             host='127.0.0.1',
             seed_contacts=[],
-            parent_logger=NULL_LOGGER):
+            parent_logger=NULL_LOGGER,
+            storage=None):
 
         self._logger = parent_logger.get_child('UrsulaServer')
 
+        self.ursula = ursula
+        self.staker_address = staker_address
+
+        if storage is None:
+            storage = InMemoryStorage()
+        self._storage = storage
+
         self._ssl_private_key = ursula.make_ssl_private_key()
-        self._ssl_certificate = SSLCertificate.self_signed(self._ssl_private_key, host)
 
         contact = Contact(host=host, port=port)
+
+        metadata_in_storage = self._storage.get_my_metadata()
+        if metadata_in_storage is None:
+            self._logger.debug("Generating new metadata")
+            metadata = generate_metadata(
+                ssl_private_key=self._ssl_private_key,
+                ursula=self.ursula,
+                staker_address=self.staker_address,
+                contact=contact)
+            self._storage.set_my_metadata(metadata)
+        else:
+            metadata = metadata_in_storage
+            self._logger.debug("Found existing metadata, verifying")
+            try:
+                verify_metadata(
+                    metadata=metadata,
+                    ssl_private_key=self._ssl_private_key,
+                    ursula=self.ursula,
+                    staker_address=self.staker_address,
+                    contact=contact)
+            except Exception as e:
+                self._logger.warn(f"Obsolete/invalid metadata found ({e}), updating")
+                metadata = generate_metadata(
+                    ssl_private_key=self._ssl_private_key,
+                    ursula=self.ursula,
+                    staker_address=self.staker_address,
+                    contact=contact)
+                self._storage.set_my_metadata(metadata)
+
+        self._ssl_certificate = SSLCertificate.from_pem_bytes(metadata.payload.certificate_bytes)
+        self._metadata = metadata
+
         self.ssl_contact = SSLContact(contact, self._ssl_certificate)
 
         if _rest_client is None:
             _rest_client = RESTClient()
 
-        self.ursula = ursula
-        self.staker_address = staker_address
-
-        payload = NodeMetadataPayload(staker_address=bytes(self.staker_address),
-                                      domain=self.ursula.domain,
-                                      timestamp_epoch=maya.now().epoch,
-                                      decentralized_identity_evidence=self.ursula.decentralized_identity_evidence,
-                                      verifying_key=self.ursula.signer.verifying_key(),
-                                      encrypting_key=self.ursula.encrypting_key,
-                                      certificate_bytes=self._ssl_certificate.to_pem_bytes(),
-                                      host=host,
-                                      port=port,
-                                      )
-        self._metadata = NodeMetadata(signer=self.ursula.signer,
-                                      payload=payload)
-
         self.learner = Learner(
-            _rest_client, eth_client,
+            rest_client=_rest_client,
+            eth_client=eth_client,
+            storage=storage,
             my_metadata=self._metadata,
             seed_contacts=seed_contacts,
-            parent_logger=self._logger)
+            parent_logger=self._logger,
+            domain=ursula.domain)
 
         self._eth_client = eth_client
 

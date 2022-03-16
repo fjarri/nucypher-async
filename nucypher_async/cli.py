@@ -1,6 +1,7 @@
 import json
 import sys
 
+from appdirs import AppDirs
 from eth_account import Account
 import trio
 
@@ -9,6 +10,7 @@ from .drivers.rest_client import Contact
 from .drivers.rest_server import serve_forever
 from .drivers.eth_client import EthClient
 from .master_key import EncryptedMasterKey
+from .storage import FileSystemStorage
 from .ursula import Ursula
 from .ursula_server import UrsulaServer
 from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
@@ -43,13 +45,17 @@ async def make_server():
         ConsoleHandler(),
         RotatingFileHandler(log_file='nucypher.log')])
 
+    dirs = AppDirs(appname='nucypher-async')
+    storage = FileSystemStorage(dirs.user_data_dir)
+
     server = await UrsulaServer.async_init(
         ursula=ursula,
         eth_client=EthClient.from_http_endpoint(config['eth_provider_uri']),
         port=config['rest_port'],
         host=config['rest_host'],
         seed_contacts=[Contact('ibex.nucypher.network', 9151)],
-        parent_logger=logger)
+        parent_logger=logger,
+        storage=storage)
 
     return server
 

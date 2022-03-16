@@ -72,8 +72,11 @@ class SSLContact:
 
 @asynccontextmanager
 async def async_client_ssl(certificate: SSLCertificate):
-    # TODO: avoid saving the certificate to disk at each request,
-    # and keep them in a directory somewhere.
+    # It would be nice avoid saving the certificate to disk at each request.
+    # Having a cache directory requires too much architectural overhead,
+    # and with the current frequency of REST calls it just isn't worth it.
+    # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
+    # and we will be able to load certificates from memory.
     with temp_file(certificate.to_pem_bytes()) as filename:
         # Timeouts are caught at top level, as per `trio` style.
         async with httpx.AsyncClient(verify=filename, timeout=None) as client:
@@ -94,7 +97,7 @@ class RESTClient:
     async def fetch_certificate(self, contact: Contact):
         try:
             return await fetch_certificate(contact.host, contact.port)
-        except OsError as e:
+        except OSError as e:
             raise ConnectionError(str(e)) from e
 
     async def ping(self, ssl_contact: SSLContact):

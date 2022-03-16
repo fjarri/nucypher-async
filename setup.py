@@ -18,7 +18,8 @@ setup(
         'pynacl',
         'mnemonic',
         'eth_account',
-        'pons'
+        'pons',
+        'appdirs',
         ],
     extras_requires={
         'dev': [

@@ -1,3 +1,4 @@
+import datetime
 from functools import wraps, partial
 from contextlib import asynccontextmanager
 from collections import defaultdict
@@ -11,9 +12,11 @@ from nucypher_core import FleetStateChecksum
 
 from .drivers.eth_client import Address
 from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError
+from .drivers.ssl import SSLCertificate
 from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
+from .storage import InMemoryStorage
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 from .ursula import RemoteUrsula
@@ -21,6 +24,58 @@ from .ursula import RemoteUrsula
 
 class NodeVerificationError(Exception):
     pass
+
+
+def verify_metadata_shared(metadata, contact, domain):
+    if not metadata.verify():
+        raise NodeVerificationError("Metadata self-verification failed")
+
+    payload = metadata.payload
+
+    try:
+        certificate = SSLCertificate.from_pem_bytes(payload.certificate_bytes)
+    except Exception as e:
+        raise NodeVerificationError(f"Invalid certificate bytes in the payload: {e}") from e
+
+    try:
+        certificate.verify()
+    except ssl.InvalidSignature as e:
+        raise NodeVerificationError(f"Invalid certificate signature") from e
+
+    if certificate.declared_host != payload.host:
+        raise NodeVerificationError(
+            f"Host mismatch: {payload.host} in the metadata, "
+            f"{certificate.declared_host} in the certificate")
+
+    if payload.host != contact.host:
+        raise NodeVerificationError(
+            f"Host mismatch: expected {contact.host}, "
+            f"{payload.host} in the metadata")
+
+    if payload.port != contact.port:
+        raise NodeVerificationError(
+            f"Port mismatch: expected {contact.port}, "
+            f"{payload.port} in the metadata")
+
+    if payload.domain != domain:
+        raise NodeVerificationError(
+            f"Domain mismatch: expected {domain}, "
+            f"{payload.domain} in the metadata")
+
+    now = datetime.datetime.utcnow()
+    if certificate.not_valid_before > now:
+        raise NodeVerificationError(
+            f"Certificate is only valid after {certificate.not_valid_before}")
+    if certificate.not_valid_after < now:
+        raise NodeVerificationError(
+            f"Certificate is only valid until {certificate.not_valid_after}")
+
+    try:
+        address_bytes = payload.derive_operator_address()
+    except Exception as e:
+        raise NodeVerificationError(f"Failed to derive operator address: {e}") from e
+
+    return Address(address_bytes)
 
 
 def producer(wrapped):
@@ -61,9 +116,14 @@ class Learner:
     CONTACT_LEARNING_TIMEOUT = 10
     NODE_LEARNING_TIMEOUT = 10
 
-    def __init__(self, rest_client, eth_client, my_metadata=None, seed_contacts=None, parent_logger=NULL_LOGGER):
+    def __init__(self, rest_client, eth_client, my_metadata=None, seed_contacts=None,
+            parent_logger=NULL_LOGGER, storage=None, domain="mainnet"):
 
         self._logger = parent_logger.get_child('Learner')
+
+        if storage is None:
+            storage = InMemoryStorage()
+        self._storage = storage
 
         self._rest_client = NetworkClient(rest_client)
         self._eth_client = eth_client
@@ -72,6 +132,7 @@ class Learner:
 
         self._seed_contacts = seed_contacts
 
+        self.domain = domain
         self.fleet_state = FleetState(self._my_metadata)
 
         my_address = Address(self._my_metadata.payload.staker_address) if my_metadata else None
@@ -120,21 +181,7 @@ class Learner:
     async def _verify_metadata(self, ssl_contact, metadata):
         # NOTE: assuming this metadata is freshly obtained from the node itself
 
-        # Internal self-verification
-        if not metadata.verify():
-            raise NodeVerificationError("Failed to verify node metadata")
-
         payload = metadata.payload
-
-        if payload.host != ssl_contact.contact.host:
-            raise NodeVerificationError(
-                f"Host mismatch: contact has {ssl_contact.contact.host}, "
-                f"but metadata has {payload.host}")
-
-        if payload.port != ssl_contact.contact.port:
-            raise NodeVerificationError(
-                f"Port mismatch: contact has {ssl_contact.contact.port}, "
-                f"but metadata has {payload.port}")
 
         certificate_bytes = ssl_contact.certificate.to_pem_bytes()
         if payload.certificate_bytes != certificate_bytes:
@@ -142,12 +189,7 @@ class Learner:
                 f"Certificate mismatch: contact has {certificate_bytes}, "
                 f"but metadata has {payload.certificate_bytes}")
 
-        try:
-            address_bytes = payload.derive_operator_address()
-        except Exception as e:
-            raise NodeVerificationError(f"Failed to derive operator address: {e}") from e
-
-        derived_operator_address = Address(address_bytes)
+        derived_operator_address = verify_metadata_shared(metadata, ssl_contact.contact, self.domain)
         staker_address = Address(payload.staker_address)
 
         bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
@@ -158,6 +200,8 @@ class Learner:
 
         if not await self._eth_client.is_staker_authorized(staker_address):
             raise NodeVerificationError("Staker is not authorized")
+
+        # TODO: is_operator_confirmed()
 
         return RemoteUrsula(metadata, derived_operator_address)
 
