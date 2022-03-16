@@ -14,7 +14,7 @@ from .mocks import MockEthClient
 
 async def test_client_with_background_tasks():
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=Address(os.urandom(20)))
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
     app = make_app(server)
 
     async with app.test_app() as test_app:
@@ -35,7 +35,7 @@ async def test_client_with_background_tasks():
 
 async def test_client_no_background_tasks():
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=Address(os.urandom(20)))
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
     app = make_app(server)
 
     test_client = app.test_client()

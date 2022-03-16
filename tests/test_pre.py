@@ -34,19 +34,19 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
     servers = []
 
     for i in range(10):
-        staker_address = Address(os.urandom(20))
+        staking_provider_address = Address(os.urandom(20))
         server = UrsulaServer(
             ursula=ursulas[i],
             eth_client=mock_eth_client,
-            staker_address=staker_address,
+            staking_provider_address=staking_provider_address,
             parent_logger=logger,
             host='127.0.0.1',
             port=9150 + i,
             _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
         servers.append(server)
         mock_network.add_server(server)
-        mock_eth_client.authorize_staker(staker_address)
-        mock_eth_client.bond_operator(staker_address, ursulas[i].operator_address)
+        mock_eth_client.authorize_staking_provider(staking_provider_address)
+        mock_eth_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
 
     # pre-learn about other Ursulas
     for i in range(10):
@@ -62,7 +62,7 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
     learner = Learner(rest_client, mock_eth_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
         parent_logger=logger)
 
-    addresses = [server.staker_address for server in ursula_servers[:3]]
+    addresses = [server.staking_provider_address for server in ursula_servers[:3]]
     nodes = []
     async with learner.verified_nodes_iter(addresses) as aiter:
         async for node in aiter:
@@ -88,7 +88,7 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
         threshold=2,
         shares=3,
         # Use preselected Ursulas since blockchain is not implemeneted yet
-        handpicked_addresses=[server.staker_address for server in ursula_servers[:3]])
+        handpicked_addresses=[server.staking_provider_address for server in ursula_servers[:3]])
 
     message = b'a secret message'
     message_kit = encrypt(policy.encrypting_key, message)

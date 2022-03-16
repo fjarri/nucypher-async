@@ -15,7 +15,7 @@ from .mocks import MockEthClient
 
 async def test_client_real_server(nursery, capsys):
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staker_address=Address(os.urandom(20)))
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
     handle = start_in_nursery(nursery, server)
 
     # TODO: have some event in the server that could be waited for to ensure finished startup?

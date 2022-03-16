@@ -57,39 +57,39 @@ class MockRESTClient:
 class MockEthClient:
 
     def __init__(self):
-        self.staker_to_operator = {}
-        self.operator_to_staker = {}
+        self.staking_provider_to_operator = {}
+        self.operator_to_staking_provider = {}
         self.operator_confirmed = set()
         self.eth_balances = {}
-        self.staker_authorization = set()
+        self.staking_provider_authorization = set()
 
-    def authorize_staker(self, staker_address: Address):
-        self.staker_authorization.add(staker_address)
+    def authorize_staking_provider(self, staking_provider_address: Address):
+        self.staking_provider_authorization.add(staking_provider_address)
 
-    def bond_operator(self, staker_address: Address, operator_address: Address):
-        self.staker_to_operator[staker_address] = operator_address
-        self.operator_to_staker[operator_address] = staker_address
+    def bond_operator(self, staking_provider_address: Address, operator_address: Address):
+        self.staking_provider_to_operator[staking_provider_address] = operator_address
+        self.operator_to_staking_provider[operator_address] = staking_provider_address
 
     def confirm_operator_address(self, operator_address: Address):
-        if operator_address not in self.operator_to_staker:
+        if operator_address not in self.operator_to_staking_provider:
             raise RuntimeError("No stake associated with the operator")
-        staker_address = self.operator_to_staker[operator_address]
+        staking_provider_address = self.operator_to_staking_provider[operator_address]
         if operator_address in self.operator_confirmed:
             raise RuntimeError("Operator address is already confirmed")
         self.operator_confirmed.add(operator_address)
 
-    async def get_staker_address(self, operator_address: Address):
-        if operator_address not in self.operator_to_staker:
+    async def get_staking_provider_address(self, operator_address: Address):
+        if operator_address not in self.operator_to_staking_provider:
             raise RuntimeError("Operator is not bonded")
-        return self.operator_to_staker[operator_address]
+        return self.operator_to_staking_provider[operator_address]
 
-    async def get_operator_address(self, staker_address: Address):
-        if staker_address not in self.staker_to_operator:
+    async def get_operator_address(self, staking_provider_address: Address):
+        if staking_provider_address not in self.staking_provider_to_operator:
             raise RuntimeError("Operator is not bonded")
-        return self.staker_to_operator[staker_address]
+        return self.staking_provider_to_operator[staking_provider_address]
 
-    async def is_staker_authorized(self, staker_address: Address):
-        return staker_address in self.staker_authorization
+    async def is_staking_provider_authorized(self, staking_provider_address: Address):
+        return staking_provider_address in self.staking_provider_authorization
 
     async def is_operator_confirmed(self, operator_address: Address):
         return operator_address in self.operator_confirmed

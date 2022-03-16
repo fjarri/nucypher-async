@@ -10,9 +10,9 @@ from ..drivers.rest_client import Contact
 
 class FleetSensor:
 
-    def __init__(self, my_staker_address, seed_contacts=None):
+    def __init__(self, my_staking_provider_address, seed_contacts=None):
 
-        self._my_staker_address = my_staker_address
+        self._my_staking_provider_address = my_staking_provider_address
 
         self._contacts_to_addresses = defaultdict(set)
         self._addresses_to_contacts = defaultdict(set)
@@ -75,18 +75,18 @@ class FleetSensor:
         finally:
             self._locked_nodes.remove(address)
 
-    def _add_contact(self, contact, staker_address):
-        if staker_address in self._verified_nodes:
+    def _add_contact(self, contact, staking_provider_address):
+        if staking_provider_address in self._verified_nodes:
             return
 
         # TODO: check if we already have a verified node with the given contact
 
         address_updated = (
-            staker_address not in self._addresses_to_contacts
-            or contact not in self._addresses_to_contacts[staker_address])
+            staking_provider_address not in self._addresses_to_contacts
+            or contact not in self._addresses_to_contacts[staking_provider_address])
 
-        self._contacts_to_addresses[contact].add(staker_address)
-        self._addresses_to_contacts[staker_address].add(contact)
+        self._contacts_to_addresses[contact].add(staking_provider_address)
+        self._addresses_to_contacts[staking_provider_address].add(contact)
 
         return address_updated
 
@@ -94,13 +94,13 @@ class FleetSensor:
         addresses_updated = False
         for metadata in metadatas:
             payload = metadata.payload
-            staker_address = Address(payload.staker_address)
+            staking_provider_address = Address(payload.staking_provider_address)
 
-            if self._my_staker_address and staker_address == self._my_staker_address:
+            if self._my_staking_provider_address and staking_provider_address == self._my_staking_provider_address:
                 continue
 
             new_contact = Contact(payload.host, payload.port)
-            address_updated = self._add_contact(new_contact, staker_address)
+            address_updated = self._add_contact(new_contact, staking_provider_address)
             addresses_updated = address_updated or addresses_updated
 
         if addresses_updated:
@@ -108,11 +108,11 @@ class FleetSensor:
             self._addresses_updated = trio.Event()
 
     def add_verified_node(self, node):
-        if node.staker_address not in self._verified_nodes:
+        if node.staking_provider_address not in self._verified_nodes:
             # This means it may be in contacts.
             # Need to clean it out to ensure consistency.
             contact = node.ssl_contact.contact
-            address = node.staker_address
+            address = node.staking_provider_address
 
             self.remove_contact(contact)
             self.remove_address(address)
@@ -121,7 +121,7 @@ class FleetSensor:
             self._verified_nodes_updated = trio.Event()
 
         # This is the most recent metadata we got from the node, add it.
-        self._verified_nodes[node.staker_address] = node
+        self._verified_nodes[node.staking_provider_address] = node
 
     def remove_contact(self, contact):
         if contact in self._contacts_to_addresses:
@@ -140,10 +140,10 @@ class FleetSensor:
             del self._addresses_to_contacts[address]
 
     def remove_verified_node(self, node):
-        if node.staker_address not in self._verified_nodes:
+        if node.staking_provider_address not in self._verified_nodes:
             return
 
-        del self._verified_nodes[node.staker_address]
+        del self._verified_nodes[node.staking_provider_address]
 
     def verified_metadata(self):
         return [node.metadata for node in self._verified_nodes.values()]

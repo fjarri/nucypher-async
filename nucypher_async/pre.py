@@ -40,7 +40,7 @@ class Alice:
         assigned_kfrags = {}
         async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
             async for node in aiter:
-                assigned_kfrags[bytes(node.staker_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
+                assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
                 if len(assigned_kfrags) == shares:
                     break
 
@@ -105,7 +105,7 @@ class Bob:
         async with trio.open_nursery() as nursery:
             async with learner.verified_nodes_iter(destinations) as aiter:
                 async for node in aiter:
-                    nursery.start_soon(reencrypt, nursery, node, destinations[node.staker_address])
+                    nursery.start_soon(reencrypt, nursery, node, destinations[node.staking_provider_address])
         return responses
 
     async def retrieve_and_decrypt(self, learner, message_kit, encrypted_treasure_map, alice_verifying_key):

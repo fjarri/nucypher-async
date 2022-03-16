@@ -42,13 +42,13 @@ with open(ABI_DIR / 'SimplePREApplication.json') as f:
 
 class BaseEthClient:
 
-    async def get_staker_address(self, operator_address: Address) -> Address:
+    async def get_staking_provider_address(self, operator_address: Address) -> Address:
         pass
 
-    async def get_operator_address(self, staker_address: Address) -> Address:
+    async def get_operator_address(self, staking_provider_address: Address) -> Address:
         pass
 
-    async def is_staker_authorized(self, staker_address: Address) -> bool:
+    async def is_staking_provider_authorized(self, staking_provider_address: Address) -> bool:
         pass
 
     async def get_eth_balance(self, address: Address) -> Wei:
@@ -84,41 +84,41 @@ class EthClient(BaseEthClient):
         # w.eth.wait_for_transaction_receipt(tx_hash)
         # or poll manually with get_transaction_receipt(), so this will be kinda async
 
-    async def approve(self, staker_address, t_amount_wei):
+    async def approve(self, staking_provider_address, t_amount_wei):
         call = self._t.functions.approve(Registry.TOKEN_STAKING, t_amount_wei)
         await self._transact(call)
 
-    async def stake(self, staker_address, t_amount_wei):
-        call = self._token_staking.functions.stake(staker_address, staker_address, staker_address, t_amount_wei)
+    async def stake(self, staking_provider_address, t_amount_wei):
+        call = self._token_staking.functions.stake(staking_provider_address, staking_provider_address, staking_provider_address, t_amount_wei)
         await self._transact(call)
 
-    async def bond(self, staker_address, operator_address):
-        call = self._pre_application.functions.bondOperator(staker_address, operator_address)
+    async def bond(self, staking_provider_address, operator_address):
+        call = self._pre_application.functions.bondOperator(staking_provider_address, operator_address)
         await self._transact(call)
     """
 
-    async def get_staked_amount(self, staker_address: Address) -> int:
+    async def get_staked_amount(self, staking_provider_address: Address) -> int:
         t, keep_in_t, nu_in_t = await self._client.call(
             self._token_staking.address,
-            self._token_staking.abi.stakes(bytes(staker_address)))
+            self._token_staking.abi.stakes(bytes(staking_provider_address)))
         return t + keep_in_t + nu_in_t # TODO: check that that's what we need
 
-    async def get_staker_address(self, operator_address: Address) -> Address:
+    async def get_staking_provider_address(self, operator_address: Address) -> Address:
         address = await self._client.call(
             self._pre_application.address,
             self._pre_application.abi.stakingProviderFromOperator(bytes(operator_address)))
         return Address.from_hex(address)
 
-    async def get_operator_address(self, staker_address: Address) -> Address:
+    async def get_operator_address(self, staking_provider_address: Address) -> Address:
         address = await self._client.call(
             self._pre_application.address,
-            self._pre_application.abi.getOperatorFromStakingProvider(bytes(staker_address)))
+            self._pre_application.abi.getOperatorFromStakingProvider(bytes(staking_provider_address)))
         return Address.from_hex(address)
 
-    async def is_staker_authorized(self, staker_address: Address):
+    async def is_staking_provider_authorized(self, staking_provider_address: Address):
         result = await self._client.call(
             self._pre_application.address,
-            self._pre_application.abi.isAuthorized(bytes(staker_address)))
+            self._pre_application.abi.isAuthorized(bytes(staking_provider_address)))
         assert isinstance(result, bool)
         return result
 

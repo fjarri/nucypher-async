@@ -16,38 +16,40 @@ from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 
 
-def generate_metadata(ssl_private_key, ursula, staker_address, contact):
+def generate_metadata(ssl_private_key, ursula, staking_provider_address, contact):
     ssl_certificate = SSLCertificate.self_signed(ssl_private_key, contact.host)
-    payload = NodeMetadataPayload(staker_address=bytes(staker_address),
+    payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
                                   domain=ursula.domain,
                                   timestamp_epoch=maya.now().epoch,
-                                  decentralized_identity_evidence=ursula.decentralized_identity_evidence,
+                                  operator_signature=ursula.operator_signature,
                                   verifying_key=ursula.signer.verifying_key(),
                                   encrypting_key=ursula.encrypting_key,
-                                  certificate_bytes=ssl_certificate.to_pem_bytes(),
+                                  # TODO: update to DER when Ibex has it
+                                  certificate_der=ssl_certificate.to_pem_bytes(),
                                   host=contact.host,
                                   port=contact.port,
                                   )
     return NodeMetadata(signer=ursula.signer, payload=payload)
 
 
-def verify_metadata(metadata, ssl_private_key, ursula, staker_address, contact):
+def verify_metadata(metadata, ssl_private_key, ursula, staking_provider_address, contact):
 
     derived_operator_address = verify_metadata_shared(metadata, contact, ursula.domain)
 
     payload = metadata.payload
 
-    certificate = SSLCertificate.from_pem_bytes(payload.certificate_bytes)
+    # TODO: update to DER when Ibex has it
+    certificate = SSLCertificate.from_pem_bytes(payload.certificate_der)
     if certificate.public_key() != ssl_private_key.public_key():
         raise NodeVerificationError(
             f"Certificate public key mismatch: expected {ssl_private_key.public_key()},"
             f"{certificate.public_key()} in the certificate")
 
-    payload_staker_address = Address(payload.staker_address)
-    if payload_staker_address != staker_address:
+    payload_staking_provider_address = Address(payload.staking_provider_address)
+    if payload_staking_provider_address != staking_provider_address:
         raise ValueError(
-            f"Staker address mismatch: {payload_staker_address} in the metadata, "
-            f"{staker_address} recorded in the blockchain")
+            f"Staking provider address mismatch: {payload_staking_provider_address} in the metadata, "
+            f"{staking_provider_address} recorded in the blockchain")
 
     if derived_operator_address != ursula.operator_address:
         raise ValueError(
@@ -75,8 +77,8 @@ class UrsulaServer:
             parent_logger=NULL_LOGGER,
             **kwds):
 
-        staker_address = await eth_client.get_staker_address(ursula.operator_address)
-        parent_logger.info("Operator bonded to {}", staker_address.as_checksum())
+        staking_provider_address = await eth_client.get_staking_provider_address(ursula.operator_address)
+        parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
         eth_balance = await eth_client.get_eth_balance(ursula.operator_address)
         parent_logger.info("Operator balance: {}", eth_balance)
@@ -88,13 +90,13 @@ class UrsulaServer:
             parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
             raise RuntimeError("Operator is not confirmed")
 
-        return cls(ursula, eth_client, staker_address=staker_address, parent_logger=parent_logger, **kwds)
+        return cls(ursula, eth_client, staking_provider_address=staking_provider_address, parent_logger=parent_logger, **kwds)
 
     def __init__(
             self,
             ursula: Ursula,
             eth_client: BaseEthClient,
-            staker_address: Address,
+            staking_provider_address: Address,
             _rest_client=None,
             port=9151,
             host='127.0.0.1',
@@ -105,7 +107,7 @@ class UrsulaServer:
         self._logger = parent_logger.get_child('UrsulaServer')
 
         self.ursula = ursula
-        self.staker_address = staker_address
+        self.staking_provider_address = staking_provider_address
 
         if storage is None:
             storage = InMemoryStorage()
@@ -121,7 +123,7 @@ class UrsulaServer:
             metadata = generate_metadata(
                 ssl_private_key=self._ssl_private_key,
                 ursula=self.ursula,
-                staker_address=self.staker_address,
+                staking_provider_address=self.staking_provider_address,
                 contact=contact)
             self._storage.set_my_metadata(metadata)
         else:
@@ -132,18 +134,19 @@ class UrsulaServer:
                     metadata=metadata,
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
-                    staker_address=self.staker_address,
+                    staking_provider_address=self.staking_provider_address,
                     contact=contact)
             except Exception as e:
                 self._logger.warn(f"Obsolete/invalid metadata found ({e}), updating")
                 metadata = generate_metadata(
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
-                    staker_address=self.staker_address,
+                    staking_provider_address=self.staking_provider_address,
                     contact=contact)
                 self._storage.set_my_metadata(metadata)
 
-        self._ssl_certificate = SSLCertificate.from_pem_bytes(metadata.payload.certificate_bytes)
+        # TODO: update to DER when Ibex has it
+        self._ssl_certificate = SSLCertificate.from_pem_bytes(metadata.payload.certificate_der)
         self._metadata = metadata
 
         self.ssl_contact = SSLContact(contact, self._ssl_certificate)
@@ -260,7 +263,7 @@ class UrsulaServer:
         contacts = self.learner.fleet_sensor._contacts_to_addresses
 
         stats = (f"""
-        Staker: {self.staker_address}
+        Staking provider: {self.staking_provider_address}
         Operator: {self.ursula.operator_address}
         """ +
         "Verified nodes:\n" +

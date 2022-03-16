@@ -21,7 +21,7 @@ class FleetState:
         updated = False
         for metadata in metadatas:
             payload = metadata.payload
-            address = payload.staker_address
+            address = payload.staking_provider_address
             if address not in self._metadatas or payload.timestamp_epoch > self._metadatas[address].payload.timestamp_epoch:
                 self._metadatas[address] = metadata
                 updated = True

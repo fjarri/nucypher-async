@@ -40,12 +40,12 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
         else:
             seed_contacts = []
 
-        staker_address = Address(os.urandom(20))
+        staking_provider_address = Address(os.urandom(20))
 
         server = UrsulaServer(
             ursula=ursulas[i],
             eth_client=mock_eth_client,
-            staker_address=staker_address,
+            staking_provider_address=staking_provider_address,
             port=9150 + i,
             seed_contacts=seed_contacts,
             parent_logger=logger,
@@ -53,8 +53,8 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
 
         servers.append(server)
         mock_network.add_server(server)
-        mock_eth_client.authorize_staker(staker_address)
-        mock_eth_client.bond_operator(staker_address, ursulas[i].operator_address)
+        mock_eth_client.authorize_staking_provider(staking_provider_address)
+        mock_eth_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
         mock_eth_client.confirm_operator_address(ursulas[i].operator_address)
 
     yield servers
@@ -70,7 +70,7 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         await trio.sleep(100)
 
         known_nodes = {
-            handle.ursula_server.staker_address: set(handle.ursula_server.learner.fleet_sensor._verified_nodes)
+            handle.ursula_server.staking_provider_address: set(handle.ursula_server.learner.fleet_sensor._verified_nodes)
             for handle in handles}
 
         # Each Ursula should know about every other Ursula by now.

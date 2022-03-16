@@ -60,7 +60,8 @@ class SSLContact:
     def from_metadata(cls, metadata: NodeMetadata):
         return cls(
             Contact.from_metadata(metadata),
-            SSLCertificate.from_pem_bytes(metadata.payload.certificate_bytes))
+            # TODO: update to DER when Ibex has it
+            SSLCertificate.from_pem_bytes(metadata.payload.certificate_der))
 
     def __eq__(self, other):
         return self.contact == other.contact and self.certificate == other.certificate

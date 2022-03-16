@@ -37,7 +37,7 @@ class Ursula:
         self.encrypting_key = self._decrypting_key.public_key()
 
         self.operator_address = self.__eth_account.address
-        self.decentralized_identity_evidence = self.__eth_account.sign_message(bytes(self.signer.verifying_key()))
+        self.operator_signature = self.__eth_account.sign_message(bytes(self.signer.verifying_key()))
 
     def make_ssl_private_key(self):
         return self.__master_key.make_ssl_private_key()
@@ -59,12 +59,11 @@ class RemoteUrsula:
         payload = metadata.payload
 
         self.metadata = metadata
-        self.staker_address = Address(payload.staker_address)
+        self.staking_provider_address = Address(payload.staking_provider_address)
         self.operator_address = operator_address
         self.verifying_key = payload.verifying_key
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
 
     def __str__(self):
-        staker_short = self.staker_address.as_checksum()[:10]
-        return f"RemoteUrsula(staker={staker_short})"
+        return f"RemoteUrsula({self.staking_provider_address.as_checksum()})"

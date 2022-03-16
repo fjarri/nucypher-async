@@ -33,7 +33,8 @@ def verify_metadata_shared(metadata, contact, domain):
     payload = metadata.payload
 
     try:
-        certificate = SSLCertificate.from_pem_bytes(payload.certificate_bytes)
+        # TODO: update to DER when Ibex has it
+        certificate = SSLCertificate.from_pem_bytes(payload.certificate_der)
     except Exception as e:
         raise NodeVerificationError(f"Invalid certificate bytes in the payload: {e}") from e
 
@@ -135,7 +136,7 @@ class Learner:
         self.domain = domain
         self.fleet_state = FleetState(self._my_metadata)
 
-        my_address = Address(self._my_metadata.payload.staker_address) if my_metadata else None
+        my_address = Address(self._my_metadata.payload.staking_provider_address) if my_metadata else None
         self.fleet_sensor = FleetSensor(my_address, seed_contacts=seed_contacts)
 
     @producer
@@ -183,23 +184,24 @@ class Learner:
 
         payload = metadata.payload
 
-        certificate_bytes = ssl_contact.certificate.to_pem_bytes()
-        if payload.certificate_bytes != certificate_bytes:
+        # TODO: update to DER when Ibex has it
+        certificate_der = ssl_contact.certificate.to_pem_bytes()
+        if payload.certificate_der != certificate_der:
             raise NodeVerificationError(
-                f"Certificate mismatch: contact has {certificate_bytes}, "
-                f"but metadata has {payload.certificate_bytes}")
+                f"Certificate mismatch: contact has {certificate_der}, "
+                f"but metadata has {payload.certificate_der}")
 
         derived_operator_address = verify_metadata_shared(metadata, ssl_contact.contact, self.domain)
-        staker_address = Address(payload.staker_address)
+        staking_provider_address = Address(payload.staking_provider_address)
 
-        bonded_operator_address = await self._eth_client.get_operator_address(staker_address)
+        bonded_operator_address = await self._eth_client.get_operator_address(staking_provider_address)
         if derived_operator_address != bonded_operator_address:
             raise NodeVerificationError(
                 f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
                 f"but the bonded address is {bonded_operator_address}")
 
-        if not await self._eth_client.is_staker_authorized(staker_address):
-            raise NodeVerificationError("Staker is not authorized")
+        if not await self._eth_client.is_staking_provider_authorized(staking_provider_address):
+            raise NodeVerificationError("Staking provider is not authorized")
 
         # TODO: is_operator_confirmed()
 
@@ -288,7 +290,7 @@ class Learner:
 
     def _add_verified_nodes(self, metadatas):
         for metadata in metadatas:
-            if metadata.payload.staker_address != self._my_metadata.payload.staker_address:
+            if metadata.payload.staking_provider_address != self._my_metadata.payload.staking_provider_address:
                 node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
                 self.fleet_sensor.add_verified_node(node)
                 self.fleet_state.add_metadatas([metadata])
