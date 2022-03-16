@@ -17,9 +17,9 @@ class FleetState:
         self._checksum = None
         self.timestamp = maya.now()
 
-    def update(self, nodes_to_add: Iterable[NodeMetadata]):
+    def add_metadatas(self, metadatas: Iterable[NodeMetadata]):
         updated = False
-        for metadata in nodes_to_add:
+        for metadata in metadatas:
             payload = metadata.payload
             address = payload.staker_address
             if address not in self._metadatas or payload.timestamp_epoch > self._metadatas[address].payload.timestamp_epoch:
@@ -28,6 +28,12 @@ class FleetState:
 
         if updated:
             self._checksum = None
+
+    def remove_metadata(self, metadata: NodeMetadata):
+        address = metadata.payload.staker_address
+        if address in self._metadatas:
+            if bytes(self._metadatas[address]) == bytes(metadata):
+                del self._metadatas[address]
 
     @property
     def checksum(self):

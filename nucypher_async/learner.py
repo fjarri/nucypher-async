@@ -255,7 +255,7 @@ class Learner:
             else:
                 self.fleet_sensor.add_verified_node(node)
                 self.fleet_sensor.add_contacts(metadatas)
-                self.fleet_state.update(nodes_to_add=metadatas)
+                self.fleet_state.add_metadatas(metadatas)
                 return contact
             finally:
                 self.fleet_sensor.remove_contact(contact)
@@ -269,11 +269,11 @@ class Learner:
                     metadatas = await self._learn_from_node(node)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to learn from {}: {}", node, e)
-                # TODO: do we remove it from the fleet state here too? Other nodes don't.
                 self.fleet_sensor.remove_verified_node(node)
+                self.fleet_state.remove_metadata(node.metadata)
             else:
                 self.fleet_sensor.add_contacts(metadatas)
-                self.fleet_state.update(nodes_to_add=metadatas)
+                self.fleet_state.add_metadatas(metadatas)
                 return node
 
     async def learning_round(self):
@@ -291,4 +291,4 @@ class Learner:
             if metadata.payload.staker_address != self._my_metadata.payload.staker_address:
                 node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
                 self.fleet_sensor.add_verified_node(node)
-                self.fleet_state.update(nodes_to_add=[metadata])
+                self.fleet_state.add_metadatas([metadata])

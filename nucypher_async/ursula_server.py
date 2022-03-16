@@ -215,7 +215,7 @@ class UrsulaServer:
         new_metadatas = metadata_request.announce_nodes
 
         # Unfliltered metadata goes into FleetState for compatibility
-        self.learner.fleet_state.update(new_metadatas)
+        self.learner.fleet_state.add_metadatas(new_metadatas)
 
         # Filter out only the contact(s) with `remote_address`.
         # We're not going to trust all this metadata anyway.
