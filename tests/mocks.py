@@ -1,9 +1,13 @@
 from functools import partial
+from typing import NamedTuple
 import weakref
 
+import trio
 from nucypher_async.drivers.eth_client import Address
 from nucypher_async.drivers.rest_client import Contact, SSLContact
 from nucypher_async.drivers.rest_server import ServerHandle
+from nucypher_async.pre import HRAC
+from pons.types import Wei
 
 
 class MockNetwork:
@@ -96,6 +100,66 @@ class MockEthClient:
 
     async def get_eth_balance(self, address: Address):
         return self.eth_balances.get(address, 0)
+
+
+class Policy(NamedTuple):
+    policy_id: HRAC
+    start: int
+    end: int
+    shares: int
+
+
+class MockL2Network:
+
+    def __init__(self):
+        self.policies = {}
+        self.balances = {}
+        self.fee = Wei(10**9)
+
+    def set_balance(self, address, value):
+        self.balances[address] = value
+
+    def pay(self, address, value):
+        assert address in self.balances
+        assert self.balances[address] >= value
+        self.balances[address] -= value
+
+
+class MockL2Client:
+
+    def __init__(self, network):
+        self._network = network
+
+    async def is_policy_active(self, hrac):
+        if hrac not in self._network.policies:
+            return False
+
+        now = int(trio.current_time())
+        if now > self._network.policies[hrac].end:
+            return False
+
+        return True
+
+    async def get_policy_cost(self, shares, start, end):
+        return self._network.fee * (end - start) * shares
+
+    def with_signer(self, signer):
+        return MockL2SigningClient(self._network, signer)
+
+
+class MockL2SigningClient(MockL2Client):
+
+    def __init__(self, network, signer):
+        super().__init__(network)
+        self._signer = signer
+
+    async def create_policy(self, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
+        assert hrac not in self._network.policies
+
+        cost = await self.get_policy_cost(shares, policy_start, policy_end)
+        self._network.pay(self._signer.address, cost)
+        self._network.policies[hrac] = Policy(
+            policy_id=hrac, start=policy_start, end=policy_end, shares=shares)
 
 
 async def mock_serve_async(nursery, ursula_server, shutdown_trigger):

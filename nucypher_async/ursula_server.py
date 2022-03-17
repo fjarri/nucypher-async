@@ -7,6 +7,7 @@ from nucypher_core import (
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .drivers.eth_client import BaseEthClient, Address
+from .drivers.l2_client import BaseL2Client
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner, verify_metadata_shared
@@ -96,6 +97,7 @@ class UrsulaServer:
             self,
             ursula: Ursula,
             eth_client: BaseEthClient,
+            l2_client: BaseL2Client,
             staking_provider_address: Address,
             _rest_client=None,
             port=9151,
@@ -164,6 +166,7 @@ class UrsulaServer:
             domain=ursula.domain)
 
         self._eth_client = eth_client
+        self._l2_client = l2_client
 
         self.started = False
 
@@ -235,18 +238,16 @@ class UrsulaServer:
     async def endpoint_reencrypt(self, reencryption_request_bytes):
         reencryption_request = ReencryptionRequest.from_bytes(reencryption_request_bytes)
 
+        hrac = reencryption_request.hrac
+
         # TODO: check if the policy is marked as revoked
+        if not await self._l2_client.is_policy_active(hrac):
+            raise HTTPError(f"Policy {hrac} is not active", status=HTTPStatus.PAYMENT_REQUIRED)
 
         verified_kfrag = self.ursula.decrypt_kfrag(
             encrypted_kfrag=reencryption_request.encrypted_kfrag,
-            hrac=reencryption_request.hrac,
+            hrac=hrac,
             publisher_verifying_key=reencryption_request.publisher_verifying_key)
-
-        """
-        TODO: blockchain checks
-        - verify that the policy has been paid for (by HRAC) (`verify_policy_payment`)
-        - verify that the policy is active (`verify_active_policy`)
-        """
 
         vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=reencryption_request.capsules)
 

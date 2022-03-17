@@ -10,8 +10,12 @@ from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob, encrypt
 from nucypher_async.learner import Learner
+from pons.types import Wei
 
-from .mocks import MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery
+from .mocks import (
+    MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery,
+    MockL2Network, MockL2Client,
+    )
 
 
 @pytest.fixture
@@ -30,7 +34,17 @@ def mock_eth_client():
 
 
 @pytest.fixture
-def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
+def mock_l2_network():
+    yield MockL2Network()
+
+
+@pytest.fixture
+def mock_l2_client(mock_l2_network):
+    yield MockL2Client(mock_l2_network)
+
+
+@pytest.fixture
+def ursula_servers(mock_network, mock_eth_client, mock_l2_client, ursulas, logger):
     servers = []
 
     for i in range(10):
@@ -38,6 +52,7 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
         server = UrsulaServer(
             ursula=ursulas[i],
             eth_client=mock_eth_client,
+            l2_client=mock_l2_client,
             staking_provider_address=staking_provider_address,
             parent_logger=logger,
             host='127.0.0.1',
@@ -71,7 +86,8 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
     assert len(nodes) == 3
 
 
-async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_eth_client):
+async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_eth_client,
+        mock_l2_network, mock_l2_client):
 
     handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
 
@@ -81,8 +97,12 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
 
     alice_learner = Learner(rest_client, mock_eth_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
 
+    # Fund Alice
+    mock_l2_network.set_balance(alice.l2_address, Wei.from_unit(1, 'ether'))
+
     policy = await alice.grant(
         learner=alice_learner,
+        l2_client=mock_l2_client,
         bob=bob, # TODO: have a "RemoteBob" type for that
         label=b'some label',
         threshold=2,

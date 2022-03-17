@@ -1,17 +1,23 @@
+from typing import NamedTuple
+
 import trio
 
-from nucypher_core import TreasureMap, MessageKit, HRAC, ReencryptionRequest, ReencryptionResponse
-from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags
+from nucypher_core import (
+    TreasureMap, MessageKit, HRAC, ReencryptionRequest, ReencryptionResponse,
+    EncryptedTreasureMap
+    )
+from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags, PublicKey
 
 from .drivers.eth_client import Address
+from .drivers.eth_account import EthAccount
 from .master_key import MasterKey
 
 
-class Policy:
-
-    def __init__(self, encrypted_treasure_map, encrypting_key):
-        self.encrypted_treasure_map = encrypted_treasure_map
-        self.encrypting_key = encrypting_key
+class Policy(NamedTuple):
+    encrypted_treasure_map: EncryptedTreasureMap
+    encrypting_key: PublicKey
+    start: int
+    end: int
 
 
 class Alice:
@@ -21,12 +27,25 @@ class Alice:
         self._signer = self.__master_key.make_signer()
         self.verifying_key = self._signer.verifying_key()
         self._delegating_skf = self.__master_key.make_delegating_key_factory()
+        self._l2_account = EthAccount.random()
 
-    async def grant(self, learner, bob, label, threshold, shares, handpicked_addresses=None):
+    @property
+    def l2_address(self):
+        return self._l2_account.address
+
+    async def grant(self, learner, l2_client, bob, label, threshold, shares, handpicked_addresses=None):
 
         # TODO: sample Ursulas from the blockchain here
 
         policy_sk = self._delegating_skf.make_key(label)
+
+        hrac = HRAC(
+            publisher_verifying_key=self.verifying_key,
+            bob_verifying_key=bob.verifying_key,
+            label=label)
+
+        if await l2_client.is_policy_active(hrac):
+            raise RuntimeError(f"Policy {hrac} is already active")
 
         kfrags = generate_kfrags(
             delegating_sk=policy_sk,
@@ -37,6 +56,7 @@ class Alice:
             sign_delegating_key=True,
             sign_receiving_key=True)
 
+        # TODO: pick Ursulas at random
         assigned_kfrags = {}
         async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
             async for node in aiter:
@@ -44,10 +64,6 @@ class Alice:
                 if len(assigned_kfrags) == shares:
                     break
 
-        hrac = HRAC(
-            publisher_verifying_key=self.verifying_key,
-            bob_verifying_key=bob.verifying_key,
-            label=label)
         treasure_map = TreasureMap(
             signer=self._signer,
             hrac=hrac,
@@ -56,7 +72,15 @@ class Alice:
             threshold=threshold)
         encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.public_key)
 
+        policy_start = int(trio.current_time())
+        policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
+
+        signing_l2_client = l2_client.with_signer(self._l2_account)
+        await signing_l2_client.create_policy(hrac, shares, policy_start, policy_end)
+
         return Policy(
+            start=policy_start,
+            end=policy_end,
             encrypted_treasure_map=encrypted_treasure_map,
             encrypting_key=policy_sk.public_key())
 

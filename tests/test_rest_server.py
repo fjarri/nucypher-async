@@ -10,12 +10,14 @@ from nucypher_async.drivers.rest_client import async_client_ssl
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 
-from .mocks import MockEthClient
+from .mocks import MockEthClient, MockL2Client, MockL2Network
 
 
 async def test_client_real_server(nursery, capsys):
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
+    l2_client = MockL2Client(MockL2Network())
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client,
+        l2_client=l2_client, staking_provider_address=Address(os.urandom(20)))
     handle = start_in_nursery(nursery, server)
 
     # TODO: have some event in the server that could be waited for to ensure finished startup?

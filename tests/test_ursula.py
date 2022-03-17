@@ -10,7 +10,9 @@ from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.learner import Learner
 
-from .mocks import MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery
+from .mocks import (
+    MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery,
+    MockL2Client, MockL2Network)
 
 
 @pytest.fixture
@@ -31,6 +33,8 @@ def mock_eth_client():
 @pytest.fixture
 def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
     servers = []
+    l2_client = MockL2Client(MockL2Network())
+
     for i in range(10):
 
         # Each Ursula knows only about one other Ursula,
@@ -45,6 +49,7 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
         server = UrsulaServer(
             ursula=ursulas[i],
             eth_client=mock_eth_client,
+            l2_client=l2_client,
             staking_provider_address=staking_provider_address,
             port=9150 + i,
             seed_contacts=seed_contacts,

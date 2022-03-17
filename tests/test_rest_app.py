@@ -9,12 +9,14 @@ from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 
-from .mocks import MockEthClient
+from .mocks import MockEthClient, MockL2Client, MockL2Network
 
 
 async def test_client_with_background_tasks():
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
+    l2_client = MockL2Client(MockL2Network())
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client,
+        l2_client=l2_client, staking_provider_address=Address(os.urandom(20)))
     app = make_app(server)
 
     async with app.test_app() as test_app:
@@ -35,7 +37,9 @@ async def test_client_with_background_tasks():
 
 async def test_client_no_background_tasks():
     eth_client = MockEthClient()
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client, staking_provider_address=Address(os.urandom(20)))
+    l2_client = MockL2Client(MockL2Network())
+    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client,
+        l2_client=l2_client, staking_provider_address=Address(os.urandom(20)))
     app = make_app(server)
 
     test_client = app.test_client()
