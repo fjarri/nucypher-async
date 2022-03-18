@@ -4,19 +4,19 @@ import os
 import pytest
 import trio
 
-from nucypher_async.drivers.eth_client import Address
+from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 
-from .mocks import MockEthClient, MockL2Client, MockL2Network
+from .mocks import MockIdentityClient, MockPaymentClient, MockPaymentNetwork
 
 
 async def test_client_with_background_tasks():
-    eth_client = MockEthClient()
-    l2_client = MockL2Client(MockL2Network())
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client,
-        l2_client=l2_client, staking_provider_address=Address(os.urandom(20)))
+    identity_client = MockIdentityClient()
+    payment_client = MockPaymentClient(MockPaymentNetwork())
+    server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
+        payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
     app = make_app(server)
 
     async with app.test_app() as test_app:
@@ -36,10 +36,10 @@ async def test_client_with_background_tasks():
 
 
 async def test_client_no_background_tasks():
-    eth_client = MockEthClient()
-    l2_client = MockL2Client(MockL2Network())
-    server = UrsulaServer(ursula=Ursula(), eth_client=eth_client,
-        l2_client=l2_client, staking_provider_address=Address(os.urandom(20)))
+    identity_client = MockIdentityClient()
+    payment_client = MockPaymentClient(MockPaymentNetwork())
+    server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
+        payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
     app = make_app(server)
 
     test_client = app.test_client()

@@ -1,15 +1,10 @@
 from typing import List, Optional
 
-from eth_account import Account
-from eth_account.messages import encode_defunct
-from eth_account._utils.signing import to_standard_signature_bytes
-
 from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
     SecretKey, Signer, PublicKey, VerifiedKeyFrag, VerifiedCapsuleFrag, reencrypt)
 
-from .drivers.eth_account import EthAccount
-from .drivers.eth_client import Address
+from .drivers.identity import IdentityAddress, IdentityAccount
 from .drivers.rest_client import SSLContact
 from .master_key import MasterKey
 
@@ -19,7 +14,7 @@ class Ursula:
     def __init__(
             self,
             master_key: Optional[MasterKey] = None,
-            eth_account: Optional[EthAccount] = None,
+            identity_account: Optional[IdentityAccount] = None,
             domain="mainnet"):
 
         self.domain = domain
@@ -28,16 +23,15 @@ class Ursula:
             master_key = MasterKey.random()
         self.__master_key = master_key
 
-        if not eth_account:
-            eth_account = EthAccount.random()
-        self.__eth_account = eth_account
+        if not identity_account:
+            identity_account = IdentityAccount.random()
 
         self.signer = self.__master_key.make_signer()
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        self.operator_address = self.__eth_account.address
-        self.operator_signature = self.__eth_account.sign_message(bytes(self.signer.verifying_key()))
+        self.operator_address = identity_account.address
+        self.operator_signature = identity_account.sign_message(bytes(self.signer.verifying_key()))
 
     def make_ssl_private_key(self):
         return self.__master_key.make_ssl_private_key()
@@ -59,7 +53,7 @@ class RemoteUrsula:
         payload = metadata.payload
 
         self.metadata = metadata
-        self.staking_provider_address = Address(payload.staking_provider_address)
+        self.staking_provider_address = IdentityAddress(payload.staking_provider_address)
         self.operator_address = operator_address
         self.verifying_key = payload.verifying_key
 

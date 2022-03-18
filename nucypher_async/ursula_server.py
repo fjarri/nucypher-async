@@ -6,8 +6,8 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .drivers.eth_client import BaseEthClient, Address
-from .drivers.l2_client import BaseL2Client
+from .drivers.identity import BaseIdentityClient, IdentityAddress
+from .drivers.payment import BasePaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner, verify_metadata_shared
@@ -46,7 +46,7 @@ def verify_metadata(metadata, ssl_private_key, ursula, staking_provider_address,
             f"Certificate public key mismatch: expected {ssl_private_key.public_key()},"
             f"{certificate.public_key()} in the certificate")
 
-    payload_staking_provider_address = Address(payload.staking_provider_address)
+    payload_staking_provider_address = IdentityAddress(payload.staking_provider_address)
     if payload_staking_provider_address != staking_provider_address:
         raise ValueError(
             f"Staking provider address mismatch: {payload_staking_provider_address} in the metadata, "
@@ -74,31 +74,36 @@ class UrsulaServer:
     async def async_init(
             cls,
             ursula: Ursula,
-            eth_client: BaseEthClient,
+            identity_client: BaseIdentityClient,
             parent_logger=NULL_LOGGER,
             **kwds):
 
-        staking_provider_address = await eth_client.get_staking_provider_address(ursula.operator_address)
+        staking_provider_address = await identity_client.get_staking_provider_address(ursula.operator_address)
         parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
-        eth_balance = await eth_client.get_eth_balance(ursula.operator_address)
-        parent_logger.info("Operator balance: {}", eth_balance)
+        balance = await identity_client.get_balance(ursula.operator_address)
+        parent_logger.info("Operator balance: {}", balance)
         # TODO: how much eth do we need to run a node?
 
         # TODO: we can call confirm_operator_address() here if the operator is not confirmed
-        confirmed = await eth_client.is_operator_confirmed(ursula.operator_address)
+        confirmed = await identity_client.is_operator_confirmed(ursula.operator_address)
         if not confirmed:
             parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
             raise RuntimeError("Operator is not confirmed")
 
-        return cls(ursula, eth_client, staking_provider_address=staking_provider_address, parent_logger=parent_logger, **kwds)
+        return cls(
+            ursula=ursula,
+            identity_client=identity_client,
+            staking_provider_address=staking_provider_address,
+            parent_logger=parent_logger,
+            **kwds)
 
     def __init__(
             self,
             ursula: Ursula,
-            eth_client: BaseEthClient,
-            l2_client: BaseL2Client,
-            staking_provider_address: Address,
+            identity_client: BaseIdentityClient,
+            payment_client: BasePaymentClient,
+            staking_provider_address: IdentityAddress,
             _rest_client=None,
             port=9151,
             host='127.0.0.1',
@@ -158,15 +163,14 @@ class UrsulaServer:
 
         self.learner = Learner(
             rest_client=_rest_client,
-            eth_client=eth_client,
+            identity_client=identity_client,
             storage=storage,
             my_metadata=self._metadata,
             seed_contacts=seed_contacts,
             parent_logger=self._logger,
             domain=ursula.domain)
 
-        self._eth_client = eth_client
-        self._l2_client = l2_client
+        self._payment_client = payment_client
 
         self.started = False
 
@@ -241,7 +245,7 @@ class UrsulaServer:
         hrac = reencryption_request.hrac
 
         # TODO: check if the policy is marked as revoked
-        if not await self._l2_client.is_policy_active(hrac):
+        if not await self._payment_client.is_policy_active(hrac):
             raise HTTPError(f"Policy {hrac} is not active", status=HTTPStatus.PAYMENT_REQUIRED)
 
         verified_kfrag = self.ursula.decrypt_kfrag(

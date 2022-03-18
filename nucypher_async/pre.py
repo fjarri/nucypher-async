@@ -8,8 +8,8 @@ from nucypher_core import (
     )
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags, PublicKey
 
-from .drivers.eth_client import Address
-from .drivers.eth_account import EthAccount
+from .drivers.identity import IdentityAddress
+from .drivers.payment import PaymentAccount
 from .master_key import MasterKey
 
 
@@ -27,13 +27,13 @@ class Alice:
         self._signer = self.__master_key.make_signer()
         self.verifying_key = self._signer.verifying_key()
         self._delegating_skf = self.__master_key.make_delegating_key_factory()
-        self._l2_account = EthAccount.random()
+        self._payment_account = PaymentAccount.random()
 
     @property
-    def l2_address(self):
-        return self._l2_account.address
+    def payment_address(self):
+        return self._payment_account.address
 
-    async def grant(self, learner, l2_client, bob, label, threshold, shares, handpicked_addresses=None):
+    async def grant(self, learner, payment_client, bob, label, threshold, shares, handpicked_addresses=None):
 
         # TODO: sample Ursulas from the blockchain here
 
@@ -44,7 +44,7 @@ class Alice:
             bob_verifying_key=bob.verifying_key,
             label=label)
 
-        if await l2_client.is_policy_active(hrac):
+        if await payment_client.is_policy_active(hrac):
             raise RuntimeError(f"Policy {hrac} is already active")
 
         kfrags = generate_kfrags(
@@ -75,8 +75,8 @@ class Alice:
         policy_start = int(trio.current_time())
         policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
 
-        signing_l2_client = l2_client.with_signer(self._l2_account)
-        await signing_l2_client.create_policy(hrac, shares, policy_start, policy_end)
+        signing_payment_client = payment_client.with_signer(self._payment_account)
+        await signing_payment_client.create_policy(hrac, shares, policy_start, policy_end)
 
         return Policy(
             start=policy_start,
@@ -125,7 +125,7 @@ class Bob:
             if len(responses) == treasure_map.threshold:
                 nursery.cancel_scope.cancel()
 
-        destinations = {Address(address): ekfrag for address, ekfrag in treasure_map.destinations.items()}
+        destinations = {IdentityAddress(address): ekfrag for address, ekfrag in treasure_map.destinations.items()}
         async with trio.open_nursery() as nursery:
             async with learner.verified_nodes_iter(destinations) as aiter:
                 async for node in aiter:

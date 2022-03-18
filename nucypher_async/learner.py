@@ -10,7 +10,7 @@ import maya
 
 from nucypher_core import FleetStateChecksum
 
-from .drivers.eth_client import Address
+from .drivers.identity import IdentityAddress
 from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError
 from .drivers.ssl import SSLCertificate
 from .client import NetworkClient
@@ -76,7 +76,7 @@ def verify_metadata_shared(metadata, contact, domain):
     except Exception as e:
         raise NodeVerificationError(f"Failed to derive operator address: {e}") from e
 
-    return Address(address_bytes)
+    return IdentityAddress(address_bytes)
 
 
 def producer(wrapped):
@@ -117,7 +117,7 @@ class Learner:
     CONTACT_LEARNING_TIMEOUT = 10
     NODE_LEARNING_TIMEOUT = 10
 
-    def __init__(self, rest_client, eth_client, my_metadata=None, seed_contacts=None,
+    def __init__(self, rest_client, identity_client, my_metadata=None, seed_contacts=None,
             parent_logger=NULL_LOGGER, storage=None, domain="mainnet"):
 
         self._logger = parent_logger.get_child('Learner')
@@ -127,7 +127,7 @@ class Learner:
         self._storage = storage
 
         self._rest_client = NetworkClient(rest_client)
-        self._eth_client = eth_client
+        self._identity_client = identity_client
 
         self._my_metadata = my_metadata
 
@@ -136,7 +136,7 @@ class Learner:
         self.domain = domain
         self.fleet_state = FleetState(self._my_metadata)
 
-        my_address = Address(self._my_metadata.payload.staking_provider_address) if my_metadata else None
+        my_address = IdentityAddress(self._my_metadata.payload.staking_provider_address) if my_metadata else None
         self.fleet_sensor = FleetSensor(my_address, seed_contacts=seed_contacts)
 
     @producer
@@ -192,15 +192,15 @@ class Learner:
                 f"but metadata has {payload.certificate_der}")
 
         derived_operator_address = verify_metadata_shared(metadata, ssl_contact.contact, self.domain)
-        staking_provider_address = Address(payload.staking_provider_address)
+        staking_provider_address = IdentityAddress(payload.staking_provider_address)
 
-        bonded_operator_address = await self._eth_client.get_operator_address(staking_provider_address)
+        bonded_operator_address = await self._identity_client.get_operator_address(staking_provider_address)
         if derived_operator_address != bonded_operator_address:
             raise NodeVerificationError(
                 f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
                 f"but the bonded address is {bonded_operator_address}")
 
-        if not await self._eth_client.is_staking_provider_authorized(staking_provider_address):
+        if not await self._identity_client.is_staking_provider_authorized(staking_provider_address):
             raise NodeVerificationError("Staking provider is not authorized")
 
         # TODO: is_operator_confirmed()

@@ -10,10 +10,19 @@ TODO:
 """
 
 import json
+import os
 from pathlib import Path
 
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from eth_account._utils.signing import to_standard_signature_bytes
+
 from pons import HTTPProvider, Client, ContractABI, DeployedContract
-from pons.types import Address, Wei
+from pons.types import Address, Amount
+
+
+class IdentityAddress(Address):
+    pass
 
 
 class Registry:
@@ -40,7 +49,46 @@ with open(ABI_DIR / 'SimplePREApplication.json') as f:
     PRE_APPLICATION_ABI = json.load(f)['abi']
 
 
-class BaseEthClient:
+class IdentityAccount:
+
+    @classmethod
+    def from_payload(cls, payload, password):
+        pk = Account.decrypt(payload, password)
+        account = Account.from_key(pk)
+        return cls(account)
+
+    @classmethod
+    def random(cls):
+        return cls(Account.create())
+
+    def __init__(self, account):
+        self._account = account
+        self.address = IdentityAddress.from_hex(account.address)
+
+    def sign_message(self, message: bytes):
+        signature = self._account.sign_message(encode_defunct(message))
+        return to_standard_signature_bytes(signature.signature)
+
+
+class AmountETH(Amount):
+
+    def __repr__(self):
+        return f"AmountETH({self.as_wei()})"
+
+    def __str__(self):
+        return f"{self.as_ether()} ETH"
+
+
+class AmountT(Amount):
+
+    def __repr__(self):
+        return f"AmountT({self.as_wei()})"
+
+    def __str__(self):
+        return f"{self.as_ether()} T"
+
+
+class BaseIdentityClient:
 
     async def get_staking_provider_address(self, operator_address: Address) -> Address:
         pass
@@ -51,11 +99,11 @@ class BaseEthClient:
     async def is_staking_provider_authorized(self, staking_provider_address: Address) -> bool:
         pass
 
-    async def get_eth_balance(self, address: Address) -> Wei:
+    async def get_eth_balance(self, address: Address) -> AmountETH:
         pass
 
 
-class EthClient(BaseEthClient):
+class IdentityClient(BaseIdentityClient):
 
     @classmethod
     def from_http_endpoint(cls, url):
@@ -73,17 +121,6 @@ class EthClient(BaseEthClient):
             address=Registry.PRE_APPLICATION, abi=ContractABI(PRE_APPLICATION_ABI))
 
     """
-    async def _transact(self, contract_call):
-        # TODO: requires a signing client
-        from_address = self._account.address
-        nonce = self._web3.eth.get_transaction_count(from_address)
-        call = contract_function(*args)
-        tx = call.buildTransaction({'chainId': 4, 'gas': 1000000, 'nonce': nonce, 'from': from_address})
-        signed_tx = w.eth.account.signTransaction(tx, self._account.pk_bytes)
-        tx_hash = w.eth.send_raw_transaction(signed_tx.rawTransaction)
-        # w.eth.wait_for_transaction_receipt(tx_hash)
-        # or poll manually with get_transaction_receipt(), so this will be kinda async
-
     async def approve(self, staking_provider_address, t_amount_wei):
         call = self._t.functions.approve(Registry.TOKEN_STAKING, t_amount_wei)
         await self._transact(call)
@@ -97,11 +134,11 @@ class EthClient(BaseEthClient):
         await self._transact(call)
     """
 
-    async def get_staked_amount(self, staking_provider_address: Address) -> int:
+    async def get_staked_amount(self, staking_provider_address: Address) -> AmountT:
         t, keep_in_t, nu_in_t = await self._client.call(
             self._token_staking.address,
             self._token_staking.abi.stakes(bytes(staking_provider_address)))
-        return t + keep_in_t + nu_in_t # TODO: check that that's what we need
+        return AmountT(t + keep_in_t + nu_in_t) # TODO: check that that's what we need
 
     async def get_staking_provider_address(self, operator_address: Address) -> Address:
         address = await self._client.call(
@@ -129,5 +166,6 @@ class EthClient(BaseEthClient):
         assert isinstance(result, bool)
         return result
 
-    async def get_eth_balance(self, address: Address) -> Wei:
-        return await self._client.get_balance(address)
+    async def get_balance(self, address: Address) -> AmountETH:
+        amount = await self._client.get_balance(address)
+        return AmountETH(amount.as_wei())

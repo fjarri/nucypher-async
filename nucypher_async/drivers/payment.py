@@ -12,9 +12,11 @@ TODO:
 import json
 from pathlib import Path
 
+from eth_account import Account
+
 from nucypher_core import HRAC
 from pons import HTTPProvider, Client, ContractABI, DeployedContract
-from pons.types import Address, Wei
+from pons.types import Address, Amount
 
 
 class Registry:
@@ -31,7 +33,31 @@ with open(ABI_DIR / 'SubscriptionManager.json') as f:
     SUBSCRIPTION_MANAGER_ABI = json.load(f)['abi']
 
 
-class BaseL2Client:
+class PaymentAddress(Address):
+    pass
+
+
+class AmountMATIC(Amount):
+
+    def __repr__(self):
+        return f"AmountMATIC({self.as_wei()})"
+
+    def __str__(self):
+        return f"{self.as_ether()} MATIC"
+
+
+class PaymentAccount:
+
+    @classmethod
+    def random(cls):
+        return cls(Account.create())
+
+    def __init__(self, account):
+        self._account = account
+        self.address = PaymentAddress.from_hex(account.address)
+
+
+class BasePaymentClient:
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
         pass
@@ -40,7 +66,7 @@ class BaseL2Client:
         pass
 
 
-class L2Client(BaseL2Client):
+class PaymentClient(BasePaymentClient):
 
     @classmethod
     def from_http_endpoint(cls, url):
@@ -57,10 +83,7 @@ class L2Client(BaseL2Client):
         return await self._client.call(self._manager.address, self._manager.abi.isPolicyActive(bytes(hrac)))
 
 
-class L2SigningClient:
+class SigningPaymentClient:
 
     async def create_policy(self, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
         pass
-
-
-

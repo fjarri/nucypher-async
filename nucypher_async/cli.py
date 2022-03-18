@@ -2,13 +2,12 @@ import json
 import sys
 
 from appdirs import AppDirs
-from eth_account import Account
 import trio
 
-from .drivers.eth_account import EthAccount
 from .drivers.rest_client import Contact
 from .drivers.rest_server import serve_forever
-from .drivers.eth_client import EthClient
+from .drivers.identity import IdentityClient, IdentityAccount
+from .drivers.payment import PaymentClient
 from .master_key import EncryptedMasterKey
 from .storage import FileSystemStorage
 from .ursula import Ursula
@@ -31,7 +30,7 @@ async def make_server():
     with open(signer) as f:
         keyfile = f.read()
 
-    acc = EthAccount.from_payload(keyfile, geth_password)
+    acc = IdentityAccount.from_payload(keyfile, geth_password)
 
     with open(config['keystore_path']) as f:
         keystore = json.load(f)
@@ -39,7 +38,7 @@ async def make_server():
     encrypted_key = EncryptedMasterKey.from_payload(keystore)
     key = encrypted_key.decrypt(nucypher_password)
 
-    ursula = Ursula(master_key=key, eth_account=acc, domain=config['domain'])
+    ursula = Ursula(master_key=key, identity_account=acc, domain=config['domain'])
 
     logger = Logger(handlers=[
         ConsoleHandler(),
@@ -50,7 +49,8 @@ async def make_server():
 
     server = await UrsulaServer.async_init(
         ursula=ursula,
-        eth_client=EthClient.from_http_endpoint(config['eth_provider_uri']),
+        identity_client=IdentityClient.from_http_endpoint(config['eth_provider_uri']),
+        payment_client=PaymentClient.from_http_endpoint(config['payment_provider']),
         port=config['rest_port'],
         host=config['rest_host'],
         seed_contacts=[Contact('ibex.nucypher.network', 9151)],

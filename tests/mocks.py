@@ -3,11 +3,11 @@ from typing import NamedTuple
 import weakref
 
 import trio
-from nucypher_async.drivers.eth_client import Address
+from nucypher_async.drivers.identity import IdentityAddress
+from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.rest_client import Contact, SSLContact
 from nucypher_async.drivers.rest_server import ServerHandle
 from nucypher_async.pre import HRAC
-from pons.types import Wei
 
 
 class MockNetwork:
@@ -58,23 +58,23 @@ class MockRESTClient:
         return await server.endpoint_reencrypt(reencryption_request_bytes)
 
 
-class MockEthClient:
+class MockIdentityClient:
 
     def __init__(self):
         self.staking_provider_to_operator = {}
         self.operator_to_staking_provider = {}
         self.operator_confirmed = set()
-        self.eth_balances = {}
+        self.balances = {}
         self.staking_provider_authorization = set()
 
-    def authorize_staking_provider(self, staking_provider_address: Address):
+    def authorize_staking_provider(self, staking_provider_address: IdentityAddress):
         self.staking_provider_authorization.add(staking_provider_address)
 
-    def bond_operator(self, staking_provider_address: Address, operator_address: Address):
+    def bond_operator(self, staking_provider_address: IdentityAddress, operator_address: IdentityAddress):
         self.staking_provider_to_operator[staking_provider_address] = operator_address
         self.operator_to_staking_provider[operator_address] = staking_provider_address
 
-    def confirm_operator_address(self, operator_address: Address):
+    def confirm_operator_address(self, operator_address: IdentityAddress):
         if operator_address not in self.operator_to_staking_provider:
             raise RuntimeError("No stake associated with the operator")
         staking_provider_address = self.operator_to_staking_provider[operator_address]
@@ -82,24 +82,24 @@ class MockEthClient:
             raise RuntimeError("Operator address is already confirmed")
         self.operator_confirmed.add(operator_address)
 
-    async def get_staking_provider_address(self, operator_address: Address):
+    async def get_staking_provider_address(self, operator_address: IdentityAddress):
         if operator_address not in self.operator_to_staking_provider:
             raise RuntimeError("Operator is not bonded")
         return self.operator_to_staking_provider[operator_address]
 
-    async def get_operator_address(self, staking_provider_address: Address):
+    async def get_operator_address(self, staking_provider_address: IdentityAddress):
         if staking_provider_address not in self.staking_provider_to_operator:
             raise RuntimeError("Operator is not bonded")
         return self.staking_provider_to_operator[staking_provider_address]
 
-    async def is_staking_provider_authorized(self, staking_provider_address: Address):
+    async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
         return staking_provider_address in self.staking_provider_authorization
 
-    async def is_operator_confirmed(self, operator_address: Address):
+    async def is_operator_confirmed(self, operator_address: IdentityAddress):
         return operator_address in self.operator_confirmed
 
-    async def get_eth_balance(self, address: Address):
-        return self.eth_balances.get(address, 0)
+    async def get_balance(self, address: IdentityAddress):
+        return self.balances.get(address, 0)
 
 
 class Policy(NamedTuple):
@@ -109,12 +109,12 @@ class Policy(NamedTuple):
     shares: int
 
 
-class MockL2Network:
+class MockPaymentNetwork:
 
     def __init__(self):
         self.policies = {}
         self.balances = {}
-        self.fee = Wei(10**9)
+        self.fee = AmountMATIC.gwei(1)
 
     def set_balance(self, address, value):
         self.balances[address] = value
@@ -125,7 +125,7 @@ class MockL2Network:
         self.balances[address] -= value
 
 
-class MockL2Client:
+class MockPaymentClient:
 
     def __init__(self, network):
         self._network = network
@@ -144,10 +144,10 @@ class MockL2Client:
         return self._network.fee * (end - start) * shares
 
     def with_signer(self, signer):
-        return MockL2SigningClient(self._network, signer)
+        return MockSigningPaymentClient(self._network, signer)
 
 
-class MockL2SigningClient(MockL2Client):
+class MockSigningPaymentClient(MockPaymentClient):
 
     def __init__(self, network, signer):
         super().__init__(network)

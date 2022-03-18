@@ -3,7 +3,7 @@ import os
 import pytest
 import trio
 
-from nucypher_async.drivers.eth_client import Address
+from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula
@@ -11,8 +11,8 @@ from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.learner import Learner
 
 from .mocks import (
-    MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery,
-    MockL2Client, MockL2Network)
+    MockNetwork, MockRESTClient, MockIdentityClient, mock_start_in_nursery,
+    MockPaymentClient, MockPaymentNetwork)
 
 
 @pytest.fixture
@@ -26,14 +26,14 @@ def mock_network():
 
 
 @pytest.fixture
-def mock_eth_client():
-    yield MockEthClient()
+def mock_identity_client():
+    yield MockIdentityClient()
 
 
 @pytest.fixture
-def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
+def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
     servers = []
-    l2_client = MockL2Client(MockL2Network())
+    payment_client = MockPaymentClient(MockPaymentNetwork())
 
     for i in range(10):
 
@@ -44,12 +44,12 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
         else:
             seed_contacts = []
 
-        staking_provider_address = Address(os.urandom(20))
+        staking_provider_address = IdentityAddress(os.urandom(20))
 
         server = UrsulaServer(
             ursula=ursulas[i],
-            eth_client=mock_eth_client,
-            l2_client=l2_client,
+            identity_client=mock_identity_client,
+            payment_client=payment_client,
             staking_provider_address=staking_provider_address,
             port=9150 + i,
             seed_contacts=seed_contacts,
@@ -58,9 +58,9 @@ def ursula_servers(mock_network, mock_eth_client, ursulas, logger):
 
         servers.append(server)
         mock_network.add_server(server)
-        mock_eth_client.authorize_staking_provider(staking_provider_address)
-        mock_eth_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
-        mock_eth_client.confirm_operator_address(ursulas[i].operator_address)
+        mock_identity_client.authorize_staking_provider(staking_provider_address)
+        mock_identity_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
+        mock_identity_client.confirm_operator_address(ursulas[i].operator_address)
 
     yield servers
 

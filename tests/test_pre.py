@@ -3,18 +3,18 @@ import os
 import pytest
 import trio
 
-from nucypher_async.drivers.eth_client import Address
+from nucypher_async.drivers.identity import IdentityAddress
+from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob, encrypt
 from nucypher_async.learner import Learner
-from pons.types import Wei
 
 from .mocks import (
-    MockNetwork, MockRESTClient, MockEthClient, mock_start_in_nursery,
-    MockL2Network, MockL2Client,
+    MockNetwork, MockRESTClient, MockIdentityClient, mock_start_in_nursery,
+    MockPaymentNetwork, MockPaymentClient,
     )
 
 
@@ -29,30 +29,30 @@ def mock_network():
 
 
 @pytest.fixture
-def mock_eth_client():
-    yield MockEthClient()
+def mock_identity_client():
+    yield MockIdentityClient()
 
 
 @pytest.fixture
-def mock_l2_network():
-    yield MockL2Network()
+def mock_payment_network():
+    yield MockPaymentNetwork()
 
 
 @pytest.fixture
-def mock_l2_client(mock_l2_network):
-    yield MockL2Client(mock_l2_network)
+def mock_payment_client(mock_payment_network):
+    yield MockPaymentClient(mock_payment_network)
 
 
 @pytest.fixture
-def ursula_servers(mock_network, mock_eth_client, mock_l2_client, ursulas, logger):
+def ursula_servers(mock_network, mock_identity_client, mock_payment_client, ursulas, logger):
     servers = []
 
     for i in range(10):
-        staking_provider_address = Address(os.urandom(20))
+        staking_provider_address = IdentityAddress(os.urandom(20))
         server = UrsulaServer(
             ursula=ursulas[i],
-            eth_client=mock_eth_client,
-            l2_client=mock_l2_client,
+            identity_client=mock_identity_client,
+            payment_client=mock_payment_client,
             staking_provider_address=staking_provider_address,
             parent_logger=logger,
             host='127.0.0.1',
@@ -60,8 +60,8 @@ def ursula_servers(mock_network, mock_eth_client, mock_l2_client, ursulas, logge
             _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
         servers.append(server)
         mock_network.add_server(server)
-        mock_eth_client.authorize_staking_provider(staking_provider_address)
-        mock_eth_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
+        mock_identity_client.authorize_staking_provider(staking_provider_address)
+        mock_identity_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
 
     # pre-learn about other Ursulas
     for i in range(10):
@@ -71,10 +71,10 @@ def ursula_servers(mock_network, mock_eth_client, mock_l2_client, ursulas, logge
     yield servers
 
 
-async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_eth_client, logger):
+async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger):
     handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
-    learner = Learner(rest_client, mock_eth_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
+    learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
         parent_logger=logger)
 
     addresses = [server.staking_provider_address for server in ursula_servers[:3]]
@@ -86,8 +86,8 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
     assert len(nodes) == 3
 
 
-async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_eth_client,
-        mock_l2_network, mock_l2_client):
+async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client,
+        mock_payment_network, mock_payment_client):
 
     handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
 
@@ -95,14 +95,14 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
     bob = Bob()
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
 
-    alice_learner = Learner(rest_client, mock_eth_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    alice_learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
 
     # Fund Alice
-    mock_l2_network.set_balance(alice.l2_address, Wei.from_unit(1, 'ether'))
+    mock_payment_network.set_balance(alice.payment_address, AmountMATIC.ether(1))
 
     policy = await alice.grant(
         learner=alice_learner,
-        l2_client=mock_l2_client,
+        payment_client=mock_payment_client,
         bob=bob, # TODO: have a "RemoteBob" type for that
         label=b'some label',
         threshold=2,
@@ -113,7 +113,7 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
     message = b'a secret message'
     message_kit = encrypt(policy.encrypting_key, message)
 
-    bob_learner = Learner(rest_client, mock_eth_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    bob_learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
     message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map,
         alice.verifying_key)
     assert message_back == message

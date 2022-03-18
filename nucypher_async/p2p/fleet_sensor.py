@@ -4,7 +4,7 @@ import random
 
 import trio
 
-from ..drivers.eth_client import Address
+from ..drivers.identity import IdentityAddress
 from ..drivers.rest_client import Contact
 
 
@@ -94,7 +94,7 @@ class FleetSensor:
         addresses_updated = False
         for metadata in metadatas:
             payload = metadata.payload
-            staking_provider_address = Address(payload.staking_provider_address)
+            staking_provider_address = IdentityAddress(payload.staking_provider_address)
 
             if self._my_staking_provider_address and staking_provider_address == self._my_staking_provider_address:
                 continue
