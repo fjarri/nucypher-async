@@ -179,6 +179,25 @@ class Learner:
                 if addresses:
                     await self.fleet_sensor._verified_nodes_updated.wait()
 
+    @producer
+    async def random_verified_nodes_iter(self, amount, send_channel):
+
+        # TODO: add a shortcut in case there's already enough verified nodes
+        import random
+
+        returned_addresses = set()
+        async with trio.open_nursery() as nursery:
+            while len(returned_addresses) < amount:
+                all_addresses = self.fleet_sensor._verified_nodes.keys() - returned_addresses
+                if len(all_addresses) > 0:
+                    address = random.choice(list(all_addresses))
+                    returned_addresses.add(address)
+                    await send_channel.send(self.fleet_sensor._verified_nodes[address])
+                else:
+                    event = self.fleet_sensor._verified_nodes_updated
+                    while not event.is_set():
+                        await self.learning_round()
+
     async def _verify_metadata(self, ssl_contact, metadata):
         # NOTE: assuming this metadata is freshly obtained from the node itself
 

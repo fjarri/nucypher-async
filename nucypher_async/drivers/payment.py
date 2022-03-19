@@ -82,8 +82,28 @@ class PaymentClient(BasePaymentClient):
     async def is_policy_active(self, hrac: HRAC) -> bool:
         return await self._client.call(self._manager.address, self._manager.abi.isPolicyActive(bytes(hrac)))
 
+    def with_signer(self, signer):
+        return SigningPaymentClient(self, signer)
+
 
 class SigningPaymentClient:
 
+    def __init__(self, client, signer):
+        self._client = client._client.with_signer(signer)
+        self._manager = client._manager
+        self._signer = signer
+
     async def create_policy(self, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
-        pass
+        value = await self._client.call(
+            self._manager.address,
+            self._manager.abi.getPolicyCost(shares, policy_start, policy_end))
+        value = AmountMATIC.wei(value)
+        print("Policy cost", value)
+        print("Policy:", policy_start, policy_end)
+        call = self._manager.abi.createPolicy(
+            bytes(hrac),
+            bytes(self._signer.address()),
+            shares,
+            policy_start,
+            policy_end)
+        await self._client.transact(self._manager.address, call, value=value)

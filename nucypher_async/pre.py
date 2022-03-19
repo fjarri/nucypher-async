@@ -1,3 +1,4 @@
+import time
 from typing import NamedTuple
 
 import trio
@@ -7,6 +8,7 @@ from nucypher_core import (
     EncryptedTreasureMap
     )
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags, PublicKey
+from pons import AccountSigner
 
 from .drivers.identity import IdentityAddress
 from .drivers.payment import PaymentAccount
@@ -22,12 +24,14 @@ class Policy(NamedTuple):
 
 class Alice:
 
-    def __init__(self):
+    def __init__(self, payment_account=None):
         self.__master_key = MasterKey.random()
         self._signer = self.__master_key.make_signer()
         self.verifying_key = self._signer.verifying_key()
         self._delegating_skf = self.__master_key.make_delegating_key_factory()
-        self._payment_account = PaymentAccount.random()
+        if payment_account is None:
+            payment_account = PaymentAccount.random()
+        self._payment_account = payment_account
 
     @property
     def payment_address(self):
@@ -56,13 +60,18 @@ class Alice:
             sign_delegating_key=True,
             sign_receiving_key=True)
 
-        # TODO: pick Ursulas at random
         assigned_kfrags = {}
-        async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
-            async for node in aiter:
-                assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
-                if len(assigned_kfrags) == shares:
-                    break
+
+        if handpicked_addresses:
+            async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
+                async for node in aiter:
+                    assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
+                    if len(assigned_kfrags) == shares:
+                        break
+        else:
+            async with learner.random_verified_nodes_iter(shares) as aiter:
+                async for node in aiter:
+                    assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
 
         treasure_map = TreasureMap(
             signer=self._signer,
@@ -72,10 +81,10 @@ class Alice:
             threshold=threshold)
         encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.public_key)
 
-        policy_start = int(trio.current_time())
+        policy_start = int(time.time())
         policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
 
-        signing_payment_client = payment_client.with_signer(self._payment_account)
+        signing_payment_client = payment_client.with_signer(AccountSigner(self._payment_account._account))
         await signing_payment_client.create_policy(hrac, shares, policy_start, policy_end)
 
         return Policy(
