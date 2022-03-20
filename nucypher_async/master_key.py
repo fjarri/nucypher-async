@@ -1,3 +1,4 @@
+import datetime
 from secrets import token_bytes
 
 from mnemonic.mnemonic import Mnemonic
@@ -40,7 +41,7 @@ class EncryptedMasterKey:
     def to_payload(self):
         return dict(
             version="2.0",
-            created=str(time.time()),
+            created=str(datetime.datetime.utcnow().timestamp()),
             key=self.encrypted_key,
             password_salt=self.password_salt,
             wrapper_salt=self.wrapper_salt,)

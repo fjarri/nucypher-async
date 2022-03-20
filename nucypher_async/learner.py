@@ -6,7 +6,6 @@ import random
 from typing import Optional
 
 import trio
-import maya
 
 from nucypher_core import FleetStateChecksum
 

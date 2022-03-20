@@ -1,4 +1,4 @@
-import time
+import datetime
 from typing import NamedTuple
 
 import trio
@@ -84,7 +84,7 @@ class Alice:
             threshold=threshold)
         encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.encrypting_key)
 
-        policy_start = int(time.time())
+        policy_start = int(datetime.datetime.utcnow().timestamp())
         policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
 
         signing_payment_client = payment_client.with_signer(AccountSigner(self._payment_account._account))

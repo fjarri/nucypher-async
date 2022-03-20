@@ -1,7 +1,7 @@
+import datetime
 import sys
 
 import trio
-import maya
 from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
@@ -21,7 +21,7 @@ def generate_metadata(ssl_private_key, ursula, staking_provider_address, contact
     ssl_certificate = SSLCertificate.self_signed(ssl_private_key, contact.host)
     payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
                                   domain=ursula.domain,
-                                  timestamp_epoch=maya.now().epoch,
+                                  timestamp_epoch=int(datetime.datetime.utcnow().timestamp()),
                                   operator_signature=ursula.operator_signature,
                                   verifying_key=ursula.signer.verifying_key(),
                                   encrypting_key=ursula.encrypting_key,
@@ -210,7 +210,7 @@ class UrsulaServer:
         return remote_address
 
     async def endpoint_node_metadata_get(self):
-        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp.epoch,
+        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                    announce_nodes=self.learner.metadata_to_announce())
         response = MetadataResponse(self.ursula.signer, response_payload)
         return bytes(response)
@@ -220,7 +220,7 @@ class UrsulaServer:
 
         if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
-            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp.epoch,
+            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                        announce_nodes=[])
             return bytes(MetadataResponse(self.ursula.signer, response_payload))
 

@@ -65,7 +65,7 @@ class LogRecord(NamedTuple):
             task_id = id(task_id) % 8999 + 1000
 
         return LogRecord(
-            timestamp=time.time(),
+            timestamp=time.time(), # Note: using the local time here, not UTC
             logger_name=logger_name,
             level=level,
             message=message,

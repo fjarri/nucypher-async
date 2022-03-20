@@ -1,6 +1,5 @@
+import datetime
 from typing import Iterable
-
-import maya
 
 from nucypher_core import NodeMetadata, FleetStateChecksum
 
@@ -15,7 +14,7 @@ class FleetState:
         self._my_metadata = my_metadata
         self._metadatas = {}
         self._checksum = None
-        self.timestamp = maya.now()
+        self.timestamp_epoch = int(datetime.datetime.utcnow().timestamp())
 
     def add_metadatas(self, metadatas: Iterable[NodeMetadata]):
         updated = False
@@ -39,5 +38,5 @@ class FleetState:
     def checksum(self):
         if not self._checksum:
             self._checksum = FleetStateChecksum(self._my_metadata, list(self._metadatas.values()))
-            self.timestamp = maya.now()
+            self.timestamp_epoch = int(datetime.datetime.utcnow().timestamp())
         return self._checksum
