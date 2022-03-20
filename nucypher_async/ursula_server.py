@@ -6,8 +6,8 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .drivers.identity import BaseIdentityClient, IdentityAddress
-from .drivers.payment import BasePaymentClient
+from .drivers.identity import IdentityAddress, IdentityClient
+from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner, verify_metadata_shared
@@ -74,7 +74,7 @@ class UrsulaServer:
     async def async_init(
             cls,
             ursula: Ursula,
-            identity_client: BaseIdentityClient,
+            identity_client: IdentityClient,
             parent_logger=NULL_LOGGER,
             **kwds):
 
@@ -101,8 +101,8 @@ class UrsulaServer:
     def __init__(
             self,
             ursula: Ursula,
-            identity_client: BaseIdentityClient,
-            payment_client: BasePaymentClient,
+            identity_client: IdentityClient,
+            payment_client: PaymentClient,
             staking_provider_address: IdentityAddress,
             _rest_client=None,
             port=9151,

@@ -8,13 +8,12 @@ from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
-
-from .mocks import MockIdentityClient, MockPaymentClient, MockPaymentNetwork
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
 
 async def test_client_with_background_tasks():
     identity_client = MockIdentityClient()
-    payment_client = MockPaymentClient(MockPaymentNetwork())
+    payment_client = MockPaymentClient()
     server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
         payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
     app = make_app(server)
@@ -37,7 +36,7 @@ async def test_client_with_background_tasks():
 
 async def test_client_no_background_tasks():
     identity_client = MockIdentityClient()
-    payment_client = MockPaymentClient(MockPaymentNetwork())
+    payment_client = MockPaymentClient()
     server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
         payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
     app = make_app(server)

@@ -9,13 +9,12 @@ from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import async_client_ssl
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
-
-from .mocks import MockIdentityClient, MockPaymentClient, MockPaymentNetwork
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
 
 async def test_client_real_server(nursery, capsys):
     identity_client = MockIdentityClient()
-    payment_client = MockPaymentClient(MockPaymentNetwork())
+    payment_client = MockPaymentClient()
     server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
         payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
     handle = start_in_nursery(nursery, server)

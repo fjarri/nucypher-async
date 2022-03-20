@@ -37,6 +37,9 @@ class Alice:
     def payment_address(self):
         return self._payment_account.address
 
+    def public_info(self):
+        return RemoteAlice(verifying_key=self.verifying_key)
+
     async def grant(self, learner, payment_client, bob, label, threshold, shares, handpicked_addresses=None):
 
         # TODO: sample Ursulas from the blockchain here
@@ -53,7 +56,7 @@ class Alice:
 
         kfrags = generate_kfrags(
             delegating_sk=policy_sk,
-            receiving_pk=bob.public_key,
+            receiving_pk=bob.encrypting_key,
             signer=self._signer,
             threshold=threshold,
             shares=shares,
@@ -79,7 +82,7 @@ class Alice:
             policy_encrypting_key=policy_sk.public_key(),
             assigned_kfrags=assigned_kfrags,
             threshold=threshold)
-        encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.public_key)
+        encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.encrypting_key)
 
         policy_start = int(time.time())
         policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
@@ -94,6 +97,12 @@ class Alice:
             encrypting_key=policy_sk.public_key())
 
 
+class RemoteAlice:
+
+    def __init__(self, verifying_key):
+        self.verifying_key = verifying_key
+
+
 def encrypt(encrypting_key, message):
     return MessageKit(policy_encrypting_key=encrypting_key, plaintext=message)
 
@@ -105,8 +114,13 @@ class Bob:
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self._signer = self.__master_key.make_signer()
 
-        self.public_key = self._decrypting_key.public_key()
+        self.encrypting_key = self._decrypting_key.public_key()
         self.verifying_key = self._signer.verifying_key()
+
+    def public_info(self):
+        return RemoteBob(
+            encrypting_key=self.encrypting_key,
+            verifying_key=self.verifying_key)
 
     async def retrieve(self, learner, capsule, encrypted_treasure_map, alice_verifying_key):
 
@@ -128,7 +142,7 @@ class Bob:
                                               alice_verifying_key=alice_verifying_key,
                                               ursula_verifying_key=node.metadata.payload.verifying_key,
                                               policy_encrypting_key=treasure_map.policy_encrypting_key,
-                                              bob_encrypting_key=self.public_key,
+                                              bob_encrypting_key=self.encrypting_key,
                                               )
             responses.add(verified_cfrags[0])
             if len(responses) == treasure_map.threshold:
@@ -150,3 +164,10 @@ class Bob:
         return message_kit.decrypt_reencrypted(self._decrypting_key,
             treasure_map.policy_encrypting_key,
             list(vcfrags))
+
+
+class RemoteBob:
+
+    def __init__(self, encrypting_key, verifying_key):
+        self.encrypting_key = encrypting_key
+        self.verifying_key = verifying_key

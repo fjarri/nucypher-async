@@ -17,12 +17,13 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_account._utils.signing import to_standard_signature_bytes
 
-from pons import HTTPProvider, Client, ContractABI, DeployedContract
-from pons.types import Address, Amount
+from pons import HTTPProvider, Client, ContractABI, DeployedContract, Address, Amount
 
 
 class IdentityAddress(Address):
-    pass
+
+    def __repr__(self):
+        return f"IdentityAddress.from_hex({self.as_checksum()})"
 
 
 class Registry:
@@ -88,30 +89,16 @@ class AmountT(Amount):
         return f"{self.as_ether()} T"
 
 
-class BaseIdentityClient:
-
-    async def get_staking_provider_address(self, operator_address: Address) -> Address:
-        pass
-
-    async def get_operator_address(self, staking_provider_address: Address) -> Address:
-        pass
-
-    async def is_staking_provider_authorized(self, staking_provider_address: Address) -> bool:
-        pass
-
-    async def get_eth_balance(self, address: Address) -> AmountETH:
-        pass
-
-
-class IdentityClient(BaseIdentityClient):
+class IdentityClient:
 
     @classmethod
     def from_http_endpoint(cls, url):
         provider = HTTPProvider(url)
-        return cls(provider)
+        client = Client(provider)
+        return cls(client)
 
-    def __init__(self, provider):
-        self._client = Client(provider)
+    def __init__(self, backend_client):
+        self._client = backend_client
 
         self._t = DeployedContract(
             address=Registry.T, abi=ContractABI(T_ABI))
@@ -134,38 +121,38 @@ class IdentityClient(BaseIdentityClient):
         await self._transact(call)
     """
 
-    async def get_staked_amount(self, staking_provider_address: Address) -> AmountT:
+    async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         t, keep_in_t, nu_in_t = await self._client.call(
             self._token_staking.address,
             self._token_staking.abi.stakes(bytes(staking_provider_address)))
         return AmountT(t + keep_in_t + nu_in_t) # TODO: check that that's what we need
 
-    async def get_staking_provider_address(self, operator_address: Address) -> Address:
+    async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
         address = await self._client.call(
             self._pre_application.address,
             self._pre_application.abi.stakingProviderFromOperator(bytes(operator_address)))
-        return Address.from_hex(address)
+        return IdentityAddress.from_hex(address)
 
-    async def get_operator_address(self, staking_provider_address: Address) -> Address:
+    async def get_operator_address(self, staking_provider_address: IdentityAddress) -> IdentityAddress:
         address = await self._client.call(
             self._pre_application.address,
             self._pre_application.abi.getOperatorFromStakingProvider(bytes(staking_provider_address)))
-        return Address.from_hex(address)
+        return IdentityAddress.from_hex(address)
 
-    async def is_staking_provider_authorized(self, staking_provider_address: Address):
+    async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
         result = await self._client.call(
             self._pre_application.address,
             self._pre_application.abi.isAuthorized(bytes(staking_provider_address)))
         assert isinstance(result, bool)
         return result
 
-    async def is_operator_confirmed(self, operator_address: Address):
+    async def is_operator_confirmed(self, operator_address: IdentityAddress):
         result = await self._client.call(
             self._pre_application.address,
             self._pre_application.abi.isOperatorConfirmed(bytes(operator_address)))
         assert isinstance(result, bool)
         return result
 
-    async def get_balance(self, address: Address) -> AmountETH:
+    async def get_balance(self, address: IdentityAddress) -> AmountETH:
         amount = await self._client.get_balance(address)
         return AmountETH(amount.as_wei())

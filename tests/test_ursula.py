@@ -3,16 +3,16 @@ import os
 import pytest
 import trio
 
-from nucypher_async.drivers.identity import IdentityAddress
+from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.learner import Learner
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
-from .mocks import (
-    MockNetwork, MockRESTClient, MockIdentityClient, mock_start_in_nursery,
-    MockPaymentClient, MockPaymentNetwork)
+from .mocks import MockNetwork, MockRESTClient, mock_start_in_nursery
+
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def mock_identity_client():
 @pytest.fixture
 def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
     servers = []
-    payment_client = MockPaymentClient(MockPaymentNetwork())
+    payment_client = MockPaymentClient()
 
     for i in range(10):
 
@@ -58,9 +58,12 @@ def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
 
         servers.append(server)
         mock_network.add_server(server)
-        mock_identity_client.authorize_staking_provider(staking_provider_address)
-        mock_identity_client.bond_operator(staking_provider_address, ursulas[i].operator_address)
-        mock_identity_client.confirm_operator_address(ursulas[i].operator_address)
+
+        mock_identity_client.mock_approve(staking_provider_address, AmountT.ether(40000))
+        mock_identity_client.mock_stake(staking_provider_address, AmountT.ether(40000))
+        mock_identity_client.mock_bond_operator(staking_provider_address, ursulas[i].operator_address)
+        # TODO: UrsulaServer should do it on startup
+        mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
 
     yield servers
 
