@@ -155,10 +155,10 @@ class Bob:
                     nursery.start_soon(reencrypt, nursery, node, destinations[node.staking_provider_address])
         return responses
 
-    async def retrieve_and_decrypt(self, learner, message_kit, encrypted_treasure_map, alice_verifying_key):
-        vcfrags = await self.retrieve(learner, message_kit.capsule, encrypted_treasure_map, alice_verifying_key)
+    async def retrieve_and_decrypt(self, learner, message_kit, encrypted_treasure_map, remote_alice):
+        vcfrags = await self.retrieve(learner, message_kit.capsule, encrypted_treasure_map, remote_alice.verifying_key)
 
-        publisher_verifying_key = alice_verifying_key
+        publisher_verifying_key = remote_alice.verifying_key
         treasure_map = encrypted_treasure_map.decrypt(self._decrypting_key, publisher_verifying_key)
 
         return message_kit.decrypt_reencrypted(self._decrypting_key,

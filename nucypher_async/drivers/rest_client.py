@@ -85,6 +85,8 @@ async def async_client_ssl(certificate: SSLCertificate):
                 yield client
             except httpx.HTTPError as e:
                 raise ConnectionError(str(e)) from e
+            except OSError as e:
+                raise ConnectionError(str(e)) from e
 
 
 def unwrap_bytes(response):

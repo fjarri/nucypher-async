@@ -71,7 +71,10 @@ def ursula_servers(mock_network, mock_identity_client, mock_payment_client, ursu
 async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger):
     handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
-    learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact],
+    learner = Learner(
+        rest_client=rest_client,
+        identity_client=mock_identity_client,
+        seed_contacts=[ursula_servers[0].ssl_contact.contact],
         parent_logger=logger)
 
     addresses = [server.staking_provider_address for server in ursula_servers[:3]]
@@ -92,7 +95,10 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
     bob = Bob()
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
 
-    alice_learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    alice_learner = Learner(
+        rest_client=rest_client,
+        identity_client=mock_identity_client,
+        seed_contacts=[ursula_servers[0].ssl_contact.contact])
 
     # Fund Alice
     mock_payment_client.mock_set_balance(alice.payment_address, AmountMATIC.ether(1))
@@ -110,7 +116,10 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
     message = b'a secret message'
     message_kit = encrypt(policy.encrypting_key, message)
 
-    bob_learner = Learner(rest_client, mock_identity_client, seed_contacts=[ursula_servers[0].ssl_contact.contact])
+    bob_learner = Learner(
+        rest_client=rest_client,
+        identity_client=mock_identity_client,
+        seed_contacts=[ursula_servers[0].ssl_contact.contact])
     message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map,
-        alice.verifying_key)
+        remote_alice=alice.public_info())
     assert message_back == message

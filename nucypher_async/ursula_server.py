@@ -81,9 +81,9 @@ class UrsulaServer:
         staking_provider_address = await identity_client.get_staking_provider_address(ursula.operator_address)
         parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
-        balance = await identity_client.get_balance(ursula.operator_address)
-        parent_logger.info("Operator balance: {}", balance)
-        # TODO: how much eth do we need to run a node?
+        #balance = await identity_client.get_balance(ursula.operator_address)
+        #parent_logger.info("Operator balance: {}", balance)
+        # TODO: check the stake size instead
 
         # TODO: we can call confirm_operator_address() here if the operator is not confirmed
         confirmed = await identity_client.is_operator_confirmed(ursula.operator_address)

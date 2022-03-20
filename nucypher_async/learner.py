@@ -11,7 +11,7 @@ import maya
 from nucypher_core import FleetStateChecksum
 
 from .drivers.identity import IdentityAddress
-from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError
+from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError, RESTClient
 from .drivers.ssl import SSLCertificate
 from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
@@ -117,8 +117,11 @@ class Learner:
     CONTACT_LEARNING_TIMEOUT = 10
     NODE_LEARNING_TIMEOUT = 10
 
-    def __init__(self, rest_client, identity_client, my_metadata=None, seed_contacts=None,
+    def __init__(self, identity_client, rest_client=None, my_metadata=None, seed_contacts=None,
             parent_logger=NULL_LOGGER, storage=None, domain="mainnet"):
+
+        if rest_client is None:
+            rest_client = RESTClient()
 
         self._logger = parent_logger.get_child('Learner')
 
@@ -298,14 +301,14 @@ class Learner:
                 return node
 
     async def learning_round(self):
-        self._logger.debug("In the learning round")
         contact = await self._learn_from_contact_and_update_sensor()
         # TODO: if learning from the contact failed, we get None here as well.
         # Need to distinguish between cases when there were no contacts to learn from
         # and a failed learning.
         if not contact:
-            await self._learn_from_node_and_update_sensor()
-        self._logger.debug("Finished the learning round")
+            node = await self._learn_from_node_and_update_sensor()
+            if node is None:
+                self.fleet_sensor.add_seed_contacts(self._seed_contacts)
 
     def _add_verified_nodes(self, metadatas):
         for metadata in metadatas:

@@ -75,6 +75,10 @@ class FleetSensor:
         finally:
             self._locked_nodes.remove(address)
 
+    def add_seed_contacts(self, contacts):
+        for contact in contacts:
+            self._contacts_to_addresses[contact]
+
     def _add_contact(self, contact, staking_provider_address):
         if staking_provider_address in self._verified_nodes:
             return
