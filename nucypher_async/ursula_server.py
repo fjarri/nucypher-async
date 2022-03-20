@@ -109,10 +109,10 @@ class UrsulaServer:
             host='127.0.0.1',
             seed_contacts=[],
             parent_logger=NULL_LOGGER,
-            storage=None):
+            storage=None,
+            learning_timeout=60):
 
         self._logger = parent_logger.get_child('UrsulaServer')
-
         self.ursula = ursula
         self.staking_provider_address = staking_provider_address
 
@@ -170,6 +170,8 @@ class UrsulaServer:
             parent_logger=self._logger,
             domain=ursula.domain)
 
+        self._learning_timeout = learning_timeout
+
         self._payment_client = payment_client
 
         self.started = False
@@ -195,7 +197,7 @@ class UrsulaServer:
         except Exception as e:
             self._logger.error("Uncaught exception during learning:", exc_info=sys.exc_info())
 
-        await this_task.restart_in(60)
+        await this_task.restart_in(self._learning_timeout)
 
     def stop(self):
         assert self.started
