@@ -1,0 +1,47 @@
+[project]
+name = "nucypher-async"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Bogdan Opanchuk", email = "bogdan@opanchuk.net"},
+]
+dependencies = [
+    "trio>=0.19.0",
+    "hypercorn[trio]>=0.13",
+    "Quart>=0.16",
+    "quart-trio>=0.9",
+    "httpx>=0.22",
+    "cryptography>=36",
+    "nucypher-core>=0.1",
+    "pynacl>=1.5",
+    "mnemonic>=0.20",
+    "eth-account>=0.5",
+    "pons>=0.2",
+    "appdirs>=1.4"
+]
+requires-python = ">=3.8"
+license-expression = "MIT"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6",
+    "pytest-trio",
+    "pytest-cov",
+]
+docs = [
+    "sphinx>=4",
+    "furo",
+]
+
+[project.scripts]
+nucypher_async = "nucypher_async.cli:main"
+
+[project.urls]
+homepage = ""
+
+[tool]
+[tool.pdm]
+
+[build-system]
+requires = ["pdm-pep517"]
+build-backend = "pdm.pep517.api"
