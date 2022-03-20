@@ -30,7 +30,7 @@ class FleetState:
             self._checksum = None
 
     def remove_metadata(self, metadata: NodeMetadata):
-        address = metadata.payload.staker_address
+        address = metadata.payload.staking_provider_address
         if address in self._metadatas:
             if bytes(self._metadatas[address]) == bytes(metadata):
                 del self._metadatas[address]
