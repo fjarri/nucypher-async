@@ -82,7 +82,7 @@ class PaymentClient:
 
     def with_signer(self, signer):
         signing_client = self._client.with_signer(signer)
-        return SigningPaymentClient(signing_client, signer.address())
+        return SigningPaymentClient(signing_client, signer.address)
 
 
 class SigningPaymentClient(PaymentClient):
