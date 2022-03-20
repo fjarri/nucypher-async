@@ -18,6 +18,7 @@ from .p2p.fleet_state import FleetState
 from .storage import InMemoryStorage
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
+from .utils.producer import producer
 from .ursula import RemoteUrsula
 
 
@@ -78,35 +79,6 @@ def verify_metadata_shared(metadata, contact, domain):
     return IdentityAddress(address_bytes)
 
 
-def producer(wrapped):
-    """
-    Trio does not allow yielding from inside open nurseries,
-    so this function is used to emulate the functionality of an async generator
-    by using a channel.
-    """
-
-    @asynccontextmanager
-    @wraps(wrapped)
-    async def wrapper(*args, **kwargs):
-        if "send_channel" in kwargs:
-            raise TypeError
-
-        send_channel, receive_channel = trio.open_memory_channel(0)
-
-        async def target():
-            async with send_channel:
-                await wrapped(*args, **kwargs, send_channel=send_channel)
-
-        async with trio.open_nursery() as nursery:
-            async with receive_channel:
-                nursery.start_soon(target)
-                yield receive_channel
-                nursery.cancel_scope.cancel()
-
-    wrapper.raw = wrapped
-    return wrapper
-
-
 class Learner:
     """
     The client for P2P network of Ursulas, keeping the metadata of known nodes
@@ -142,7 +114,7 @@ class Learner:
         self.fleet_sensor = FleetSensor(my_address, seed_contacts=seed_contacts)
 
     @producer
-    async def verified_nodes_iter(self, addresses, send_channel):
+    async def verified_nodes_iter(self, yield_, addresses):
 
         addresses = set(addresses)
 
@@ -151,7 +123,7 @@ class Learner:
             node = self.fleet_sensor.try_get_verified_node(address)
             if node is not None:
                 addresses.remove(address)
-                await send_channel.send(node)
+                await yield_(node)
 
         # Check first, maybe we don't need to do the whole concurrency thing
         if not addresses:
@@ -176,13 +148,13 @@ class Learner:
                     node = self.fleet_sensor.try_get_verified_node(address)
                     if node is not None:
                         addresses.remove(address)
-                        await send_channel.send(node)
+                        await yield_(node)
 
                 if addresses:
                     await self.fleet_sensor._verified_nodes_updated.wait()
 
     @producer
-    async def random_verified_nodes_iter(self, amount, send_channel):
+    async def random_verified_nodes_iter(self, yield_, amount):
 
         # TODO: add a shortcut in case there's already enough verified nodes
         import random
@@ -194,7 +166,7 @@ class Learner:
                 if len(all_addresses) > 0:
                     address = random.choice(list(all_addresses))
                     returned_addresses.add(address)
-                    await send_channel.send(self.fleet_sensor._verified_nodes[address])
+                    await yield_(self.fleet_sensor._verified_nodes[address])
                 else:
                     event = self.fleet_sensor._verified_nodes_updated
                     while not event.is_set():
