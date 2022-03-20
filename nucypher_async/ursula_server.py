@@ -81,9 +81,12 @@ class UrsulaServer:
         staking_provider_address = await identity_client.get_staking_provider_address(ursula.operator_address)
         parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
-        #balance = await identity_client.get_balance(ursula.operator_address)
-        #parent_logger.info("Operator balance: {}", balance)
-        # TODO: check the stake size instead
+        balance = await identity_client.get_balance(ursula.operator_address)
+        parent_logger.info("Operator balance: {}", balance)
+
+        if not await identity_client.is_staking_provider_authorized(staking_provider_address):
+            parent_logger.info("Staking provider {} is not authorized", staking_provider_address)
+            raise RuntimeError("Staking provider is not authorized")
 
         # TODO: we can call confirm_operator_address() here if the operator is not confirmed
         confirmed = await identity_client.is_operator_confirmed(ursula.operator_address)

@@ -31,7 +31,7 @@ def mock_identity_client():
 
 
 @pytest.fixture
-def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
+async def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
     servers = []
     payment_client = MockPaymentClient()
 
@@ -46,11 +46,16 @@ def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
 
         staking_provider_address = IdentityAddress(os.urandom(20))
 
-        server = UrsulaServer(
+        mock_identity_client.mock_approve(staking_provider_address, AmountT.ether(40000))
+        mock_identity_client.mock_stake(staking_provider_address, AmountT.ether(40000))
+        mock_identity_client.mock_bond_operator(staking_provider_address, ursulas[i].operator_address)
+        # TODO: UrsulaServer should do it on startup
+        mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
+
+        server = await UrsulaServer.async_init(
             ursula=ursulas[i],
             identity_client=mock_identity_client,
             payment_client=payment_client,
-            staking_provider_address=staking_provider_address,
             port=9150 + i,
             seed_contacts=seed_contacts,
             parent_logger=logger,
@@ -58,12 +63,6 @@ def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
 
         servers.append(server)
         mock_network.add_server(server)
-
-        mock_identity_client.mock_approve(staking_provider_address, AmountT.ether(40000))
-        mock_identity_client.mock_stake(staking_provider_address, AmountT.ether(40000))
-        mock_identity_client.mock_bond_operator(staking_provider_address, ursulas[i].operator_address)
-        # TODO: UrsulaServer should do it on startup
-        mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
 
     yield servers
 

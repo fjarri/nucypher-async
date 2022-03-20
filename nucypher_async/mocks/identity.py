@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from pons import MethodCall
 
 from ..drivers.identity import IdentityClient, IdentityAddress, AmountT, AmountETH
@@ -6,12 +8,13 @@ from ..drivers.identity import IdentityClient, IdentityAddress, AmountT, AmountE
 class MockBackend():
 
     def __init__(self):
+        self._min_stake = AmountT.ether(40000)
         self._approved_staking_providers = {}
         self._stakes = {}
         self._staking_provider_to_operator = {}
         self._operator_to_staking_provider = {}
         self._confirmed_operators = set()
-        self._balances = {}
+        self._balances = defaultdict(lambda: AmountETH(0))
 
     # Administrative methods to modify the mocked state
 
@@ -21,6 +24,7 @@ class MockBackend():
 
     def stake(self, staking_provider_address: IdentityAddress, amount_t: AmountT):
         assert staking_provider_address in self._approved_staking_providers
+        assert self._approved_staking_providers[staking_provider_address] >= amount_t
         assert staking_provider_address not in self._stakes
         self._stakes[staking_provider_address] = amount_t
 
@@ -49,8 +53,8 @@ class MockBackend():
         return self._staking_provider_to_operator[IdentityAddress(staking_provider_address)].as_checksum()
 
     def _call_is_authorized(self, staking_provider_address: bytes) -> bool:
-        # TODO: check in the contract that that's what it is
-        return IdentityAddress(staking_provider_address) in self._approved_staking_providers
+        address = IdentityAddress(staking_provider_address)
+        return address in self._stakes and self._stakes[address] >= self._min_stake
 
     def _call_is_operator_confirmed(self, operator_address: bytes) -> bool:
         return IdentityAddress(operator_address) in self._confirmed_operators

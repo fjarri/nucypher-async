@@ -37,28 +37,28 @@ def mock_payment_client():
 
 
 @pytest.fixture
-def ursula_servers(mock_network, mock_identity_client, mock_payment_client, ursulas, logger):
+async def ursula_servers(mock_network, mock_identity_client, mock_payment_client, ursulas, logger):
     servers = []
 
     for i in range(10):
         staking_provider_address = IdentityAddress(os.urandom(20))
-        server = UrsulaServer(
-            ursula=ursulas[i],
-            identity_client=mock_identity_client,
-            payment_client=mock_payment_client,
-            staking_provider_address=staking_provider_address,
-            parent_logger=logger,
-            host='127.0.0.1',
-            port=9150 + i,
-            _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
-        servers.append(server)
-        mock_network.add_server(server)
 
         mock_identity_client.mock_approve(staking_provider_address, AmountT.ether(40000))
         mock_identity_client.mock_stake(staking_provider_address, AmountT.ether(40000))
         mock_identity_client.mock_bond_operator(staking_provider_address, ursulas[i].operator_address)
         # TODO: UrsulaServer should do it on startup
         mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
+
+        server = await UrsulaServer.async_init(
+            ursula=ursulas[i],
+            identity_client=mock_identity_client,
+            payment_client=mock_payment_client,
+            parent_logger=logger,
+            host='127.0.0.1',
+            port=9150 + i,
+            _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
+        servers.append(server)
+        mock_network.add_server(server)
 
     # pre-learn about other Ursulas
     for i in range(10):
