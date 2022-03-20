@@ -100,7 +100,7 @@ class Logger:
             handler.emit(record)
 
     def log(self, level, message, args, exc_info=False):
-        self._emit(LogRecord.make(self.name, Level.DEBUG, message, args, exc_info=exc_info))
+        self._emit(LogRecord.make(self.name, level, message, args, exc_info=exc_info))
 
     def debug(self, message, *args, **kwds):
         self.log(Level.DEBUG, message, args, **kwds)
