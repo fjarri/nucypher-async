@@ -147,7 +147,7 @@ class UrsulaServer:
                     staking_provider_address=self.staking_provider_address,
                     contact=contact)
             except Exception as e:
-                self._logger.warn(f"Obsolete/invalid metadata found ({e}), updating")
+                self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e))
                 metadata = generate_metadata(
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
