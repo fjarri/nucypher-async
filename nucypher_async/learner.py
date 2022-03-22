@@ -33,8 +33,7 @@ def verify_metadata_shared(metadata, contact, domain):
     payload = metadata.payload
 
     try:
-        # TODO: update to DER when Ibex has it
-        certificate = SSLCertificate.from_pem_bytes(payload.certificate_der)
+        certificate = SSLCertificate.from_der_bytes(payload.certificate_der)
     except Exception as e:
         raise NodeVerificationError(f"Invalid certificate bytes in the payload: {e}") from e
 
@@ -177,8 +176,7 @@ class Learner:
 
         payload = metadata.payload
 
-        # TODO: update to DER when Ibex has it
-        certificate_der = ssl_contact.certificate.to_pem_bytes()
+        certificate_der = ssl_contact.certificate.to_der_bytes()
         if payload.certificate_der != certificate_der:
             raise NodeVerificationError(
                 f"Certificate mismatch: contact has {certificate_der}, "

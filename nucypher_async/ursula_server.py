@@ -25,8 +25,7 @@ def generate_metadata(ssl_private_key, ursula, staking_provider_address, contact
                                   operator_signature=ursula.operator_signature,
                                   verifying_key=ursula.signer.verifying_key(),
                                   encrypting_key=ursula.encrypting_key,
-                                  # TODO: update to DER when Ibex has it
-                                  certificate_der=ssl_certificate.to_pem_bytes(),
+                                  certificate_der=ssl_certificate.to_der_bytes(),
                                   host=contact.host,
                                   port=contact.port,
                                   )
@@ -39,8 +38,7 @@ def verify_metadata(metadata, ssl_private_key, ursula, staking_provider_address,
 
     payload = metadata.payload
 
-    # TODO: update to DER when Ibex has it
-    certificate = SSLCertificate.from_pem_bytes(payload.certificate_der)
+    certificate = SSLCertificate.from_der_bytes(payload.certificate_der)
     if certificate.public_key() != ssl_private_key.public_key():
         raise NodeVerificationError(
             f"Certificate public key mismatch: expected {ssl_private_key.public_key()},"
@@ -155,8 +153,7 @@ class UrsulaServer:
                     contact=contact)
                 self._storage.set_my_metadata(metadata)
 
-        # TODO: update to DER when Ibex has it
-        self._ssl_certificate = SSLCertificate.from_pem_bytes(metadata.payload.certificate_der)
+        self._ssl_certificate = SSLCertificate.from_der_bytes(metadata.payload.certificate_der)
         self._metadata = metadata
 
         self.ssl_contact = SSLContact(contact, self._ssl_certificate)
