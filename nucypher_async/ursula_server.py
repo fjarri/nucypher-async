@@ -11,6 +11,7 @@ from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
 from .learner import Learner, verify_metadata_shared
+from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .utils import BackgroundTask
@@ -265,19 +266,4 @@ class UrsulaServer:
         return bytes(response)
 
     async def endpoint_status(self):
-
-        verified_nodes = self.learner.fleet_sensor._verified_nodes
-        contacts = self.learner.fleet_sensor._contacts_to_addresses
-
-        stats = (f"""
-        Staking provider: {self.staking_provider_address}
-        Operator: {self.ursula.operator_address}
-        """ +
-        "Verified nodes:\n" +
-        "\n".join(str(node) for node in verified_nodes) +
-        "\n" +
-        "Contacts:\n" +
-        "\n".join(f"{contact}: {list(addresses)}" for contact, addresses in contacts.items())
-        )
-
-        return stats.replace('\n', '<br/>')
+        return render_status(self._logger, self)

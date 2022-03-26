@@ -17,7 +17,8 @@ dependencies = [
     "mnemonic>=0.20",
     "eth-account>=0.5",
     "pons>=0.2",
-    "appdirs>=1.4"
+    "appdirs>=1.4",
+    "mako>=1",
 ]
 requires-python = ">=3.8"
 license-expression = "GPL-3.0-only"

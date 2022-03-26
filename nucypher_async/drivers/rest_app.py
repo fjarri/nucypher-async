@@ -23,16 +23,16 @@ from .rest_client import HTTPError
 
 async def wrap_in_response(logger, callable, *args, **kwds):
     try:
-        result_bytes = await callable(*args, **kwds)
+        result = await callable(*args, **kwds)
     # TODO: we can have a small subset of errors here that are a part of the protocol,
     # and correspond to HTTP status codes
     except HTTPError as e:
-        return await make_response((str(e), e.status_code))
+        return await make_response(e.args[0], e.status_code)
     except Exception as e:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=sys.exc_info())
-        return await make_response((str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR))
-    return await make_response(result_bytes)
+        return await make_response(str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    return await make_response(result)
 
 
 def make_app(ursula_server):
