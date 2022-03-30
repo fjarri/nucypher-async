@@ -1,6 +1,6 @@
-import datetime
 from secrets import token_bytes
 
+import arrow
 from mnemonic.mnemonic import Mnemonic
 from nucypher_core.umbral import SecretKeyFactory, SecretKey, Signer
 
@@ -41,7 +41,8 @@ class EncryptedMasterKey:
     def to_payload(self):
         return dict(
             version="2.0",
-            created=str(datetime.datetime.utcnow().timestamp()),
+            # TODO: do we need this field? Don't want to pass Clock here
+            created=str(arrow.utcnow().timestamp()),
             key=self.encrypted_key,
             password_salt=self.password_salt,
             wrapper_salt=self.wrapper_salt,)

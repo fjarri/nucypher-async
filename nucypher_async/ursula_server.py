@@ -10,6 +10,7 @@ from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
+from .drivers.time import Clock
 from .learner import Learner, verify_metadata_shared
 from .status import render_status
 from .storage import InMemoryStorage
@@ -18,11 +19,11 @@ from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 
 
-def generate_metadata(ssl_private_key, ursula, staking_provider_address, contact):
-    ssl_certificate = SSLCertificate.self_signed(ssl_private_key, contact.host)
+def generate_metadata(clock, ssl_private_key, ursula, staking_provider_address, contact):
+    ssl_certificate = SSLCertificate.self_signed(clock, ssl_private_key, contact.host)
     payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
                                   domain=ursula.domain,
-                                  timestamp_epoch=int(datetime.datetime.utcnow().timestamp()),
+                                  timestamp_epoch=int(clock.utcnow().timestamp()),
                                   operator_signature=ursula.operator_signature,
                                   verifying_key=ursula.signer.verifying_key(),
                                   encrypting_key=ursula.encrypting_key,
@@ -33,9 +34,9 @@ def generate_metadata(ssl_private_key, ursula, staking_provider_address, contact
     return NodeMetadata(signer=ursula.signer, payload=payload)
 
 
-def verify_metadata(metadata, ssl_private_key, ursula, staking_provider_address, contact):
+def verify_metadata(clock, metadata, ssl_private_key, ursula, staking_provider_address, contact):
 
-    derived_operator_address = verify_metadata_shared(metadata, contact, ursula.domain)
+    derived_operator_address = verify_metadata_shared(clock, metadata, contact, ursula.domain)
 
     payload = metadata.payload
 
@@ -112,7 +113,10 @@ class UrsulaServer:
             seed_contacts=[],
             parent_logger=NULL_LOGGER,
             storage=None,
-            learning_timeout=60):
+            learning_timeout=60,
+            clock=None):
+
+        self._clock = clock or Clock()
 
         self._logger = parent_logger.get_child('UrsulaServer')
         self.ursula = ursula
@@ -126,20 +130,12 @@ class UrsulaServer:
 
         contact = Contact(host=host, port=port)
 
-        metadata_in_storage = self._storage.get_my_metadata()
-        if metadata_in_storage is None:
-            self._logger.debug("Generating new metadata")
-            metadata = generate_metadata(
-                ssl_private_key=self._ssl_private_key,
-                ursula=self.ursula,
-                staking_provider_address=self.staking_provider_address,
-                contact=contact)
-            self._storage.set_my_metadata(metadata)
-        else:
-            metadata = metadata_in_storage
+        metadata = self._storage.get_my_metadata()
+        if metadata is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
                 verify_metadata(
+                    clock=clock,
                     metadata=metadata,
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
@@ -147,12 +143,17 @@ class UrsulaServer:
                     contact=contact)
             except Exception as e:
                 self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e))
-                metadata = generate_metadata(
-                    ssl_private_key=self._ssl_private_key,
-                    ursula=self.ursula,
-                    staking_provider_address=self.staking_provider_address,
-                    contact=contact)
-                self._storage.set_my_metadata(metadata)
+                metadata = None
+
+        if metadata is None:
+            self._logger.debug("Generating new metadata")
+            metadata = generate_metadata(
+                clock=self._clock,
+                ssl_private_key=self._ssl_private_key,
+                ursula=self.ursula,
+                staking_provider_address=self.staking_provider_address,
+                contact=contact)
+            self._storage.set_my_metadata(metadata)
 
         self._ssl_certificate = SSLCertificate.from_der_bytes(metadata.payload.certificate_der)
         self._metadata = metadata
@@ -169,7 +170,8 @@ class UrsulaServer:
             my_metadata=self._metadata,
             seed_contacts=seed_contacts,
             parent_logger=self._logger,
-            domain=ursula.domain)
+            domain=ursula.domain,
+            clock=self._clock)
 
         self._learning_timeout = learning_timeout
 
@@ -183,26 +185,41 @@ class UrsulaServer:
     def start(self, nursery):
         assert not self.started
 
+        # TODO: can we move initialization to __init__()?
+        self._verification_task = BackgroundTask(nursery, self._verification_worker)
+        self._learning_task = BackgroundTask(nursery, self._learning_worker)
+
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
-        self._learning_task = BackgroundTask(nursery, self._learn)
+        self._verification_task.start()
+        self._learning_task.start()
 
         self.started = True
 
-    async def _learn(self, this_task):
+    async def _verification_worker(self, this_task):
         try:
-            with trio.fail_after(5):
-                await self.learner.learning_round()
-        except trio.TooSlowError:
-            # Better luck next time
-            pass
+            self._logger.debug("Starting a verification round")
+            next_verification_in = await self.learner.verification_round()
+            self._logger.debug("After the verification round, next verification in: {}", next_verification_in)
+            min_time_between_rounds = datetime.timedelta(seconds=5) # TODO: remove hardcoding
+            this_task.restart_in(max(next_verification_in, min_time_between_rounds))
         except Exception as e:
-            self._logger.error("Uncaught exception during learning:", exc_info=sys.exc_info())
+            self._logger.error("Uncaught exception in the verification task:", exc_info=sys.exc_info())
 
-        await this_task.restart_in(self._learning_timeout)
+    async def _learning_worker(self, this_task):
+        try:
+            self._logger.debug("Starting a learning round")
+            next_verification_in, next_learning_in = await self.learner.learning_round()
+            self._logger.debug("After the learning round, next verification in: {}", next_verification_in)
+            self._logger.debug("After the learning round, next learning in: {}", next_learning_in)
+            this_task.restart_in(next_learning_in)
+            self._verification_task.reset(next_verification_in)
+        except Exception as e:
+            self._logger.error("Uncaught exception in the learning task:", exc_info=sys.exc_info())
 
     def stop(self):
         assert self.started
 
+        self._verification_task.stop()
         self._learning_task.stop()
 
         self.started = False
@@ -227,15 +244,10 @@ class UrsulaServer:
 
         new_metadatas = metadata_request.announce_nodes
 
-        # Unfliltered metadata goes into FleetState for compatibility
-        self.learner.fleet_state.add_metadatas(new_metadatas)
-
-        # Filter out only the contact(s) with `remote_address`.
-        # We're not going to trust all this metadata anyway.
-        sender_metadatas = [
-            metadata for metadata in new_metadatas
-            if metadata.payload.host == remote_address]
-        self.learner.fleet_sensor.add_contacts(sender_metadatas)
+        next_verification_in = self.learner.add_metadatas(remote_address, new_metadatas)
+        self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
+        # TODO: don't reset if there's less than a certain timeout before awakening
+        self._verification_task.reset(next_verification_in)
 
         return await self.endpoint_node_metadata_get()
 
@@ -266,4 +278,4 @@ class UrsulaServer:
         return bytes(response)
 
     async def endpoint_status(self):
-        return render_status(self._logger, self)
+        return render_status(self._logger, self._clock, self)

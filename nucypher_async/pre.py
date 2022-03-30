@@ -1,6 +1,6 @@
-import datetime
 from typing import NamedTuple
 
+import arrow
 import trio
 
 from nucypher_core import (
@@ -84,11 +84,12 @@ class Alice:
             threshold=threshold)
         encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.encrypting_key)
 
-        policy_start = int(datetime.datetime.utcnow().timestamp())
-        policy_end = policy_start + 60 * 60 * 24 * 30 # TODO: make adjustable
+        policy_start = clock.utcnow()
+        policy_end = policy_start.shift(days=30) # TODO: make adjustable
 
         signing_payment_client = payment_client.with_signer(AccountSigner(self._payment_account._account))
-        await signing_payment_client.create_policy(hrac, shares, policy_start, policy_end)
+        await signing_payment_client.create_policy(
+            hrac, shares, int(policy_start.timestamp()), int(policy_end.timestamp()))
 
         return Policy(
             start=policy_start,

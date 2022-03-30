@@ -1,9 +1,9 @@
-import datetime
 from ipaddress import IPv4Address
 from pathlib import Path
 from typing import Optional, Tuple
 import ssl
 
+import arrow
 from cryptography import x509
 from cryptography import exceptions
 from cryptography.hazmat.backends import default_backend
@@ -59,11 +59,12 @@ class SSLCertificate:
         pass
 
     @classmethod
-    def self_signed(cls, private_key: SSLPrivateKey, host: str, days_valid: int = 365):
+    def self_signed(cls, clock, private_key: SSLPrivateKey, host: str, days_valid: int = 365):
 
         public_key = private_key.public_key()
 
-        now = datetime.datetime.utcnow()
+        start_date = clock.utcnow()
+        end_date = start_date.shift(days=days_valid)
         fields = [x509.NameAttribute(NameOID.COMMON_NAME, host)]
 
         subject = issuer = x509.Name(fields)
@@ -71,8 +72,8 @@ class SSLCertificate:
         cert = cert.issuer_name(issuer)
         cert = cert.public_key(public_key._public_key)
         cert = cert.serial_number(x509.random_serial_number())
-        cert = cert.not_valid_before(now)
-        cert = cert.not_valid_after(now + datetime.timedelta(days=days_valid))
+        cert = cert.not_valid_before(start_date.datetime)
+        cert = cert.not_valid_after(end_date.datetime)
         cert = cert.add_extension(x509.SubjectAlternativeName([x509.IPAddress(IPv4Address(host))]), critical=False)
         cert = cert.sign(private_key._private_key, hashes.SHA512(), default_backend())
 
@@ -117,12 +118,12 @@ class SSLCertificate:
         return self._certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
 
     @property
-    def not_valid_before(self) -> datetime.datetime:
-        return self._certificate.not_valid_before
+    def not_valid_before(self):
+        return arrow.get(self._certificate.not_valid_before)
 
     @property
-    def not_valid_after(self) -> datetime.datetime:
-        return self._certificate.not_valid_after
+    def not_valid_after(self):
+        return arrow.get(self._certificate.not_valid_after)
 
 
 async def fetch_certificate(host: str, port: int) -> SSLCertificate:

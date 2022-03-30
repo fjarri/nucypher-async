@@ -2,6 +2,8 @@ import pytest
 
 import nucypher_async.utils.logging as logging
 
+from .mocks import MockClock
+
 
 @pytest.fixture(scope='session')
 def logger():
@@ -9,3 +11,8 @@ def logger():
     return logging.Logger(
         level=logging.DEBUG,
         handlers=[logging.ConsoleHandler(stderr_at=None)])
+
+
+@pytest.fixture
+async def clock():
+    return MockClock()

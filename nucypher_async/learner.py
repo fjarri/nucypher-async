@@ -5,6 +5,7 @@ from collections import defaultdict
 import random
 from typing import Optional
 
+import arrow
 import trio
 
 from nucypher_core import FleetStateChecksum
@@ -12,6 +13,7 @@ from nucypher_core import FleetStateChecksum
 from .drivers.identity import IdentityAddress
 from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError, RESTClient
 from .drivers.ssl import SSLCertificate
+from .drivers.time import Clock
 from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
@@ -26,7 +28,7 @@ class NodeVerificationError(Exception):
     pass
 
 
-def verify_metadata_shared(metadata, contact, domain):
+def verify_metadata_shared(clock, metadata, contact, domain):
     if not metadata.verify():
         raise NodeVerificationError("Metadata self-verification failed")
 
@@ -62,11 +64,11 @@ def verify_metadata_shared(metadata, contact, domain):
             f"Domain mismatch: expected {domain}, "
             f"{payload.domain} in the metadata")
 
-    now = datetime.datetime.utcnow()
-    if certificate.not_valid_before > now:
+    now = clock.utcnow()
+    if arrow.get(certificate.not_valid_before) > now:
         raise NodeVerificationError(
             f"Certificate is only valid after {certificate.not_valid_before}")
-    if certificate.not_valid_after < now:
+    if arrow.get(certificate.not_valid_after) < now:
         raise NodeVerificationError(
             f"Certificate is only valid until {certificate.not_valid_after}")
 
@@ -84,15 +86,16 @@ class Learner:
     and running the background learning task.
     """
 
-    CONTACT_LEARNING_TIMEOUT = 10
-    NODE_LEARNING_TIMEOUT = 10
+    VERIFICATION_TIMEOUT = 10
+    LEARNING_TIMEOUT = 10
 
     def __init__(self, identity_client, rest_client=None, my_metadata=None, seed_contacts=None,
-            parent_logger=NULL_LOGGER, storage=None, domain="mainnet"):
+            parent_logger=NULL_LOGGER, storage=None, domain="mainnet", clock=None):
 
         if rest_client is None:
             rest_client = RESTClient()
 
+        self._clock = clock or Clock()
         self._logger = parent_logger.get_child('Learner')
 
         if storage is None:
@@ -104,13 +107,24 @@ class Learner:
 
         self._my_metadata = my_metadata
 
-        self._seed_contacts = seed_contacts
-
         self.domain = domain
-        self.fleet_state = FleetState(self._my_metadata)
+        self.fleet_state = FleetState(self._clock, self._my_metadata)
 
-        my_address = IdentityAddress(self._my_metadata.payload.staking_provider_address) if my_metadata else None
-        self.fleet_sensor = FleetSensor(my_address, seed_contacts=seed_contacts)
+        if my_metadata:
+            payload = my_metadata.payload
+            my_address = IdentityAddress(payload.staking_provider_address)
+            my_contact = Contact(payload.host, payload.port)
+        else:
+            my_address = None
+            my_contact = None
+        self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact, seed_contacts=seed_contacts)
+
+    def _add_verified_nodes(self, metadatas):
+        for metadata in metadatas:
+            if metadata.payload.staking_provider_address != self._my_metadata.payload.staking_provider_address:
+                node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
+                self.fleet_sensor.report_verified_node(node)
+                self.fleet_state.add_metadatas([metadata])
 
     @producer
     async def verified_nodes_iter(self, yield_, addresses):
@@ -182,7 +196,7 @@ class Learner:
                 f"Certificate mismatch: contact has {certificate_der}, "
                 f"but metadata has {payload.certificate_der}")
 
-        derived_operator_address = verify_metadata_shared(metadata, ssl_contact.contact, self.domain)
+        derived_operator_address = verify_metadata_shared(self._clock, metadata, ssl_contact.contact, self.domain)
         staking_provider_address = IdentityAddress(payload.staking_provider_address)
 
         bonded_operator_address = await self._identity_client.get_operator_address(staking_provider_address)
@@ -198,11 +212,7 @@ class Learner:
 
         return RemoteUrsula(metadata, derived_operator_address)
 
-    def metadata_to_announce(self):
-        my_metadata = [self._my_metadata] if self._my_metadata else []
-        return my_metadata + self.fleet_sensor.verified_metadata()
-
-    async def _learn_from_contact(self, contact: Contact):
+    async def _verify_contact(self, contact: Contact):
         self._logger.debug("Resolving a contact {}", contact)
         try:
             ssl_contact = await self._rest_client.fetch_certificate(contact)
@@ -218,70 +228,115 @@ class Learner:
             raise ConnectionError(f"Failed to get metadata from {contact}")
 
         node = await self._verify_metadata(ssl_contact, metadata)
-        metadatas = await self._learn_from_node(node)
-        return node, metadatas
+        return node
 
     async def _learn_from_node(self, node: RemoteUrsula):
-        self._logger.debug("Learning from {}", node)
-        ssl_contact = node.ssl_contact
+        self._logger.debug(
+            "Learning from {} ({})",
+            node.ssl_contact.contact, node.staking_provider_address)
+
+        metadata_to_announce = [self._my_metadata] if self._my_metadata else []
+
         metadata_response = await self._rest_client.node_metadata_post(
-            ssl_contact, self.fleet_state.checksum, self.metadata_to_announce())
+            node.ssl_contact, self.fleet_state.checksum, metadata_to_announce)
 
         try:
             payload = metadata_response.verify(node.verifying_key)
         except Exception as e: # TODO: can we narrow it down?
-            raise NodeVerificationError(f"Failed to verify MetadataResponse: {e}") from e
-
-        # TODO: make use of the returned timestamp?
+            raise NodeVerificationError("Failed to verify MetadataResponse") from e
 
         return payload.announce_nodes
 
-    async def _learn_from_contact_and_update_sensor(self, contact=None):
-        with self.fleet_sensor.try_lock_unchecked_contact(contact=contact) as contact:
+    async def _learn_from_node_and_report(self, node=None):
+        with self.fleet_sensor.try_lock_node_to_learn_from(node) as node:
+            if node is None:
+                return
+            try:
+                with trio.fail_after(self.LEARNING_TIMEOUT):
+                    metadatas = await self._learn_from_node(node)
+            except (OSError, ConnectionError, trio.TooSlowError, NodeVerificationError) as e:
+                self._logger.debug(
+                    "Failed to learn from {} ({}): {}",
+                    node.ssl_contact.contact, node.staking_provider_address, e)
+                self.fleet_sensor.report_bad_contact(node.ssl_contact.contact)
+                return
+
+            self._logger.debug("Learned from {}: {}", node.ssl_contact.contact, node)
+            self.fleet_sensor.report_active_learning_results(node, metadatas)
+            self.fleet_state.add_metadatas(metadatas)
+
+    async def _verify_contact_and_report(self):
+        with self.fleet_sensor.try_lock_contact_to_verify() as contact:
             if contact is None:
                 return
             try:
-                with trio.fail_after(self.CONTACT_LEARNING_TIMEOUT):
-                    node, metadatas = await self._learn_from_contact(contact)
+                with trio.fail_after(self.VERIFICATION_TIMEOUT):
+                    node = await self._verify_contact(contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to learn from {}: {}", contact, e)
-            else:
-                self.fleet_sensor.add_verified_node(node)
-                self.fleet_sensor.add_contacts(metadatas)
-                self.fleet_state.add_metadatas(metadatas)
-                return contact
-            finally:
-                self.fleet_sensor.remove_contact(contact)
+                self.fleet_sensor.report_bad_contact(contact)
+                return
 
-    async def _learn_from_node_and_update_sensor(self):
-        with self.fleet_sensor.try_lock_verified_node() as node:
+            self._logger.debug("Verified {}: {}", contact, node)
+            self.fleet_sensor.report_verified_node(node)
+
+        await self._learn_from_node_and_report(node)
+
+    async def _verify_node_and_report(self):
+        with self.fleet_sensor.try_lock_node_to_verify() as node:
             if node is None:
                 return
             try:
-                with trio.fail_after(self.NODE_LEARNING_TIMEOUT):
-                    metadatas = await self._learn_from_node(node)
+                with trio.fail_after(self.VERIFICATION_TIMEOUT):
+                    new_node = await self._verify_contact(node.ssl_contact.contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to learn from {}: {}", node, e)
-                self.fleet_sensor.remove_verified_node(node)
+                self.fleet_sensor.report_bad_node(node)
                 self.fleet_state.remove_metadata(node.metadata)
-            else:
-                self.fleet_sensor.add_contacts(metadatas)
-                self.fleet_state.add_metadatas(metadatas)
-                return node
+                return
+
+            self._logger.debug("Re-verified {}: {}", node.ssl_contact.contact, node)
+            self.fleet_sensor.report_reverified_node(node, new_node)
+            self.fleet_state.replace_metadata(node, new_node)
+
+        await self._learn_from_node_and_report(new_node)
+
+    # External API
+
+    def metadata_to_announce(self):
+        my_metadata = [self._my_metadata] if self._my_metadata else []
+        return my_metadata + self.fleet_sensor.verified_metadata()
+
+    def add_metadatas(self, sender_host, metadatas):
+
+        # Unfiltered metadata goes into FleetState for compatibility
+        self.fleet_state.add_metadatas(metadatas)
+        self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
+
+        return self.fleet_sensor.next_verification_in()
+
+    async def verification_round(self):
+
+        # How many events to schedule simultaneusly
+        # TODO: this is a learning parameter
+        contacts_num = 1
+        nodes_num = 1
+
+        # how long to wait until scheduling another round, even if there are already events available
+        # TODO: this is a learning parameter
+        min_time_between_rounds = 5
+
+        async with trio.open_nursery() as nursery:
+            for _ in range(contacts_num):
+                nursery.start_soon(self._verify_contact_and_report)
+            for _ in range(nodes_num):
+                nursery.start_soon(self._verify_node_and_report)
+
+        return self.fleet_sensor.next_verification_in()
 
     async def learning_round(self):
-        contact = await self._learn_from_contact_and_update_sensor()
-        # TODO: if learning from the contact failed, we get None here as well.
-        # Need to distinguish between cases when there were no contacts to learn from
-        # and a failed learning.
-        if not contact:
-            node = await self._learn_from_node_and_update_sensor()
-            if node is None:
-                self.fleet_sensor.add_seed_contacts(self._seed_contacts)
-
-    def _add_verified_nodes(self, metadatas):
-        for metadata in metadatas:
-            if metadata.payload.staking_provider_address != self._my_metadata.payload.staking_provider_address:
-                node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
-                self.fleet_sensor.add_verified_node(node)
-                self.fleet_state.add_metadatas([metadata])
+        # TODO: this is a learning parameter
+        # May be adjusted dynamically based on the network state
+        learning_timeout = datetime.timedelta(seconds=90)
+        await self._learn_from_node_and_report()
+        return self.fleet_sensor.next_verification_in(), learning_timeout

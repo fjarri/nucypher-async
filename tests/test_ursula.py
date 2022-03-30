@@ -58,7 +58,7 @@ async def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
             payment_client=payment_client,
             port=9150 + i,
             seed_contacts=seed_contacts,
-            parent_logger=logger,
+            parent_logger=logger.get_child(str(i)),
             _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
 
         servers.append(server)
@@ -74,12 +74,13 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
 
     while True:
         # Wait multiple learning cycles
+        # TODO: find a way to wait until the learning is done, and measure how much time has passed
         await trio.sleep(100)
 
         known_nodes = {
-            handle.ursula_server.staking_provider_address: set(handle.ursula_server.learner.fleet_sensor._verified_nodes)
+            handle.ursula_server.staking_provider_address: handle.ursula_server.learner.metadata_to_announce()
             for handle in handles}
 
         # Each Ursula should know about every other Ursula by now.
-        if all(len(nodes) == 9 for nodes in known_nodes.values()):
+        if all(len(nodes) == 10 for nodes in known_nodes.values()):
             break

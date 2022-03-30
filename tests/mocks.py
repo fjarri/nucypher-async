@@ -2,12 +2,22 @@ from functools import partial
 from typing import NamedTuple
 import weakref
 
+import arrow
 import trio
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.rest_client import Contact, SSLContact
 from nucypher_async.drivers.rest_server import ServerHandle
 from nucypher_async.pre import HRAC
+
+
+class MockClock:
+
+    def __init__(self):
+        self._start = arrow.utcnow().timestamp() - trio.current_time()
+
+    def utcnow(self):
+        return arrow.get(self._start + trio.current_time())
 
 
 class MockNetwork:

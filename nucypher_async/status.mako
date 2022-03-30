@@ -60,8 +60,11 @@
 </style>
 </body>
     <%
-        verified_nodes = ursula_server.learner.fleet_sensor._verified_nodes
-        contacts = ursula_server.learner.fleet_sensor._contacts_to_addresses
+        verified_node_entries = ursula_server.learner.fleet_sensor._verified_nodes_db._nodes
+        verify_at = {
+            entry.address: entry
+            for entry in ursula_server.learner.fleet_sensor._verified_nodes_db._verify_at}
+        contacts = ursula_server.learner.fleet_sensor._contacts_db._contacts_to_addresses
 
         if code_info.release:
             version_str = code_info.version
@@ -101,29 +104,38 @@
         </tr>
     </table>
 
-    <h3>Verified nodes (${len(verified_nodes)} total)</h3>
+    <h3>Verified nodes (${len(verified_node_entries)} total)</h3>
 
+    %if verified_node_entries:
     <table class="verified-nodes">
         <thead>
             <td></td>
             <td>Launched</td>
-            <td>Verified</td>
+            <td>Last verified</td>
+            <td>Next verification</td>
         </thead>
         <tbody>
-        %for node in verified_nodes.values():
+        %for address, node_entry in verified_node_entries.items():
+            <%
+                node = node_entry.node
+                verify_at_entry = verify_at[address]
+            %>
             <tr>
                 <td><span class="monospace">
-                ${node.staking_provider_address}
+                <a href="https://${node.ssl_contact.contact.host}:${node.ssl_contact.contact.port}/status">${node.staking_provider_address}</a>
                 </span></td>
-                <td></td>
-                <td></td>
+                <td>${arrow.get(node.metadata.payload.timestamp_epoch).humanize(now)}</td>
+                <td>${node_entry.verified_at.humanize(now)}</td>
+                <td>${verify_at[address].verify_at.humanize(now)}</td>
             </tr>
         %endfor
         </tbody>
     </table>
+    %endif
 
     <h3>Contacts (${len(contacts)} total)</h3>
 
+    %if contacts:
     <table class="contacts">
         <thead>
             <td></td>
@@ -133,11 +145,16 @@
         %for contact, addresses in contacts.items():
             <tr>
                 <td><span class="monospace">${contact.host}:${contact.port}</span></td>
-                <td>${addresses}</td>
+                <td>
+                %for address in addresses:
+                ${address.as_checksum()}<br/>
+                %endfor
+                </td>
             </tr>
         %endfor
         </tbody>
     </table>
+    %endif
 
 </body>
 </html>
