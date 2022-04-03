@@ -9,13 +9,14 @@ TODO:
 - add newtypes for currencies instead of just using wei
 """
 
+from contextlib import asynccontextmanager
 import json
 from pathlib import Path
 
 from eth_account import Account
 
 from nucypher_core import HRAC
-from pons import HTTPProvider, Client, ContractABI, DeployedContract, Signer
+from pons import HTTPProvider, Client, ContractABI, DeployedContract, Signer, AccountSigner
 from pons.types import Address, Amount
 
 
@@ -57,6 +58,16 @@ class PaymentAccount:
         self.address = PaymentAddress.from_hex(account.address)
 
 
+class PaymentAccountSigner(AccountSigner):
+
+    def __init__(self, payment_account: PaymentAccount):
+        super().__init__(payment_account._account)
+
+    @property
+    def address(self):
+        return PaymentAddress(bytes(super().address))
+
+
 class PaymentClient:
 
     @classmethod
@@ -71,33 +82,35 @@ class PaymentClient:
         self._manager = DeployedContract(
             address=Registry.SUBSCRIPTION_MANAGER, abi=ContractABI(SUBSCRIPTION_MANAGER_ABI))
 
+    @asynccontextmanager
+    async def session(self):
+        async with self._client.session() as backend_session:
+            yield PaymentClientSession(self, backend_session)
+
+
+class PaymentClientSession:
+
+    def __init__(self, payment_client, backend_session):
+        self._payment_client = payment_client
+        self._backend_session = backend_session
+
     async def is_policy_active(self, hrac: HRAC) -> bool:
-        return await self._client.call(self._manager.address, self._manager.abi.isPolicyActive(bytes(hrac)))
+        return await self._backend_session.call(
+            self._payment_client._manager.address,
+            self._payment_client._manager.abi.isPolicyActive(bytes(hrac)))
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
-        amount = await self._client.call(
-            self._manager.address,
-            self._manager.abi.getPolicyCost(shares, policy_start, policy_end))
+        amount = await self._backend_session.call(
+            self._payment_client._manager.address,
+            self._payment_client._manager.abi.getPolicyCost(shares, policy_start, policy_end))
         return AmountMATIC.wei(amount)
 
-    def with_signer(self, signer):
-        signing_client = self._client.with_signer(signer)
-        return SigningPaymentClient(signing_client, signer.address)
-
-
-class SigningPaymentClient(PaymentClient):
-
-    def __init__(self, backend_client, address):
-        # TODO: here we will re-initialize ContractABI objects. Can they be reused?
-        super().__init__(backend_client)
-        self._address = address
-
-    async def create_policy(self, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
+    async def create_policy(self, signer: Signer, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
         amount = await self.get_policy_cost(shares, policy_start, policy_end)
-        call = self._manager.abi.createPolicy(
+        call = self._payment_client._manager.abi.createPolicy(
             bytes(hrac),
-            bytes(self._address),
+            bytes(signer.address),
             shares,
             policy_start,
             policy_end)
-        await self._client.transact(self._manager.address, call, amount=amount)
+        await self._backend_session.transact(signer, self._payment_client._manager.address, call, amount=amount)

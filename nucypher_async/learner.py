@@ -195,17 +195,18 @@ class Learner:
         derived_operator_address = verify_metadata_shared(self._clock, metadata, ssl_contact.contact, self.domain)
         staking_provider_address = IdentityAddress(payload.staking_provider_address)
 
-        bonded_operator_address = await self._identity_client.get_operator_address(staking_provider_address)
-        if derived_operator_address != bonded_operator_address:
-            raise NodeVerificationError(
-                f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
-                f"but the bonded address is {bonded_operator_address}")
+        async with self._identity_client.session() as session:
+            bonded_operator_address = await session.get_operator_address(staking_provider_address)
+            if derived_operator_address != bonded_operator_address:
+                raise NodeVerificationError(
+                    f"Invalid decentralized identity evidence: derived {derived_operator_address}, "
+                    f"but the bonded address is {bonded_operator_address}")
 
-        if not await self._identity_client.is_staking_provider_authorized(staking_provider_address):
-            raise NodeVerificationError("Staking provider is not authorized")
+            if not await session.is_staking_provider_authorized(staking_provider_address):
+                raise NodeVerificationError("Staking provider is not authorized")
 
-        if not await self._identity_client.is_operator_confirmed(derived_operator_address):
-            raise NodeVerificationError("Operator is not confirmed")
+            if not await session.is_operator_confirmed(derived_operator_address):
+                raise NodeVerificationError("Operator is not confirmed")
 
         return RemoteUrsula(metadata, derived_operator_address)
 

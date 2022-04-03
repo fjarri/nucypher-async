@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from collections import defaultdict
 
 from pons import MethodCall
@@ -15,6 +16,10 @@ class MockBackend():
         self._operator_to_staking_provider = {}
         self._confirmed_operators = set()
         self._balances = defaultdict(lambda: AmountETH(0))
+
+    @asynccontextmanager
+    async def session(self):
+        yield self
 
     # Administrative methods to modify the mocked state
 

@@ -78,21 +78,22 @@ class UrsulaServer:
             parent_logger=NULL_LOGGER,
             **kwds):
 
-        staking_provider_address = await identity_client.get_staking_provider_address(ursula.operator_address)
-        parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
+        async with identity_client.session() as session:
+            staking_provider_address = await session.get_staking_provider_address(ursula.operator_address)
+            parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
-        balance = await identity_client.get_balance(ursula.operator_address)
-        parent_logger.info("Operator balance: {}", balance)
+            balance = await session.get_balance(ursula.operator_address)
+            parent_logger.info("Operator balance: {}", balance)
 
-        if not await identity_client.is_staking_provider_authorized(staking_provider_address):
-            parent_logger.info("Staking provider {} is not authorized", staking_provider_address)
-            raise RuntimeError("Staking provider is not authorized")
+            if not await session.is_staking_provider_authorized(staking_provider_address):
+                parent_logger.info("Staking provider {} is not authorized", staking_provider_address)
+                raise RuntimeError("Staking provider is not authorized")
 
-        # TODO: we can call confirm_operator_address() here if the operator is not confirmed
-        confirmed = await identity_client.is_operator_confirmed(ursula.operator_address)
-        if not confirmed:
-            parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
-            raise RuntimeError("Operator is not confirmed")
+            # TODO: we can call confirm_operator_address() here if the operator is not confirmed
+            confirmed = await session.is_operator_confirmed(ursula.operator_address)
+            if not confirmed:
+                parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
+                raise RuntimeError("Operator is not confirmed")
 
         return cls(
             ursula=ursula,
@@ -260,8 +261,9 @@ class UrsulaServer:
         hrac = reencryption_request.hrac
 
         # TODO: check if the policy is marked as revoked
-        if not await self._payment_client.is_policy_active(hrac):
-            raise HTTPError(f"Policy {hrac} is not active", status=HTTPStatus.PAYMENT_REQUIRED)
+        async with self._payment_client.session() as session:
+            if not await session.is_policy_active(hrac):
+                raise HTTPError(f"Policy {hrac} is not active", status=HTTPStatus.PAYMENT_REQUIRED)
 
         verified_kfrag = self.ursula.decrypt_kfrag(
             encrypted_kfrag=reencryption_request.encrypted_kfrag,

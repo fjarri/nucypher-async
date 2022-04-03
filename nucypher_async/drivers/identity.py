@@ -9,6 +9,7 @@ TODO:
 - add newtypes for currencies instead of just using wei
 """
 
+from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
@@ -107,6 +108,18 @@ class IdentityClient:
         self._pre_application = DeployedContract(
             address=Registry.PRE_APPLICATION, abi=ContractABI(PRE_APPLICATION_ABI))
 
+    @asynccontextmanager
+    async def session(self):
+        async with self._client.session() as backend_session:
+            yield IdentityClientSession(self, backend_session)
+
+
+class IdentityClientSession:
+
+    def __init__(self, identity_client, backend_session):
+        self._identity_client = identity_client
+        self._backend_session = backend_session
+
     """
     async def approve(self, staking_provider_address, t_amount_wei):
         call = self._t.functions.approve(Registry.TOKEN_STAKING, t_amount_wei)
@@ -122,37 +135,37 @@ class IdentityClient:
     """
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
-        t, keep_in_t, nu_in_t = await self._client.call(
-            self._token_staking.address,
-            self._token_staking.abi.stakes(bytes(staking_provider_address)))
+        t, keep_in_t, nu_in_t = await self._backend_session.call(
+            self._identity_client._token_staking.address,
+            self._identity_client._token_staking.abi.stakes(bytes(staking_provider_address)))
         return AmountT(t + keep_in_t + nu_in_t)
 
     async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
-        address = await self._client.call(
-            self._pre_application.address,
-            self._pre_application.abi.stakingProviderFromOperator(bytes(operator_address)))
+        address = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.stakingProviderFromOperator(bytes(operator_address)))
         return IdentityAddress.from_hex(address)
 
     async def get_operator_address(self, staking_provider_address: IdentityAddress) -> IdentityAddress:
-        address = await self._client.call(
-            self._pre_application.address,
-            self._pre_application.abi.getOperatorFromStakingProvider(bytes(staking_provider_address)))
+        address = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.getOperatorFromStakingProvider(bytes(staking_provider_address)))
         return IdentityAddress.from_hex(address)
 
     async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
-        result = await self._client.call(
-            self._pre_application.address,
-            self._pre_application.abi.isAuthorized(bytes(staking_provider_address)))
+        result = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.isAuthorized(bytes(staking_provider_address)))
         assert isinstance(result, bool)
         return result
 
     async def is_operator_confirmed(self, operator_address: IdentityAddress):
-        result = await self._client.call(
-            self._pre_application.address,
-            self._pre_application.abi.isOperatorConfirmed(bytes(operator_address)))
+        result = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.isOperatorConfirmed(bytes(operator_address)))
         assert isinstance(result, bool)
         return result
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
-        amount = await self._client.get_balance(address)
+        amount = await self._backend_session.get_balance(address)
         return AmountETH(amount.as_wei())

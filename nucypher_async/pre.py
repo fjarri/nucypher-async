@@ -8,10 +8,9 @@ from nucypher_core import (
     EncryptedTreasureMap
     )
 from nucypher_core.umbral import SecretKeyFactory, Signer, SecretKey, generate_kfrags, PublicKey
-from pons import AccountSigner
 
 from .drivers.identity import IdentityAddress
-from .drivers.payment import PaymentAccount
+from .drivers.payment import PaymentAccount, PaymentAccountSigner
 from .master_key import MasterKey
 
 
@@ -51,8 +50,9 @@ class Alice:
             bob_verifying_key=bob.verifying_key,
             label=label)
 
-        if await payment_client.is_policy_active(hrac):
-            raise RuntimeError(f"Policy {hrac} is already active")
+        async with payment_client.session() as session:
+            if await session.is_policy_active(hrac):
+                raise RuntimeError(f"Policy {hrac} is already active")
 
         kfrags = generate_kfrags(
             delegating_sk=policy_sk,
@@ -92,9 +92,10 @@ class Alice:
         policy_start = learner._clock.utcnow()
         policy_end = policy_start.shift(days=30) # TODO: make adjustable
 
-        signing_payment_client = payment_client.with_signer(AccountSigner(self._payment_account._account))
-        await signing_payment_client.create_policy(
-            hrac, shares, int(policy_start.timestamp()), int(policy_end.timestamp()))
+        signer = PaymentAccountSigner(self._payment_account)
+        async with payment_client.session() as session:
+            await session.create_policy(
+                signer, hrac, shares, int(policy_start.timestamp()), int(policy_end.timestamp()))
 
         return Policy(
             start=policy_start,
