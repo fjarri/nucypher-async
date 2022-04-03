@@ -57,7 +57,7 @@ class BackgroundTask:
         self._nursery.start_soon(self._task_callable, self)
 
     def stop(self):
-        self._shutdown_event.set()
+        self._stop_event.set()
 
     def reset(self, awaken_in):
         if self._next_invocation is not None:
