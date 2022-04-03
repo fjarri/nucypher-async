@@ -244,7 +244,7 @@ class UrsulaServer:
 
         new_metadatas = metadata_request.announce_nodes
 
-        next_verification_in = self.learner.add_metadatas(remote_address, new_metadatas)
+        next_verification_in = self.learner.passive_learning(remote_address, new_metadatas)
         self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
         # TODO: don't reset if there's less than a certain timeout before awakening
         self._verification_task.reset(next_verification_in)

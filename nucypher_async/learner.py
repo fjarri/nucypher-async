@@ -307,7 +307,7 @@ class Learner:
         my_metadata = [self._my_metadata] if self._my_metadata else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
-    def add_metadatas(self, sender_host, metadatas):
+    def passive_learning(self, sender_host, metadatas):
 
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
