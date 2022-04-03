@@ -125,7 +125,7 @@ class IdentityClient:
         t, keep_in_t, nu_in_t = await self._client.call(
             self._token_staking.address,
             self._token_staking.abi.stakes(bytes(staking_provider_address)))
-        return AmountT(t + keep_in_t + nu_in_t) # TODO: check that that's what we need
+        return AmountT(t + keep_in_t + nu_in_t)
 
     async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
         address = await self._client.call(
