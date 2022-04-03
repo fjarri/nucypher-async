@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from collections import defaultdict
 import random
 from typing import Optional
+import random
 
 import arrow
 import trio
@@ -133,56 +134,51 @@ class Learner:
 
         # Shortcut in case we already have things verified
         for address in list(addresses):
-            node = self.fleet_sensor.try_get_verified_node(address)
-            if node is not None:
+            node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
+            if node_entry is not None:
                 addresses.remove(address)
-                await yield_(node)
+                await yield_(node_entry.node)
 
-        # Check first, maybe we don't need to do the whole concurrency thing
         if not addresses:
             return
 
         async with trio.open_nursery() as nursery:
             while addresses:
-                if not self.fleet_sensor.addresses_are_known(addresses):
-
-                    # TODO: use a special form of learning round here, without sending out known nodes.
-                    # This is called on the client side, clients are not supposed to provide that info.
-
-                    # TODO: we can run several instances here, learning rounds are supposed to be reentrable
-                    await self.learning_round()
-
+                new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
                 for address in addresses:
-                    possible_contacts = self.fleet_sensor.try_get_possible_contacts(address)
+                    possible_contacts = self.fleet_sensor.try_get_possible_contacts_for(address)
                     for contact in possible_contacts:
-                        nursery.start_soon(self._learn_from_contact_and_update_sensor, contact)
+                        nursery.start_soon(self._verify_contact_and_report, contact)
+
+                # TODO: we can run several instances here, learning rounds are supposed to be reentrable
+                await self.verification_round()
+                await self.learning_round()
 
                 for address in list(addresses):
-                    node = self.fleet_sensor.try_get_verified_node(address)
-                    if node is not None:
+                    node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
+                    if node_entry is not None:
                         addresses.remove(address)
-                        await yield_(node)
+                        await yield_(node_entry.node)
 
-                if addresses:
-                    await self.fleet_sensor._verified_nodes_updated.wait()
+                await new_verified_nodes_event.wait()
 
     @producer
-    async def random_verified_nodes_iter(self, yield_, amount):
-
-        # TODO: add a shortcut in case there's already enough verified nodes
-        import random
-
-        returned_addresses = set()
+    async def random_verified_nodes_iter(self, yield_, exclude=None):
+        returned_addresses = exclude or set()
         async with trio.open_nursery() as nursery:
-            while len(returned_addresses) < amount:
-                all_addresses = self.fleet_sensor._verified_nodes.keys() - returned_addresses
+            while True:
+
+                new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+
+                all_addresses = self.fleet_sensor.verified_node_entries.keys() - returned_addresses
                 if len(all_addresses) > 0:
                     address = random.choice(list(all_addresses))
                     returned_addresses.add(address)
-                    await yield_(self.fleet_sensor._verified_nodes[address])
+                    await yield_(self.fleet_sensor.verified_node_entries[address].node)
                 else:
-                    event = self.fleet_sensor._verified_nodes_updated
-                    while not event.is_set():
+                    new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+                    while not new_verified_nodes_event.is_set():
+                        await self.verification_round()
                         await self.learning_round()
 
     async def _verify_metadata(self, ssl_contact, metadata):
@@ -208,7 +204,8 @@ class Learner:
         if not await self._identity_client.is_staking_provider_authorized(staking_provider_address):
             raise NodeVerificationError("Staking provider is not authorized")
 
-        # TODO: is_operator_confirmed()
+        if not await self._identity_client.is_operator_confirmed(derived_operator_address):
+            raise NodeVerificationError("Operator is not confirmed")
 
         return RemoteUrsula(metadata, derived_operator_address)
 
@@ -265,8 +262,8 @@ class Learner:
             self.fleet_sensor.report_active_learning_results(node, metadatas)
             self.fleet_state.add_metadatas(metadatas)
 
-    async def _verify_contact_and_report(self):
-        with self.fleet_sensor.try_lock_contact_to_verify() as contact:
+    async def _verify_contact_and_report(self, contact=None):
+        with self.fleet_sensor.try_lock_contact_to_verify(contact) as contact:
             if contact is None:
                 return
             try:
@@ -279,8 +276,7 @@ class Learner:
 
             self._logger.debug("Verified {}: {}", contact, node)
             self.fleet_sensor.report_verified_node(node)
-
-        await self._learn_from_node_and_report(node)
+            await self._learn_from_node_and_report(node)
 
     async def _verify_node_and_report(self):
         with self.fleet_sensor.try_lock_node_to_verify() as node:
@@ -298,8 +294,6 @@ class Learner:
             self._logger.debug("Re-verified {}: {}", node.ssl_contact.contact, node)
             self.fleet_sensor.report_reverified_node(node, new_node)
             self.fleet_state.replace_metadata(node, new_node)
-
-        await self._learn_from_node_and_report(new_node)
 
     # External API
 
@@ -335,8 +329,5 @@ class Learner:
         return self.fleet_sensor.next_verification_in()
 
     async def learning_round(self):
-        # TODO: this is a learning parameter
-        # May be adjusted dynamically based on the network state
-        learning_timeout = datetime.timedelta(seconds=90)
         await self._learn_from_node_and_report()
-        return self.fleet_sensor.next_verification_in(), learning_timeout
+        return self.fleet_sensor.next_verification_in(), self.fleet_sensor.next_learning_in()

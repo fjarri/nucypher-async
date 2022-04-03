@@ -63,18 +63,23 @@ class Alice:
             sign_delegating_key=True,
             sign_receiving_key=True)
 
-        assigned_kfrags = {}
+        handpicked_addresses = handpicked_addresses or set()
+        nodes = []
+        async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
+            async for node in aiter:
+                nodes.append(node)
 
-        if handpicked_addresses:
-            async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
+        if len(nodes) < shares:
+            # TODO: implement ranking for granting, don't just pick random nodes
+            async with learner.random_verified_nodes_iter(exclude=handpicked_addresses) as aiter:
                 async for node in aiter:
-                    assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
-                    if len(assigned_kfrags) == shares:
+                    nodes.append(node)
+                    if len(nodes) == shares:
                         break
-        else:
-            async with learner.random_verified_nodes_iter(shares) as aiter:
-                async for node in aiter:
-                    assigned_kfrags[bytes(node.staking_provider_address)] = (node.metadata.payload.encrypting_key, kfrags.pop())
+
+        assigned_kfrags = {
+            bytes(node.staking_provider_address): (node.metadata.payload.encrypting_key, kfrags.pop())
+            for node in nodes}
 
         treasure_map = TreasureMap(
             signer=self._signer,
@@ -84,7 +89,7 @@ class Alice:
             threshold=threshold)
         encrypted_treasure_map = treasure_map.encrypt(self._signer, bob.encrypting_key)
 
-        policy_start = clock.utcnow()
+        policy_start = learner._clock.utcnow()
         policy_end = policy_start.shift(days=30) # TODO: make adjustable
 
         signing_payment_client = payment_client.with_signer(AccountSigner(self._payment_account._account))
