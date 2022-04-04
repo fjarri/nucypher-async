@@ -252,6 +252,8 @@ class FleetSensor:
             self._new_contacts_for_address.set()
             self._new_contacts_for_address = trio.Event()
 
+        return new_contacts
+
     def next_learning_in(self) -> datetime.timedelta:
         # TODO: May be adjusted dynamically based on the network state
         return datetime.timedelta(seconds=90)

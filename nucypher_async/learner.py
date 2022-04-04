@@ -310,9 +310,12 @@ class Learner:
 
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
-        self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
+        new_contacts_added = self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
-        return self.fleet_sensor.next_verification_in()
+        if new_contacts_added:
+            return self.fleet_sensor.next_verification_in()
+        else:
+            return None
 
     async def verification_round(self):
 
