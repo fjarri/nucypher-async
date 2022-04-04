@@ -126,7 +126,7 @@
         <thead>
             <td></td>
             <td>Stake</td>
-            <td>Launched</td>
+            <td>Metadata created</td>
             <td>Last verified</td>
             <td>Next verification</td>
         </thead>
