@@ -355,24 +355,27 @@ class FleetSensor:
         return set(contacts) - self._locked_contacts
 
     def print_status(self):
-        print("Verified nodes:")
-        for entry in self._verified_nodes_db._nodes.values():
-            print(entry)
-        print()
-        print("Verification queue:")
+        import io
+        file = io.StringIO()
+        print("Verified nodes:", file=file)
+        for address, entry in self._verified_nodes_db._nodes.items():
+            print(address, ":", entry, file=file)
+        print(file=file)
+        print("Verification queue:", file=file)
         for entry in self._verified_nodes_db._verify_at:
-            print(entry)
-        print()
-        print("Locked verified nodes:")
-        print(self._locked_verified_addresses)
-        print()
-        print("Contacts to addresses:")
+            print(entry, file=file)
+        print(file=file)
+        print("Locked verified nodes:", file=file)
+        print(self._locked_verified_addresses, file=file)
+        print(file=file)
+        print("Contacts to addresses:", file=file)
         for contact, addresses in self._contacts_db._contacts_to_addresses.items():
-            print(f"{contact}: {addresses}")
-        print()
-        print("Addresses to contacts:")
+            print(f"{contact}: {addresses}", file=file)
+        print(file=file)
+        print("Addresses to contacts:", file=file)
         for address, contacts in self._contacts_db._addresses_to_contacts.items():
-            print(f"{address}: {contacts}")
-        print()
-        print("Locked contacts:")
-        print(self._locked_contacts)
+            print(f"{address}: {contacts}", file=file)
+        print(file=file)
+        print("Locked contacts:", file=file)
+        print(self._locked_contacts, file=file)
+        return file.getvalue()
