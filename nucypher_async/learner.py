@@ -256,8 +256,8 @@ class Learner:
                     metadatas = await self._learn_from_node(node)
             except (OSError, ConnectionError, trio.TooSlowError, NodeVerificationError) as e:
                 self._logger.debug(
-                    "Failed to learn from {} ({}): {}",
-                    node.ssl_contact.contact, node.staking_provider_address, e)
+                    "Error when trying to learn from {} ({}): {}",
+                    node.ssl_contact.contact, node.staking_provider_address.as_checksum(), e)
                 self.fleet_sensor.report_bad_contact(node.ssl_contact.contact)
                 return
 
@@ -273,7 +273,7 @@ class Learner:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
-                self._logger.debug("Error when trying to learn from {}: {}", contact, e)
+                self._logger.debug("Error when trying to verify {}: {}", contact, e)
                 self.fleet_sensor.report_bad_contact(contact)
                 return
 
@@ -289,14 +289,16 @@ class Learner:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     new_node, staked_amount = await self._verify_contact(node.ssl_contact.contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
-                self._logger.debug("Error when trying to learn from {}: {}", node, e)
+                self._logger.debug(
+                    "Error when trying to re-verify {} ({}): {}",
+                    node, node.staking_provider_address.as_checksum(), e)
                 self.fleet_sensor.report_bad_node(node)
                 self.fleet_state.remove_metadata(node.metadata)
                 return
 
             self._logger.debug("Re-verified {}: {}", node.ssl_contact.contact, node)
             self.fleet_sensor.report_reverified_node(node, new_node, staked_amount)
-            self.fleet_state.replace_metadata(node, new_node)
+            self.fleet_state.replace_metadata(node.metadata, new_node.metadata)
 
     # External API
 
