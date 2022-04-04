@@ -208,7 +208,9 @@ class Learner:
             if not await session.is_operator_confirmed(derived_operator_address):
                 raise NodeVerificationError("Operator is not confirmed")
 
-        return RemoteUrsula(metadata, derived_operator_address)
+            staked = await session.get_staked_amount(staking_provider_address)
+
+        return RemoteUrsula(metadata, derived_operator_address), staked
 
     async def _verify_contact(self, contact: Contact):
         self._logger.debug("Resolving a contact {}", contact)
@@ -225,8 +227,8 @@ class Learner:
         except OSError:
             raise ConnectionError(f"Failed to get metadata from {contact}")
 
-        node = await self._verify_metadata(ssl_contact, metadata)
-        return node
+        node, staked_amount = await self._verify_metadata(ssl_contact, metadata)
+        return node, staked_amount
 
     async def _learn_from_node(self, node: RemoteUrsula):
         self._logger.debug(
@@ -269,14 +271,14 @@ class Learner:
                 return
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
-                    node = await self._verify_contact(contact)
+                    node, staked_amount = await self._verify_contact(contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to learn from {}: {}", contact, e)
                 self.fleet_sensor.report_bad_contact(contact)
                 return
 
             self._logger.debug("Verified {}: {}", contact, node)
-            self.fleet_sensor.report_verified_node(node)
+            self.fleet_sensor.report_verified_node(node, staked_amount)
             await self._learn_from_node_and_report(node)
 
     async def _verify_node_and_report(self):
@@ -285,7 +287,7 @@ class Learner:
                 return
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
-                    new_node = await self._verify_contact(node.ssl_contact.contact)
+                    new_node, staked_amount = await self._verify_contact(node.ssl_contact.contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to learn from {}: {}", node, e)
                 self.fleet_sensor.report_bad_node(node)
@@ -293,7 +295,7 @@ class Learner:
                 return
 
             self._logger.debug("Re-verified {}: {}", node.ssl_contact.contact, node)
-            self.fleet_sensor.report_reverified_node(node, new_node)
+            self.fleet_sensor.report_reverified_node(node, new_node, staked_amount)
             self.fleet_state.replace_metadata(node, new_node)
 
     # External API

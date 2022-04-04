@@ -8,7 +8,7 @@ import arrow
 from sortedcontainers import SortedKeyList
 import trio
 
-from ..drivers.identity import IdentityAddress
+from ..drivers.identity import IdentityAddress, AmountT
 from ..drivers.rest_client import Contact
 from ..ursula import RemoteUrsula
 
@@ -16,6 +16,7 @@ from ..ursula import RemoteUrsula
 class NodeEntry(NamedTuple):
     node: RemoteUrsula
     verified_at: arrow.Arrow
+    staked_amount: AmountT
 
 
 class VerifyAtEntry(NamedTuple):
@@ -29,11 +30,12 @@ class VerifiedNodesDB:
         self._nodes = {}
         self._verify_at = SortedKeyList(key=lambda entry: entry.verify_at)
 
-    def add_node(self, node, verified_at, verify_at):
+    def add_node(self, node, staked_amount, verified_at, verify_at):
         assert node.staking_provider_address not in self._nodes
         self._nodes[node.staking_provider_address] = NodeEntry(
             node=node,
-            verified_at=verified_at)
+            verified_at=verified_at,
+            staked_amount=staked_amount)
         self._verify_at.add(VerifyAtEntry(
             address=node.staking_provider_address,
             verify_at=verify_at))
@@ -178,15 +180,15 @@ class FleetSensor:
     def report_bad_node(self, node):
         self._verified_nodes_db.remove_node(node)
 
-    def report_verified_node(self, node):
+    def report_verified_node(self, node, staked_amount):
         self._contacts_db.remove_contact(node.ssl_contact.contact)
         self._contacts_db.remove_address(node.staking_provider_address)
 
         verified_at = self._clock.utcnow()
         verify_at = self._calculate_next_verification(node, verified_at)
-        self._add_node(node, verified_at, verify_at)
+        self._add_node(node, staked_amount, verified_at, verify_at)
 
-    def report_reverified_node(self, old_node, new_node):
+    def report_reverified_node(self, old_node, new_node, staked_amount):
         verified_at = self._clock.utcnow()
         if bytes(new_node.metadata) == bytes(old_node.metadata):
             previously_verified_at = self._verified_nodes_db.get_verified_at(node)
@@ -195,7 +197,7 @@ class FleetSensor:
         else:
             self._verified_nodes_db.remove_node(old_node)
             verify_at = self._calculate_next_verification(new_node, verified_at)
-            self._add_node(new_node, verified_at, verify_at)
+            self._add_node(new_node, staked_amount, verified_at, verify_at)
 
     def report_active_learning_results(self, teacher_node, metadatas):
         for metadata in metadatas:
@@ -217,8 +219,8 @@ class FleetSensor:
     def verified_metadata(self):
         return [node.metadata for node in self._verified_nodes_db.all_nodes()]
 
-    def _add_node(self, node, verified_at, verify_at):
-        self._verified_nodes_db.add_node(node, verified_at, verify_at)
+    def _add_node(self, node, staked_amount, verified_at, verify_at):
+        self._verified_nodes_db.add_node(node, staked_amount, verified_at, verify_at)
         self._new_verified_nodes.set()
         self._new_verified_nodes = trio.Event()
 
