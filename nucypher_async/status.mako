@@ -30,25 +30,32 @@
 
     table.this-node-info > tbody > tr > td {
         padding-left: 0;
-        padding-right: 0.5em;
+        padding-right: 1em;
         vertical-align: top;
-    }
-
-    table.verified-nodes > tbody > tr > td {
-        padding: 0 1em 0 0;
     }
 
     table.verified-nodes > thead > tr > td {
         border-bottom: 1px solid #ddd;
+        padding-left: 0;
+        padding-right: 2em;
     }
 
     table.verified-nodes > tbody > tr > td {
         border-bottom: 1px solid #ddd;
+        padding-right: 2em;
+    }
+
+    table.contacts > thead > tr > td {
+        border-bottom: 1px solid #ddd;
+        padding-left: 0;
+        padding-right: 2em;
+        padding-bottom: 0.5em;
     }
 
     table.contacts > tbody > tr > td {
+        border-bottom: 1px solid #ddd;
         padding-left: 0;
-        padding-right: 0.5em;
+        padding-right: 2em;
         padding-bottom: 0.5em;
         vertical-align: top;
     }
@@ -143,7 +150,13 @@
                 <td>${humanize.number.intword(int(node_entry.staked_amount.as_ether()))} T</td>
                 <td>${arrow.get(node.metadata.payload.timestamp_epoch).humanize(now)}</td>
                 <td>${node_entry.verified_at.humanize(now)}</td>
-                <td>${verify_at[address].verify_at.humanize(now)}</td>
+                <td>
+                %if verify_at_entry.verify_at < now:
+                was due ${verify_at_entry.verify_at.humanize(now)}
+                %else:
+                ${verify_at_entry.verify_at.humanize(now)}
+                %endif
+                </td>
             </tr>
         %endfor
         </tbody>
