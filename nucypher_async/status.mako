@@ -46,6 +46,13 @@
         border-bottom: 1px solid #ddd;
     }
 
+    table.contacts > tbody > tr > td {
+        padding-left: 0;
+        padding-right: 0.5em;
+        padding-bottom: 0.5em;
+        vertical-align: top;
+    }
+
     h3 {
         margin-bottom: 0em;
     }
@@ -102,6 +109,14 @@
             <td><i>Domain:</i></td>
             <td><span class="monospace">${ ursula_server.ursula.domain }</span></td>
         </tr>
+        <tr>
+            <td><i>Metadata created:</i></td>
+            <td>${arrow.get(ursula_server._metadata.payload.timestamp_epoch).humanize(now)}</td>
+        </tr>
+        <tr>
+            <td><i>Uptime:</i></td>
+            <td>${humanize.naturaldelta(now - ursula_server._started_at)}</td>
+        </tr>
     </table>
 
     <h3>Verified nodes (${len(verified_node_entries)} total)</h3>
@@ -110,6 +125,7 @@
     <table class="verified-nodes">
         <thead>
             <td></td>
+            <td>Stake</td>
             <td>Launched</td>
             <td>Last verified</td>
             <td>Next verification</td>
@@ -124,6 +140,7 @@
                 <td><span class="monospace">
                 <a href="https://${node.ssl_contact.contact.host}:${node.ssl_contact.contact.port}/status">${node.staking_provider_address}</a>
                 </span></td>
+                <td>${humanize.number.intword(int(node_entry.staked_amount.as_ether()))} T</td>
                 <td>${arrow.get(node.metadata.payload.timestamp_epoch).humanize(now)}</td>
                 <td>${node_entry.verified_at.humanize(now)}</td>
                 <td>${verify_at[address].verify_at.humanize(now)}</td>
@@ -139,16 +156,24 @@
     <table class="contacts">
         <thead>
             <td></td>
-            <td>Possible addresses</td>
+            <td>Reported staking provider(s)</td>
         </thead>
         <tbody>
         %for contact, addresses in contacts.items():
             <tr>
-                <td><span class="monospace">${contact.host}:${contact.port}</span></td>
                 <td>
+                <a href="https://${contact.host}:${contact.port}/status">
+                <span class="monospace">${contact.host}:${contact.port}</span>
+                </a>
+                </td>
+                <td>
+                %if addresses:
                 %for address in addresses:
-                ${address.as_checksum()}<br/>
+                <span class="monospace">${address.as_checksum()}</span><br/>
                 %endfor
+                %else:
+                &mdash;
+                %endif
                 </td>
             </tr>
         %endfor

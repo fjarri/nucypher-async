@@ -178,6 +178,8 @@ class UrsulaServer:
 
         self._payment_client = payment_client
 
+        self._started_at = self._clock.utcnow()
+
         self.started = False
 
     def metadata(self):
