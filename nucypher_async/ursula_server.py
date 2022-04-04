@@ -136,7 +136,7 @@ class UrsulaServer:
             self._logger.debug("Found existing metadata, verifying")
             try:
                 verify_metadata(
-                    clock=clock,
+                    clock=self._clock,
                     metadata=metadata,
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
