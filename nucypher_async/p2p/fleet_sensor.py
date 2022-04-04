@@ -40,21 +40,29 @@ class VerifiedNodesDB:
             address=node.staking_provider_address,
             verify_at=verify_at))
 
+    def _del_verify_at(self, node):
+        # TODO: we really need a SortedDict type
+        for i in range(len(self._verify_at)):
+            if self._verify_at[i].address == node.staking_provider_address:
+                del self._verify_at[i]
+                break
+
     def get_verified_at(self, node):
         return self._nodes[node.staking_provider_address].verified_at
 
-    def set_verified_at(self, node, verify_at):
+    def update_verify_at(self, node, verified_at, verify_at):
         assert node.staking_provider_address in self._nodes
+
+        node_entry = self._nodes[node.staking_provider_address]._replace(verified_at=verified_at)
+        self._nodes[node.staking_provider_address] = node_entry
+
+        self._del_verify_at(node)
         self._verify_at.add(VerifyAtEntry(
             address=node.staking_provider_address, verify_at=verify_at))
 
     def remove_node(self, node):
         del self._nodes[node.staking_provider_address]
-        # TODO: we really need a SortedDict type
-        for i in range(len(self._verify_at)):
-            if self._verify_at[i] == node.staking_provider_address:
-                del self._verify_at[i]
-                break
+        self._del_verify_at(node)
 
     def all_nodes(self):
         return [entry.node for entry in self._nodes.values()]
@@ -191,9 +199,9 @@ class FleetSensor:
     def report_reverified_node(self, old_node, new_node, staked_amount):
         verified_at = self._clock.utcnow()
         if bytes(new_node.metadata) == bytes(old_node.metadata):
-            previously_verified_at = self._verified_nodes_db.get_verified_at(node)
-            verify_at = self._calculate_next_verification(old_node, verified_at, previously_verified_at)
-            self._verified_nodes_db.set_verify_at(node, verify_at)
+            previously_verified_at = self._verified_nodes_db.get_verified_at(new_node)
+            verify_at = self._calculate_next_verification(new_node, verified_at, previously_verified_at)
+            self._verified_nodes_db.update_verify_at(new_node, verified_at, verify_at)
         else:
             self._verified_nodes_db.remove_node(old_node)
             verify_at = self._calculate_next_verification(new_node, verified_at)
@@ -319,16 +327,17 @@ class FleetSensor:
     @contextmanager
     def try_lock_node_to_verify(self):
         now = self._clock.utcnow()
-        node = self._verified_nodes_db.get_next_verification(now, exclude=self._locked_verified_addresses)
-        if node is None:
+        address = self._verified_nodes_db.get_next_verification(now, exclude=self._locked_verified_addresses)
+        if address is None:
             yield None
             return
 
-        self._locked_verified_addresses.add(node.staking_provider_address)
+        node = self._verified_nodes_db._nodes[address].node
+        self._locked_verified_addresses.add(address)
         try:
             yield node
         finally:
-            self._locked_verified_addresses.remove(node.staking_provider_address)
+            self._locked_verified_addresses.remove(address)
 
     def _add_seed_contacts(self):
         if self._seed_contacts:
