@@ -11,7 +11,7 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from .rest_app import make_app
+from .rest_app import make_ursula_app
 from .ssl import SSLCertificate, SSLPrivateKey
 from ..utils import temp_file
 
@@ -57,30 +57,30 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(ursula_server):
+def make_config(server):
 
     # TODO: expose the certificate/pkey properly, via a method
     config = InMemoryCertificateConfig(
-        ssl_certificate=ursula_server._ssl_certificate,
-        ssl_private_key=ursula_server._ssl_private_key)
+        ssl_certificate=server._ssl_certificate,
+        ssl_private_key=server._ssl_private_key)
 
-    config.bind = [f"{ursula_server.ssl_contact.contact.host}:{ursula_server.ssl_contact.contact.port}"]
+    config.bind = [f"{server.ssl_contact.contact.host}:{server.ssl_contact.contact.port}"]
     config.worker_class = "trio"
 
     return config
 
 
-async def serve_async(ursula_server, shutdown_trigger=None):
-    config = make_config(ursula_server)
-    app = make_app(ursula_server)
+async def serve_async(server, shutdown_trigger=None):
+    config = make_config(server)
+    app = make_ursula_app(server)
     await serve(app, config, shutdown_trigger=shutdown_trigger)
 
 
-def serve_forever(ursula_server):
+def serve_forever(server):
     """
     Runs the Ursula web server and blocks.
     """
-    trio.run(serve_async, ursula_server)
+    trio.run(serve_async, server)
 
 
 class ServerHandle:
@@ -89,8 +89,8 @@ class ServerHandle:
     Can be used to shut it down.
     """
 
-    def __init__(self, ursula_server):
-        self.ursula_server = ursula_server
+    def __init__(self, server):
+        self.server = server
         self._shutdown_event = trio.Event()
 
     def _shutdown_trigger(self):
@@ -100,11 +100,11 @@ class ServerHandle:
         self._shutdown_event.set()
 
 
-def start_in_nursery(nursery, ursula_server):
+def start_in_nursery(nursery, server):
     """
     Starts an Ursula web server in an external event loop.
     Useful for the cases when it needs to run in parallel with other servers or clients.
     """
-    handle = ServerHandle(ursula_server)
-    nursery.start_soon(partial(serve_async, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
+    handle = ServerHandle(server)
+    nursery.start_soon(partial(serve_async, server, shutdown_trigger=handle._shutdown_trigger()))
     return handle

@@ -6,7 +6,6 @@ import trio
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.rest_server import start_in_nursery
-from nucypher_async.drivers.rest_app import make_app
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob, encrypt
@@ -63,7 +62,8 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
     # pre-learn about other Ursulas
     for i in range(10):
         metadatas = [server.metadata() for server in servers]
-        servers[i].learner._add_verified_nodes(metadatas)
+        stakes = [AmountT.ether(40000) for server in servers]
+        servers[i].learner._add_verified_nodes(metadatas, stakes)
 
     yield servers
 

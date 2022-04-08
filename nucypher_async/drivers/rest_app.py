@@ -35,7 +35,7 @@ async def wrap_in_response(logger, callable, *args, **kwds):
     return await make_response(result)
 
 
-def make_app(ursula_server):
+def make_ursula_app(ursula_server):
     """
     Creates and returns an ASGI app.
     """

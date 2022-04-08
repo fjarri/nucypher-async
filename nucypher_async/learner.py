@@ -120,50 +120,56 @@ class Learner:
             my_contact = None
         self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact, seed_contacts=seed_contacts)
 
-    def _add_verified_nodes(self, metadatas):
-        for metadata in metadatas:
+    def _add_verified_nodes(self, metadatas, stakes):
+        for metadata, stake in zip(metadatas, stakes):
             if metadata.payload.staking_provider_address != self._my_metadata.payload.staking_provider_address:
                 node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
-                self.fleet_sensor.report_verified_node(node)
+                self.fleet_sensor.report_verified_node(node, stake)
                 self.fleet_state.add_metadatas([metadata])
 
     @producer
-    async def verified_nodes_iter(self, yield_, addresses):
+    async def verified_nodes_iter(self, yield_, addresses, verified_within=None):
 
         addresses = set(addresses)
-
-        # Shortcut in case we already have things verified
-        for address in list(addresses):
-            node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
-            if node_entry is not None:
-                addresses.remove(address)
-                await yield_(node_entry.node)
-
-        if not addresses:
-            return
+        now = self._clock.utcnow()
 
         async with trio.open_nursery() as nursery:
-            while addresses:
+            while True:
+
                 new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+
+                for address in list(addresses):
+                    node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
+                    if node_entry is None:
+                        continue
+
+                    if verified_within and node_entry.verified_at < now - verified_within:
+                        nursery.start_soon(self._verify_node_and_report, node_entry.node)
+                        continue
+
+                    addresses.remove(address)
+                    await yield_(node_entry.node)
+
+                if not addresses:
+                    break
+
                 for address in addresses:
                     possible_contacts = self.fleet_sensor.try_get_possible_contacts_for(address)
                     for contact in possible_contacts:
                         nursery.start_soon(self._verify_contact_and_report, contact)
 
-                # TODO: we can run several instances here, learning rounds are supposed to be reentrable
-                await self.verification_round()
-                await self.learning_round()
+                # There has been some `awaits`, so new nodes could have been verified
+                # If not, force run verification/learning of random nodes
+                while not new_verified_nodes_event.is_set():
 
-                for address in list(addresses):
-                    node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
-                    if node_entry is not None:
-                        addresses.remove(address)
-                        await yield_(node_entry.node)
+                    new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
 
-                await new_verified_nodes_event.wait()
+                    # TODO: we can run several instances here, learning rounds are supposed to be reentrable
+                    await self.verification_round()
+                    await self.learning_round()
 
     @producer
-    async def random_verified_nodes_iter(self, yield_, exclude=None):
+    async def random_verified_nodes_iter(self, yield_, exclude=None, verified_within=None):
         returned_addresses = exclude or set()
         async with trio.open_nursery() as nursery:
             while True:
@@ -281,8 +287,8 @@ class Learner:
             self.fleet_sensor.report_verified_node(node, staked_amount)
             await self._learn_from_node_and_report(node)
 
-    async def _verify_node_and_report(self):
-        with self.fleet_sensor.try_lock_node_to_verify() as node:
+    async def _verify_node_and_report(self, node=None):
+        with self.fleet_sensor.try_lock_node_to_verify(node) as node:
             if node is None:
                 return
             try:

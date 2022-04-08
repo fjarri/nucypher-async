@@ -78,7 +78,7 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         await trio.sleep(100)
 
         known_nodes = {
-            handle.ursula_server.staking_provider_address: handle.ursula_server.learner.metadata_to_announce()
+            handle.server.staking_provider_address: handle.server.learner.metadata_to_announce()
             for handle in handles}
 
         # Each Ursula should know about every other Ursula by now.

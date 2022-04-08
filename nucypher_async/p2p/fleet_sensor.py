@@ -325,12 +325,18 @@ class FleetSensor:
             self._locked_verified_addresses.remove(address)
 
     @contextmanager
-    def try_lock_node_to_verify(self):
-        now = self._clock.utcnow()
-        address = self._verified_nodes_db.get_next_verification(now, exclude=self._locked_verified_addresses)
-        if address is None:
-            yield None
-            return
+    def try_lock_node_to_verify(self, node=None):
+        if node is None:
+            now = self._clock.utcnow()
+            address = self._verified_nodes_db.get_next_verification(now, exclude=self._locked_verified_addresses)
+            if address is None:
+                yield None
+                return
+        else:
+            if node.staking_provider_address in self._locked_verified_addresses:
+                yield None
+                return
+            address = node.staking_provider_address
 
         node = self._verified_nodes_db._nodes[address].node
         self._locked_verified_addresses.add(address)
