@@ -56,6 +56,7 @@ class RemoteUrsula:
         self.staking_provider_address = IdentityAddress(payload.staking_provider_address)
         self.operator_address = operator_address
         self.verifying_key = payload.verifying_key
+        self.encrypting_key = payload.encrypting_key
 
         self.ssl_contact = SSLContact.from_metadata(metadata)
 

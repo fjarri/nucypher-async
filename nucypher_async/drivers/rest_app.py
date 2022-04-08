@@ -87,3 +87,30 @@ def make_ursula_app(ursula_server):
         return await wrap_in_response(logger, ursula_server.endpoint_status)
 
     return app
+
+
+def make_porter_app(porter_server):
+
+    app = QuartTrio('porter_async')
+
+    logger = porter_server._logger.get_child('App')
+
+    @app.before_serving
+    async def on_startup():
+        porter_server.start(app.nursery)
+
+    @app.after_serving
+    async def on_shutdown():
+        porter_server.stop()
+
+    @app.route('/get_ursulas')
+    async def get_ursulas():
+        get_ursulas_request = await request.json
+        return await wrap_in_response(logger, porter_server.endpoint_get_ursulas, get_ursulas_request)
+
+    @app.route("/retrieve_cfrags", methods=['POST'])
+    async def retrieve_cfrags():
+        retrieve_cfrags_request = await request.json
+        return await wrap_in_response(logger, porter_server.endpoint_retrieve_cfrags, retrieve_cfrags_request)
+
+    return app

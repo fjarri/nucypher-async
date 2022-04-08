@@ -2,6 +2,7 @@
 This module encapsulates a specific server running our ASGI app (currently ``hypercorn``).
 """
 
+from abc import ABC, abstractmethod
 from functools import partial
 import os
 from ssl import SSLContext
@@ -57,14 +58,30 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server):
+class Server(ABC):
 
-    # TODO: expose the certificate/pkey properly, via a method
+    @abstractmethod
+    def ssl_contact(self):
+        ...
+
+    @abstractmethod
+    def ssl_private_key(self):
+        ...
+
+    @abstractmethod
+    def into_app(self):
+        ...
+
+
+def make_config(server: Server):
+
+    ssl_contact = server.ssl_contact()
+
     config = InMemoryCertificateConfig(
-        ssl_certificate=server._ssl_certificate,
-        ssl_private_key=server._ssl_private_key)
+        ssl_certificate=ssl_contact.certificate,
+        ssl_private_key=server.ssl_private_key())
 
-    config.bind = [f"{server.ssl_contact.contact.host}:{server.ssl_contact.contact.port}"]
+    config.bind = [f"{ssl_contact.contact.host}:{ssl_contact.contact.port}"]
     config.worker_class = "trio"
 
     return config
@@ -72,7 +89,7 @@ def make_config(server):
 
 async def serve_async(server, shutdown_trigger=None):
     config = make_config(server)
-    app = make_ursula_app(server)
+    app = server.into_app()
     await serve(app, config, shutdown_trigger=shutdown_trigger)
 
 

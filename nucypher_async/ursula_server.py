@@ -10,6 +10,8 @@ from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
+from .drivers.rest_app import make_ursula_app
+from .drivers.rest_server import Server
 from .drivers.time import Clock
 from .learner import Learner, verify_metadata_shared
 from .status import render_status
@@ -68,7 +70,7 @@ def verify_metadata(clock, metadata, ssl_private_key, ursula, staking_provider_a
             f"{ursula.encrypting_key} derived from the master key")
 
 
-class UrsulaServer:
+class UrsulaServer(Server):
 
     @classmethod
     async def async_init(
@@ -159,7 +161,7 @@ class UrsulaServer:
         self._ssl_certificate = SSLCertificate.from_der_bytes(metadata.payload.certificate_der)
         self._metadata = metadata
 
-        self.ssl_contact = SSLContact(contact, self._ssl_certificate)
+        self._ssl_contact = SSLContact(contact, self._ssl_certificate)
 
         if _rest_client is None:
             _rest_client = RESTClient()
@@ -181,6 +183,15 @@ class UrsulaServer:
         self._started_at = self._clock.utcnow()
 
         self.started = False
+
+    def ssl_contact(self):
+        return self._ssl_contact
+
+    def ssl_private_key(self):
+        return self._ssl_private_key
+
+    def into_app(self):
+        return make_ursula_app(self)
 
     def metadata(self):
         return self._metadata

@@ -284,7 +284,7 @@ class Learner:
                 return
 
             self._logger.debug("Verified {}: {}", contact, node)
-            self.fleet_sensor.report_verified_node(node, staked_amount)
+            self.fleet_sensor.report_verified_node(contact, node, staked_amount)
             await self._learn_from_node_and_report(node)
 
     async def _verify_node_and_report(self, node=None):

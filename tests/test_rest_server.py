@@ -22,8 +22,8 @@ async def test_client_real_server(nursery, capsys):
     # TODO: have some event in the server that could be waited for to ensure finished startup?
     await trio.sleep(1)
 
-    async with async_client_ssl(server.ssl_contact.certificate) as client:
-        response = await client.get(f'{server.ssl_contact.url}/ping')
+    async with async_client_ssl(server.ssl_contact().certificate) as client:
+        response = await client.get(f'{server.ssl_contact().url}/ping')
         assert response.status_code == HTTPStatus.OK
         assert response.text == '127.0.0.1'
 

@@ -188,8 +188,11 @@ class FleetSensor:
     def report_bad_node(self, node):
         self._verified_nodes_db.remove_node(node)
 
-    def report_verified_node(self, node, staked_amount):
-        self._contacts_db.remove_contact(node.ssl_contact.contact)
+    def report_verified_node(self, contact, node, staked_amount):
+        # Note that we do not use the node's `ssl_contact`:
+        # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
+        # TODO: IPs should be typed properly.
+        self._contacts_db.remove_contact(contact)
         self._contacts_db.remove_address(node.staking_provider_address)
 
         verified_at = self._clock.utcnow()
