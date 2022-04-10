@@ -17,14 +17,15 @@ from .learner import Learner, verify_metadata_shared
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
+from .config import UrsulaServerConfig
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 
 
-def generate_metadata(clock, ssl_private_key, ursula, staking_provider_address, contact):
+def generate_metadata(clock, ssl_private_key, ursula, domain, staking_provider_address, contact):
     ssl_certificate = SSLCertificate.self_signed(clock, ssl_private_key, contact.host)
     payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
-                                  domain=ursula.domain,
+                                  domain=domain.value,
                                   timestamp_epoch=int(clock.utcnow().timestamp()),
                                   operator_signature=ursula.operator_signature,
                                   verifying_key=ursula.signer.verifying_key(),
@@ -36,9 +37,9 @@ def generate_metadata(clock, ssl_private_key, ursula, staking_provider_address, 
     return NodeMetadata(signer=ursula.signer, payload=payload)
 
 
-def verify_metadata(clock, metadata, ssl_private_key, ursula, staking_provider_address, contact):
+def verify_metadata(clock, metadata, ssl_private_key, ursula, domain, staking_provider_address, contact):
 
-    derived_operator_address = verify_metadata_shared(clock, metadata, contact, ursula.domain)
+    derived_operator_address = verify_metadata_shared(clock, metadata, contact, domain)
 
     payload = metadata.payload
 
@@ -76,62 +77,47 @@ class UrsulaServer(Server):
     async def async_init(
             cls,
             ursula: Ursula,
-            identity_client: IdentityClient,
-            parent_logger=NULL_LOGGER,
+            config: UrsulaServerConfig,
             **kwds):
 
-        async with identity_client.session() as session:
+        logger = config.parent_logger.get_child('UrsulaServerInit')
+
+        async with config.identity_client.session() as session:
             staking_provider_address = await session.get_staking_provider_address(ursula.operator_address)
-            parent_logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
+            logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
 
             balance = await session.get_balance(ursula.operator_address)
-            parent_logger.info("Operator balance: {}", balance)
+            logger.info("Operator balance: {}", balance)
 
             if not await session.is_staking_provider_authorized(staking_provider_address):
-                parent_logger.info("Staking provider {} is not authorized", staking_provider_address)
+                logger.info("Staking provider {} is not authorized", staking_provider_address)
                 raise RuntimeError("Staking provider is not authorized")
 
             # TODO: we can call confirm_operator_address() here if the operator is not confirmed
             confirmed = await session.is_operator_confirmed(ursula.operator_address)
             if not confirmed:
-                parent_logger.info("Operator {} is not confirmed", ursula.operator_address)
+                logger.info("Operator {} is not confirmed", ursula.operator_address)
                 raise RuntimeError("Operator is not confirmed")
 
         return cls(
             ursula=ursula,
-            identity_client=identity_client,
+            config=config,
             staking_provider_address=staking_provider_address,
-            parent_logger=parent_logger,
             **kwds)
 
     def __init__(
             self,
             ursula: Ursula,
-            identity_client: IdentityClient,
-            payment_client: PaymentClient,
-            staking_provider_address: IdentityAddress,
-            _rest_client=None,
-            port=9151,
-            host='127.0.0.1',
-            seed_contacts=[],
-            parent_logger=NULL_LOGGER,
-            storage=None,
-            learning_timeout=60,
-            clock=None):
+            config: UrsulaServerConfig,
+            staking_provider_address: IdentityAddress):
 
-        self._clock = clock or Clock()
-
-        self._logger = parent_logger.get_child('UrsulaServer')
         self.ursula = ursula
         self.staking_provider_address = staking_provider_address
 
-        if storage is None:
-            storage = InMemoryStorage()
-        self._storage = storage
-
+        self._clock = config.clock
+        self._logger = config.parent_logger.get_child('UrsulaServer')
+        self._storage = config.storage
         self._ssl_private_key = ursula.make_ssl_private_key()
-
-        contact = Contact(host=host, port=port)
 
         metadata = self._storage.get_my_metadata()
         if metadata is not None:
@@ -143,7 +129,8 @@ class UrsulaServer(Server):
                     ssl_private_key=self._ssl_private_key,
                     ursula=self.ursula,
                     staking_provider_address=self.staking_provider_address,
-                    contact=contact)
+                    contact=config.contact,
+                    domain=config.domain)
             except Exception as e:
                 self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e))
                 metadata = None
@@ -155,30 +142,26 @@ class UrsulaServer(Server):
                 ssl_private_key=self._ssl_private_key,
                 ursula=self.ursula,
                 staking_provider_address=self.staking_provider_address,
-                contact=contact)
+                contact=config.contact,
+                domain=config.domain)
             self._storage.set_my_metadata(metadata)
 
         self._ssl_certificate = SSLCertificate.from_der_bytes(metadata.payload.certificate_der)
         self._metadata = metadata
 
-        self._ssl_contact = SSLContact(contact, self._ssl_certificate)
-
-        if _rest_client is None:
-            _rest_client = RESTClient()
+        self._ssl_contact = SSLContact(config.contact, self._ssl_certificate)
 
         self.learner = Learner(
-            rest_client=_rest_client,
-            identity_client=identity_client,
-            storage=storage,
+            rest_client=config.rest_client,
+            identity_client=config.identity_client,
+            storage=config.storage,
             my_metadata=self._metadata,
-            seed_contacts=seed_contacts,
+            seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
-            domain=ursula.domain,
+            domain=config.domain,
             clock=self._clock)
 
-        self._learning_timeout = learning_timeout
-
-        self._payment_client = payment_client
+        self._payment_client = config.payment_client
 
         self._started_at = self._clock.utcnow()
 

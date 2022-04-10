@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from pons import MethodCall
 
+from ..domain import Domain
 from ..drivers.identity import IdentityClient, IdentityAddress, AmountT, AmountETH
 
 
@@ -85,7 +86,7 @@ class MockIdentityClient(IdentityClient):
 
     def __init__(self):
         mock_backend = MockBackend()
-        super().__init__(mock_backend)
+        super().__init__(mock_backend, Domain.MAINNET)
         self._mock_backend = mock_backend
 
     def mock_approve(self, staking_provider_address: IdentityAddress, amount_t: AmountT):

@@ -20,6 +20,8 @@ from eth_account._utils.signing import to_standard_signature_bytes
 
 from pons import HTTPProvider, Client, ContractABI, DeployedContract, Address, Amount
 
+from ..domain import Domain
+
 
 class IdentityAddress(Address):
 
@@ -27,16 +29,28 @@ class IdentityAddress(Address):
         return f"IdentityAddress.from_hex({self.as_checksum()})"
 
 
-class Registry:
+class IbexContracts:
     """
     Registry for Rinkeby.
     """
     # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
-    T = Address.from_hex('0xc3871E2C11Ff18d809Bce74d1e4229d561aa3F09')
+    T = IdentityAddress.from_hex('0xc3871E2C11Ff18d809Bce74d1e4229d561aa3F09')
     # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
-    TOKEN_STAKING = Address.from_hex('0x18eFb520dA5D387982C860a64855C14C0AcADF3F')
+    TOKEN_STAKING = IdentityAddress.from_hex('0x18eFb520dA5D387982C860a64855C14C0AcADF3F')
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = Address.from_hex('0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35')
+    PRE_APPLICATION = IdentityAddress.from_hex('0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35')
+
+
+class MainnetContracts:
+    """
+    Registry for mainnet.
+    """
+    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
+    T = IdentityAddress.from_hex('0xCdF7028ceAB81fA0C6971208e83fa7872994beE5')
+    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
+    TOKEN_STAKING = IdentityAddress.from_hex('0x01b67b1194c75264d06f808a921228a95c765dd7')
+    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
+    PRE_APPLICATION = IdentityAddress.from_hex('0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd')
 
 
 ABI_DIR = Path(__file__).parent / 'eth_abi'
@@ -49,6 +63,7 @@ with open(ABI_DIR / 'TokenStaking.json') as f:
 
 with open(ABI_DIR / 'SimplePREApplication.json') as f:
     PRE_APPLICATION_ABI = json.load(f)['abi']
+
 
 
 class IdentityAccount:
@@ -93,20 +108,28 @@ class AmountT(Amount):
 class IdentityClient:
 
     @classmethod
-    def from_http_endpoint(cls, url):
+    def from_endpoint(cls, url, domain):
+        assert url.startswith('https://')
         provider = HTTPProvider(url)
         client = Client(provider)
-        return cls(client)
+        return cls(client, domain)
 
-    def __init__(self, backend_client):
+    def __init__(self, backend_client, domain):
         self._client = backend_client
 
+        if domain == Domain.MAINNET:
+            registry = MainnetContracts
+        elif domain == Domain.IBEX:
+            registry = IbexContracts
+        else:
+            raise ValueError(f"Unknown domain: {domain}")
+
         self._t = DeployedContract(
-            address=Registry.T, abi=ContractABI(T_ABI))
+            address=registry.T, abi=ContractABI(T_ABI))
         self._token_staking = DeployedContract(
-            address=Registry.TOKEN_STAKING, abi=ContractABI(TOKEN_STAKING_ABI))
+            address=registry.TOKEN_STAKING, abi=ContractABI(TOKEN_STAKING_ABI))
         self._pre_application = DeployedContract(
-            address=Registry.PRE_APPLICATION, abi=ContractABI(PRE_APPLICATION_ABI))
+            address=registry.PRE_APPLICATION, abi=ContractABI(PRE_APPLICATION_ABI))
 
     @asynccontextmanager
     async def session(self):

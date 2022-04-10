@@ -19,23 +19,33 @@ from nucypher_core import HRAC
 from pons import HTTPProvider, Client, ContractABI, DeployedContract, Signer, AccountSigner
 from pons.types import Address, Amount
 
+from ..domain import Domain
 
-class Registry:
+
+class PaymentAddress(Address):
+    pass
+
+
+class IbexContracts:
     """
-    Registry for Mumbai.
+    Registry for Polygon-Mumbai.
     """
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = Address.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
+
+
+class MainnetContracts:
+    """
+    Registry for Polygon-Mainnet.
+    """
+    # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xB0194073421192F6Cf38d72c791Be8729721A0b3')
 
 
 ABI_DIR = Path(__file__).parent / 'eth_abi'
 
 with open(ABI_DIR / 'SubscriptionManager.json') as f:
     SUBSCRIPTION_MANAGER_ABI = json.load(f)['abi']
-
-
-class PaymentAddress(Address):
-    pass
 
 
 class AmountMATIC(Amount):
@@ -71,16 +81,24 @@ class PaymentAccountSigner(AccountSigner):
 class PaymentClient:
 
     @classmethod
-    def from_http_endpoint(cls, url):
+    def from_endpoint(cls, url, domain):
+        assert url.startswith('https://')
         provider = HTTPProvider(url)
         client = Client(provider)
-        return cls(client)
+        return cls(client, domain)
 
-    def __init__(self, backend_client):
+    def __init__(self, backend_client, domain):
         self._client = backend_client
 
+        if domain == Domain.MAINNET:
+            registry = MainnetContracts
+        elif domain == Domain.IBEX:
+            registry = IbexContracts
+        else:
+            raise ValueError(f"Unknown domain: {domain}")
+
         self._manager = DeployedContract(
-            address=Registry.SUBSCRIPTION_MANAGER, abi=ContractABI(SUBSCRIPTION_MANAGER_ABI))
+            address=registry.SUBSCRIPTION_MANAGER, abi=ContractABI(SUBSCRIPTION_MANAGER_ABI))
 
     @asynccontextmanager
     async def session(self):

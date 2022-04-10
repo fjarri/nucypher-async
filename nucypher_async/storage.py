@@ -1,10 +1,17 @@
+from abc import ABC
+
 from pathlib import Path
 
 from appdirs import AppDirs
 from nucypher_core import NodeMetadata
 
 
-class InMemoryStorage:
+# TODO: make abstract and define abstract methods
+class Storage:
+    pass
+
+
+class InMemoryStorage(Storage):
 
     def __init__(self):
         self._my_metadata = None
@@ -16,7 +23,7 @@ class InMemoryStorage:
         self._my_metadata = metadata
 
 
-class FileSystemStorage:
+class FileSystemStorage(Storage):
 
     def __init__(self, storage_dir: Path):
         self._storage_dir = Path(storage_dir)

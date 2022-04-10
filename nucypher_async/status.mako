@@ -114,7 +114,7 @@
         %endif
         <tr>
             <td><i>Domain:</i></td>
-            <td><span class="monospace">${ ursula_server.ursula.domain }</span></td>
+            <td><span class="monospace">${ ursula_server.domain }</span></td>
         </tr>
         <tr>
             <td><i>Metadata created:</i></td>

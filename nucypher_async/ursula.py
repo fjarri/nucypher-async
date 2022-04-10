@@ -14,10 +14,7 @@ class Ursula:
     def __init__(
             self,
             master_key: Optional[MasterKey] = None,
-            identity_account: Optional[IdentityAccount] = None,
-            domain="mainnet"):
-
-        self.domain = domain
+            identity_account: Optional[IdentityAccount] = None):
 
         if not master_key:
             master_key = MasterKey.random()

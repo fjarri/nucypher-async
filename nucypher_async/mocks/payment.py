@@ -3,6 +3,7 @@ from typing import NamedTuple
 
 from pons import MethodCall, Signer
 
+from ..domain import Domain
 from ..drivers.payment import PaymentClient, PaymentAddress, AmountMATIC
 
 
@@ -80,7 +81,7 @@ class MockPaymentClient(PaymentClient):
 
     def __init__(self):
         mock_backend = MockBackend()
-        super().__init__(mock_backend)
+        super().__init__(mock_backend, Domain.MAINNET)
         self._mock_backend = mock_backend
 
     def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC):

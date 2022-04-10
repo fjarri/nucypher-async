@@ -8,33 +8,18 @@ from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
+from nucypher_async.config import UrsulaServerConfig
+from nucypher_async.domain import Domain
+from nucypher_async.storage import InMemoryStorage
 from nucypher_async.learner import Learner
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
 from .mocks import MockNetwork, MockRESTClient, mock_start_in_nursery
 
 
-
 @pytest.fixture
-def ursulas():
-    yield [Ursula() for i in range(10)]
-
-
-@pytest.fixture
-def mock_network():
-    yield MockNetwork()
-
-
-@pytest.fixture
-def mock_identity_client():
-    yield MockIdentityClient()
-
-
-@pytest.fixture
-async def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
+async def ursula_servers(mock_network, mock_identity_client, mock_payment_client, mock_clock, ursulas, logger):
     servers = []
-    payment_client = MockPaymentClient()
-
     for i in range(10):
 
         # Each Ursula knows only about one other Ursula,
@@ -52,15 +37,20 @@ async def ursula_servers(mock_network, mock_identity_client, ursulas, logger):
         # TODO: UrsulaServer should do it on startup
         mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
 
-        server = await UrsulaServer.async_init(
-            ursula=ursulas[i],
+        config = UrsulaServerConfig(
+            domain=Domain.MAINNET,
+            contact=Contact('127.0.0.1', 9150 + i),
+            # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
-            payment_client=payment_client,
-            port=9150 + i,
-            seed_contacts=seed_contacts,
+            payment_client=mock_payment_client,
+            rest_client=MockRESTClient(mock_network, '127.0.0.1'),
             parent_logger=logger.get_child(str(i)),
-            _rest_client=MockRESTClient(mock_network, '127.0.0.1'))
+            storage=InMemoryStorage(),
+            seed_contacts=seed_contacts,
+            clock=mock_clock,
+            )
 
+        server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
         servers.append(server)
         mock_network.add_server(server)
 

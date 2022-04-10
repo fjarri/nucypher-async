@@ -30,7 +30,7 @@ async def wrap_in_response(logger, callable, *args, **kwds):
         return await make_response(e.args[0], e.status_code)
     except Exception as e:
         # A catch-all for any unexpected errors
-        logger.error("Uncaught exception:", exc_info=sys.exc_info())
+        logger.error("Uncaught exception:", exc_info=True)
         return await make_response(str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR)
     return await make_response(result)
 

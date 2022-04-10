@@ -35,7 +35,7 @@ class PorterServer(Server):
             parent_logger=NULL_LOGGER,
             domain='mainnet'):
 
-        self._clock = Clock()
+        self._clock = SystemClock()
 
         master_key = MasterKey.random()
         contact = Contact(host=host, port=port)
@@ -142,10 +142,6 @@ class PorterServer(Server):
 
         except trio.TooSlowError as e:
             raise HTTPError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
-
-        except Exception as e:
-            self._logger.debug("Failed to execute get_ursulas(): {}", str(e), exc_info=True)
-            raise HTTPError(str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR) from e
 
         node_list = [dict(
             checksum_address=node.staking_provider_address.as_checksum(),

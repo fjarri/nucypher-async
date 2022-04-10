@@ -7,20 +7,23 @@ from eth_account import Account
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.learner import Learner
+from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
 from nucypher_async.drivers.rest_server import start_in_nursery
-from nucypher_async.drivers.rest_client import Contact
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
+from nucypher_async.drivers.rest_client import Contact, RESTClient
+from nucypher_async.storage import InMemoryStorage
+from nucypher_async.drivers.time import Clock, SystemClock
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
+from nucypher_async.domain import Domain
 from nucypher_async.pre import Alice, Bob, RemoteAlice, RemoteBob, encrypt
 from nucypher_async.utils.logging import Logger, ConsoleHandler, Level
 
 
-LOCAL_DOMAIN = "local"
 LOCALHOST = '127.0.0.1'
 PORT_BASE = 9151
 
-RINKEBY_ENDPOINT = "https://rinkeby.infura.io/v3/e86a8c23df63469ab91d5b40fbff09d1"
+RINKEBY_ENDPOINT = "<rinkeby endpoint address here>"
 MUMBAI_ENDPOINT = "https://rpc-mumbai.matic.today/"
 
 
@@ -28,10 +31,11 @@ MUMBAI_ENDPOINT = "https://rpc-mumbai.matic.today/"
 # (Easier than passing endless lists of arguments)
 class Context(NamedTuple):
     logger: Logger
-    domain: str
+    domain: Domain
     identity_client: IdentityClient
     payment_client: PaymentClient
     seed_contact: Contact
+    clock: Clock
 
 
 async def run_local_ursula_fleet(context, nursery):
@@ -40,7 +44,7 @@ async def run_local_ursula_fleet(context, nursery):
     contacts = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
-        ursula = Ursula(domain=context.domain)
+        ursula = Ursula()
 
         # Make the first node the dedicated teacher of the other nodes
         if i > 0:
@@ -56,17 +60,20 @@ async def run_local_ursula_fleet(context, nursery):
         # TODO: UrsulaServer should do it on startup
         context.identity_client.mock_confirm_operator(ursula.operator_address)
 
-        server = await UrsulaServer.async_init(
-            ursula=ursula,
+
+        config = UrsulaServerConfig(
+            domain=context.domain,
+            contact=Contact(LOCALHOST, PORT_BASE + i),
             identity_client=context.identity_client,
             payment_client=context.payment_client,
+            rest_client=RESTClient(),
             parent_logger=context.logger.get_child(f"Ursula{i+1}"),
-            host=LOCALHOST,
-            port=PORT_BASE + i,
+            storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
-            learning_timeout=1,
+            clock=context.clock,
             )
 
+        server = await UrsulaServer.async_init(ursula, config)
         handle = start_in_nursery(nursery, server)
         handles.append(handle)
 
@@ -79,7 +86,8 @@ async def alice_grants(context, alice, remote_bob):
         identity_client=context.identity_client,
         domain=context.domain,
         parent_logger=context.logger.get_child("Learner-Alice"),
-        seed_contacts=[context.seed_contact])
+        seed_contacts=[context.seed_contact],
+        clock=context.clock)
 
     policy = await alice.grant(
         learner=learner,
@@ -98,7 +106,8 @@ async def bob_decrypts(context, bob, remote_alice, policy, message_kit):
         identity_client=context.identity_client,
         domain=context.domain,
         parent_logger=context.logger.get_child('Learner-Bob'),
-        seed_contacts=[context.seed_contact])
+        seed_contacts=[context.seed_contact],
+        clock=context.clock)
 
     decrypted = await bob.retrieve_and_decrypt(
         learner=learner,
@@ -116,23 +125,28 @@ async def main(mocked=True):
         domain=None,
         identity_client=None,
         payment_client=None,
-        seed_contact=None)
+        seed_contact=None,
+        clock=None)
 
     if mocked:
         context = context._replace(
-            domain=LOCAL_DOMAIN,
+            domain=Domain.IBEX,
             identity_client=MockIdentityClient(),
-            payment_client=MockPaymentClient())
+            payment_client=MockPaymentClient(),
+            clock=MockClock())
     else:
         context = context._replace(
-            domain='ibex',
-            identity_client=IdentityClient.from_http_endpoint(RINKEBY_ENDPOINT),
-            payment_client=PaymentClient.from_http_endpoint(MUMBAI_ENDPOINT))
+            domain=Domain.IBEX,
+            identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.IBEX),
+            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.IBEX),
+            clock=SystemClock())
 
     async with trio.open_nursery() as nursery:
         if mocked:
             context.logger.info("Mocked mode - starting Ursulas")
             server_handles, seed_contact = await run_local_ursula_fleet(context, nursery)
+            # Wait for all the nodes to learn about each other
+            await trio.sleep(3600)
         else:
             seed_contact = Contact('ibex.nucypher.network', 9151)
 
@@ -145,7 +159,7 @@ async def main(mocked=True):
             payment_account = PaymentAccount.random()
         else:
             # TODO: don't expose eth_account.Account
-            acc = Account.from_key(b'<your Mumbai private key here>')
+            acc = Account.from_key(b'$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an')
             payment_account = PaymentAccount(acc)
 
         alice = Alice(payment_account=payment_account)
@@ -168,5 +182,15 @@ async def main(mocked=True):
                 handle.shutdown()
 
 
+def run_main(mocked=True):
+    if mocked:
+        from trio.testing import MockClock
+        clock = MockClock(autojump_threshold=0)
+    else:
+        clock = None
+
+    trio.run(main, mocked, clock=clock)
+
+
 if __name__ == '__main__':
-    trio.run(main)
+    run_main()

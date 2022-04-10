@@ -6,22 +6,42 @@ import trio
 
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.rest_app import make_ursula_app
+from nucypher_async.drivers.rest_client import RESTClient, Contact
+from nucypher_async.drivers.time import SystemClock
+from nucypher_async.domain import Domain
+from nucypher_async.storage import InMemoryStorage
 from nucypher_async.ursula import Ursula
+from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
+from nucypher_async.utils.logging import NULL_LOGGER
 
 
-async def test_client_with_background_tasks():
-    identity_client = MockIdentityClient()
-    payment_client = MockPaymentClient()
-    server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
-        payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
-    app = make_ursula_app(server)
+@pytest.fixture
+def ursula_server():
+    config = UrsulaServerConfig(
+        domain=Domain.MAINNET,
+        contact=Contact('127.0.0.1', 9151),
+        identity_client=MockIdentityClient(),
+        payment_client=MockPaymentClient(),
+        rest_client=RESTClient(),
+        parent_logger=NULL_LOGGER,
+        storage=InMemoryStorage(),
+        seed_contacts=[],
+        clock=SystemClock(),
+        )
 
-    async with app.test_app() as test_app:
+    return UrsulaServer(ursula=Ursula(), config=config, staking_provider_address=IdentityAddress(os.urandom(20)))
+
+
+async def test_client_with_background_tasks(ursula_server):
+
+    ursula_app = make_ursula_app(ursula_server)
+
+    async with ursula_app.test_app() as test_app:
 
         test_client = test_app.test_client()
-        assert server.started
+        assert ursula_server.started
 
         r = await test_client.get('/ping')
         assert r.status_code == HTTPStatus.OK
@@ -31,19 +51,16 @@ async def test_client_with_background_tasks():
 
         await test_app.shutdown()
 
-    assert not server.started
+    assert not ursula_server.started
 
 
-async def test_client_no_background_tasks():
-    identity_client = MockIdentityClient()
-    payment_client = MockPaymentClient()
-    server = UrsulaServer(ursula=Ursula(), identity_client=identity_client,
-        payment_client=payment_client, staking_provider_address=IdentityAddress(os.urandom(20)))
-    app = make_ursula_app(server)
+async def test_client_no_background_tasks(ursula_server):
 
-    test_client = app.test_client()
+    ursula_app = make_ursula_app(ursula_server)
 
-    assert not server.started
+    test_client = ursula_app.test_client()
+
+    assert not ursula_server.started
     response = await test_client.get('/ping')
     assert response.status_code == 200
     # For some reason

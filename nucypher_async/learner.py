@@ -14,7 +14,7 @@ from nucypher_core import FleetStateChecksum
 from .drivers.identity import IdentityAddress
 from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError, RESTClient
 from .drivers.ssl import SSLCertificate
-from .drivers.time import Clock
+from .drivers.time import SystemClock
 from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
@@ -60,7 +60,7 @@ def verify_metadata_shared(clock, metadata, contact, domain):
             f"Port mismatch: expected {contact.port}, "
             f"{payload.port} in the metadata")
 
-    if payload.domain != domain:
+    if payload.domain != domain.value:
         raise NodeVerificationError(
             f"Domain mismatch: expected {domain}, "
             f"{payload.domain} in the metadata")
@@ -90,13 +90,13 @@ class Learner:
     VERIFICATION_TIMEOUT = 10
     LEARNING_TIMEOUT = 10
 
-    def __init__(self, identity_client, rest_client=None, my_metadata=None, seed_contacts=None,
-            parent_logger=NULL_LOGGER, storage=None, domain="mainnet", clock=None):
+    def __init__(self, domain, identity_client, rest_client=None, my_metadata=None, seed_contacts=None,
+            parent_logger=NULL_LOGGER, storage=None, clock=None):
 
         if rest_client is None:
             rest_client = RESTClient()
 
-        self._clock = clock or Clock()
+        self._clock = clock or SystemClock()
         self._logger = parent_logger.get_child('Learner')
 
         if storage is None:
@@ -124,7 +124,7 @@ class Learner:
         for metadata, stake in zip(metadatas, stakes):
             if metadata.payload.staking_provider_address != self._my_metadata.payload.staking_provider_address:
                 node = RemoteUrsula(metadata, metadata.payload.derive_operator_address())
-                self.fleet_sensor.report_verified_node(node, stake)
+                self.fleet_sensor.report_verified_node(node.ssl_contact.contact, node, stake)
                 self.fleet_state.add_metadatas([metadata])
 
     @producer
