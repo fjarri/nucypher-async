@@ -165,6 +165,8 @@ class UrsulaServer(Server):
 
         self._started_at = self._clock.utcnow()
 
+        self.domain = config.domain
+
         self.started = False
 
     def ssl_contact(self):

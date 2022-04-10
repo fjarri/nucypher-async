@@ -1,4 +1,5 @@
 from typing import List
+from pathlib import Path
 
 import attrs
 from appdirs import AppDirs
@@ -48,8 +49,8 @@ class UrsulaServerConfig:
 
         log_handlers = (
             ([ConsoleHandler()] if log_to_console else []) +
-            ([RotatingFileHandler(log_file=dirs.user_log_dir)] if log_to_file else []))
-        logger = Logger(log_handlers)
+            ([RotatingFileHandler(log_file=Path(dirs.user_log_dir).resolve() / 'nucypher.log')] if log_to_file else []))
+        logger = Logger(handlers=log_handlers)
 
         if persistent_storage:
             storage = FileSystemStorage(dirs.user_data_dir)
@@ -68,6 +69,8 @@ class UrsulaServerConfig:
         elif domain == Domain.IBEX:
             seed_contacts = [
                 Contact('ibex.nucypher.network', 9151)]
+
+        rest_client = RESTClient()
 
         return cls(
             domain=domain,

@@ -13,16 +13,13 @@ from .config import UrsulaServerConfig
 from .master_key import EncryptedMasterKey
 from .storage import FileSystemStorage
 from .ursula import Ursula
+from .domain import Domain
 from .ursula_server import UrsulaServer
 from .porter_server import PorterServer
 from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
 
 
-async def make_ursula_server():
-
-    config_path = sys.argv[1]
-    nucypher_password = sys.argv[2]
-    geth_password = sys.argv[3]
+async def make_ursula_server(config_path, nucypher_password, geth_password):
 
     with open(config_path) as f:
         config = json.load(f)
@@ -44,7 +41,7 @@ async def make_ursula_server():
     ursula = Ursula(master_key=key, identity_account=acc)
 
     config = UrsulaServerConfig.from_config_values(
-        domain=config['domain'],
+        domain=Domain.from_string(config['domain']),
         contact=Contact(config['rest_host'], config['rest_port']),
         identity_endpoint=config['eth_provider_uri'],
         payment_endpoint=config['payment_provider'],
@@ -58,20 +55,7 @@ async def make_ursula_server():
     return server
 
 
-@click.group()
-def main():
-    pass
-
-
-@main.command()
-def ursula():
-    server = trio.run(make_ursula_server)
-    serve_forever(server)
-
-
-@main.command()
-def porter():
-
+async def make_porter_server():
     config_path = sys.argv[1]
 
     with open(config_path) as f:
@@ -89,4 +73,22 @@ def porter():
         seed_contacts=[Contact('ibex.nucypher.network', 9151)],
         parent_logger=logger)
 
+
+@click.group()
+def main():
+    pass
+
+
+@main.command()
+@click.argument('config_path')
+@click.argument('nucypher_password')
+@click.argument('geth_password')
+def ursula(config_path, nucypher_password, geth_password):
+    server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
+    serve_forever(server)
+
+
+@main.command()
+def porter():
+    server = trio.run(make_porter_server)
     serve_forever(server)

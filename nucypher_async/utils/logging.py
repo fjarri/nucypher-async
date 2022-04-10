@@ -169,6 +169,7 @@ class RotatingFileHandler:
         self.level = level
         self.formatter = formatter
         self.log_file = Path(log_file).resolve()
+        self.log_dir = self.log_file.parent
         self.max_bytes = max_bytes
         self.backup_count = backup_count
 
@@ -193,6 +194,8 @@ class RotatingFileHandler:
             return
         message = self.formatter.format(record)
         message_bytes = message.encode()
+
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         if self.log_file.exists() and self.log_file.stat().st_size + len(message_bytes) > self.max_bytes:
             self._rotate()
