@@ -158,10 +158,10 @@ class IdentityClientSession:
     """
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
-        t, keep_in_t, nu_in_t = await self._backend_session.call(
-            self._identity_client._token_staking.address,
-            self._identity_client._token_staking.abi.stakes(bytes(staking_provider_address)))
-        return AmountT(t + keep_in_t + nu_in_t)
+        staked_amount = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.authorizedStake(bytes(staking_provider_address)))
+        return AmountT(staked_amount)
 
     async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
         address = await self._backend_session.call(

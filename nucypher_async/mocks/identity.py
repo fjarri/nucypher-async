@@ -49,8 +49,8 @@ class MockBackend():
 
     # Mocked contract methods (arguments are whatever MethodCall packs)
 
-    def _call_stakes(self, staking_provider_address: bytes) -> int:
-        return self._stakes[IdentityAddress(staking_provider_address)].as_wei(), 0, 0
+    def _call_authorized_stake(self, staking_provider_address: bytes) -> int:
+        return self._stakes[IdentityAddress(staking_provider_address)].as_wei()
 
     def _call_staking_provider_from_operator(self, operator_address: bytes) -> str:
         return self._operator_to_staking_provider[IdentityAddress(operator_address)].as_checksum()
@@ -70,7 +70,7 @@ class MockBackend():
     async def call(self, contract_address: IdentityAddress, contract_call: MethodCall):
         # TODO: check that the address is correct (that is, the correct registry was used)
         dispatch = dict(
-            stakes=self._call_stakes,
+            authorizedStake=self._call_authorized_stake,
             stakingProviderFromOperator=self._call_staking_provider_from_operator,
             getOperatorFromStakingProvider=self._call_get_operator_from_staking_provider,
             isAuthorized=self._call_is_authorized,
