@@ -113,4 +113,8 @@ def make_porter_app(porter_server):
         retrieve_cfrags_request = await request.json
         return await wrap_in_response(logger, porter_server.endpoint_retrieve_cfrags, retrieve_cfrags_request)
 
+    @app.route("/status")
+    async def status():
+        return await wrap_in_response(logger, porter_server.endpoint_status)
+
     return app

@@ -9,7 +9,7 @@ from .drivers.rest_client import Contact
 from .drivers.rest_server import serve_forever
 from .drivers.identity import IdentityClient, IdentityAccount
 from .drivers.payment import PaymentClient
-from .config import UrsulaServerConfig
+from .config import UrsulaServerConfig, PorterServerConfig
 from .master_key import EncryptedMasterKey
 from .storage import FileSystemStorage
 from .ursula import Ursula
@@ -42,7 +42,8 @@ async def make_ursula_server(config_path, nucypher_password, geth_password):
 
     config = UrsulaServerConfig.from_config_values(
         domain=Domain.from_string(config['domain']),
-        contact=Contact(config['rest_host'], config['rest_port']),
+        host=config['rest_host'],
+        port=config['rest_port'],
         identity_endpoint=config['eth_provider_uri'],
         payment_endpoint=config['payment_provider'],
         log_to_console=True,
@@ -55,8 +56,7 @@ async def make_ursula_server(config_path, nucypher_password, geth_password):
     return server
 
 
-async def make_porter_server():
-    config_path = sys.argv[1]
+def make_porter_server(config_path):
 
     with open(config_path) as f:
         config = json.load(f)
@@ -65,13 +65,17 @@ async def make_porter_server():
         ConsoleHandler(),
         RotatingFileHandler(log_file='porter.log')])
 
-    server = await PorterServer(
-        identity_client=IdentityClient.from_http_endpoint(config['eth_provider_uri']),
-        payment_client=PaymentClient.from_http_endpoint(config['payment_provider']),
-        port=config['rest_port'],
+    config = PorterServerConfig.from_config_values(
+        domain=Domain.from_string(config['domain']),
         host=config['rest_host'],
-        seed_contacts=[Contact('ibex.nucypher.network', 9151)],
-        parent_logger=logger)
+        port=config['rest_port'] + 4,
+        identity_endpoint=config['eth_provider_uri'],
+        log_to_console=True,
+        log_to_file=True,
+        persistent_storage=True,
+        )
+
+    return PorterServer(config)
 
 
 @click.group()
@@ -89,6 +93,7 @@ def ursula(config_path, nucypher_password, geth_password):
 
 
 @main.command()
-def porter():
-    server = trio.run(make_porter_server)
+@click.argument('config_path')
+def porter(config_path):
+    server = make_porter_server(config_path)
     serve_forever(server)

@@ -25,35 +25,29 @@ from .utils.logging import NULL_LOGGER
 
 class PorterServer(Server):
 
-    def __init__(
-            self,
-            identity_client: IdentityClient,
-            payment_client: PaymentClient,
-            port=9151,
-            host='127.0.0.1',
-            seed_contacts=[],
-            parent_logger=NULL_LOGGER,
-            domain='mainnet'):
+    def __init__(self, config):
 
-        self._clock = SystemClock()
+        self._clock = config.clock
+        self.domain = config.domain
 
         master_key = MasterKey.random()
-        contact = Contact(host=host, port=port)
+        contact = config.contact
         # TODO: use a proper CA cert
         self._ssl_private_key = master_key.make_ssl_private_key()
         certificate = SSLCertificate.self_signed(self._clock, self._ssl_private_key, contact.host)
         self._ssl_contact = SSLContact(contact, certificate)
 
-        self._logger = parent_logger.get_child('UrsulaServer')
+        self._logger = config.parent_logger.get_child('PorterServer')
 
         self.learner = Learner(
-            identity_client=identity_client,
-            seed_contacts=seed_contacts,
+            identity_client=config.identity_client,
+            seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
-            domain=domain,
-            clock=self._clock)
+            domain=config.domain,
+            clock=config.clock,
+            storage=config.storage)
 
-        self._payment_client = payment_client
+        self._started_at = self._clock.utcnow()
 
         self.started = False
 
@@ -153,3 +147,6 @@ class PorterServer(Server):
 
     async def endpoint_retrieve_cfrags(self, request_json):
         pass
+
+    async def endpoint_status(self):
+        return render_status(self._logger, self._clock, self, is_active_peer=False)

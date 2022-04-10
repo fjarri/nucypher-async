@@ -1,4 +1,4 @@
-<%def name="main(ursula_server, code_info)">
+<%def name="main(server, code_info, is_active_peer)">
 <!DOCTYPE html>
 <html>
 <head>
@@ -74,11 +74,11 @@
 </style>
 </body>
     <%
-        verified_node_entries = ursula_server.learner.fleet_sensor._verified_nodes_db._nodes
+        verified_node_entries = server.learner.fleet_sensor._verified_nodes_db._nodes
         verify_at = {
             entry.address: entry
-            for entry in ursula_server.learner.fleet_sensor._verified_nodes_db._verify_at}
-        contacts = ursula_server.learner.fleet_sensor._contacts_db._contacts_to_addresses
+            for entry in server.learner.fleet_sensor._verified_nodes_db._verify_at}
+        contacts = server.learner.fleet_sensor._contacts_db._contacts_to_addresses
 
         if code_info.release:
             version_str = code_info.version
@@ -90,10 +90,12 @@
 
 
     <table class="this-node-info">
+        %if is_active_peer:
         <tr>
             <td></td>
-            <td><span class="this-node monospace">${ursula_server.staking_provider_address}</span></td>
+            <td><span class="this-node monospace">${server.staking_provider_address}</span></td>
         </tr>
+        %endif
         <tr>
             <td><div style="margin-bottom: 1em"></div></td>
             <td></td>
@@ -114,15 +116,17 @@
         %endif
         <tr>
             <td><i>Domain:</i></td>
-            <td><span class="monospace">${ ursula_server.domain.value }</span></td>
+            <td><span class="monospace">${ server.domain.value }</span></td>
         </tr>
+        %if is_active_peer:
         <tr>
             <td><i>Metadata created:</i></td>
-            <td>${arrow.get(ursula_server._metadata.payload.timestamp_epoch).humanize(now)}</td>
+            <td>${arrow.get(server._metadata.payload.timestamp_epoch).humanize(now)}</td>
         </tr>
+        %endif
         <tr>
             <td><i>Uptime:</i></td>
-            <td>${humanize.naturaldelta(now - ursula_server._started_at)}</td>
+            <td>${humanize.naturaldelta(now - server._started_at)}</td>
         </tr>
     </table>
 

@@ -279,4 +279,4 @@ class UrsulaServer(Server):
         return bytes(response)
 
     async def endpoint_status(self):
-        return render_status(self._logger, self._clock, self)
+        return render_status(self._logger, self._clock, self, is_active_peer=True)
