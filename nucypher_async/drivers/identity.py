@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
+from typing import Dict
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
@@ -192,3 +193,18 @@ class IdentityClientSession:
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
         amount = await self._backend_session.get_balance(address)
         return AmountETH(amount.as_wei())
+
+    async def get_active_staking_providers(
+            self,
+            start_index: int = 0,
+            max_staking_providers: int = 0) -> Dict[IdentityAddress, AmountT]:
+        _total_staked, staking_providers_data = await self._backend_session.call(
+            self._identity_client._pre_application.address,
+            self._identity_client._pre_application.abi.getActiveStakingProviders(start_index, max_staking_providers))
+
+        staking_providers = {
+            IdentityAddress(address.to_bytes(20, byteorder='big')): AmountT(amount)
+            for address, amount in staking_providers_data
+        }
+
+        return staking_providers
