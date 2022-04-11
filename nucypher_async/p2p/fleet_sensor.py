@@ -75,7 +75,7 @@ class VerifiedNodesDB:
 
     def next_verification_in(self, now, exclude):
         for entry in self._verify_at:
-            if entry.address not in exclude:
+            if entry.node.ssl_contact.contact not in exclude:
                 return entry.verify_at - now
         return None
 
@@ -153,7 +153,6 @@ class FleetSensor:
         self._verified_nodes_db = VerifiedNodesDB()
         self._contacts_db = ContactsDB()
 
-        self._locked_verified_addresses = set()
         self._locked_contacts = set()
 
         self._new_verified_nodes = trio.Event()
@@ -279,7 +278,7 @@ class FleetSensor:
             return datetime.timedelta()
 
         now = self._clock.utcnow()
-        next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_verified_addresses)
+        next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_contacts)
         if next_verification_in is None:
             # Maybe someone will contact us during this time and leave some contacts.
             return datetime.timedelta(days=1)
@@ -330,9 +329,6 @@ class FleetSensor:
         print("Verification queue:", file=file)
         for entry in self._verified_nodes_db._verify_at:
             print(entry, file=file)
-        print(file=file)
-        print("Locked verified nodes:", file=file)
-        print(self._locked_verified_addresses, file=file)
         print(file=file)
         print("Contacts to addresses:", file=file)
         for contact, addresses in self._contacts_db._contacts_to_addresses.items():
