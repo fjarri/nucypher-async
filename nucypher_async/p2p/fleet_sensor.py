@@ -188,23 +188,29 @@ class FleetSensor:
         # Note that we do not use the node's `ssl_contact`:
         # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
         # TODO: IPs should be typed properly.
-        self._contacts_db.remove_contact(contact)
-        self._contacts_db.remove_address(node.staking_provider_address)
 
         verified_at = self._clock.utcnow()
-        verify_at = self._calculate_next_verification(node, verified_at)
-        self._add_node(node, staked_amount, verified_at, verify_at)
 
-    def report_reverified_node(self, old_node, new_node, staked_amount):
-        verified_at = self._clock.utcnow()
-        if bytes(new_node.metadata) == bytes(old_node.metadata):
-            previously_verified_at = self._verified_nodes_db.get_verified_at(new_node)
-            verify_at = self._calculate_next_verification(new_node, verified_at, previously_verified_at)
-            self._verified_nodes_db.update_verify_at(new_node, verified_at, verify_at)
+        if node.staking_provider_address not in self._verified_nodes_db._nodes:
+            # New verification
+
+            self._contacts_db.remove_contact(contact)
+            self._contacts_db.remove_address(node.staking_provider_address)
+
+            verify_at = self._calculate_next_verification(node, verified_at)
+            self._add_node(node, staked_amount, verified_at, verify_at)
         else:
-            self._verified_nodes_db.remove_node(old_node)
-            verify_at = self._calculate_next_verification(new_node, verified_at)
-            self._add_node(new_node, staked_amount, verified_at, verify_at)
+            # Re-verification
+            old_node = self._verified_nodes_db._nodes[node.staking_provider_address].node
+
+            if bytes(node.metadata) == bytes(old_node.metadata):
+                previously_verified_at = self._verified_nodes_db.get_verified_at(node)
+                verify_at = self._calculate_next_verification(node, verified_at, previously_verified_at)
+                self._verified_nodes_db.update_verify_at(node, verified_at, verify_at)
+            else:
+                self._verified_nodes_db.remove_node(old_node)
+                verify_at = self._calculate_next_verification(node, verified_at)
+                self._add_node(node, staked_amount, verified_at, verify_at)
 
     def report_active_learning_results(self, teacher_node, metadatas):
         for metadata in metadatas:
