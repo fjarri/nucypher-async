@@ -91,7 +91,7 @@ class VerifiedNodesDB:
             if entry.verify_at > now:
                 return contacts
 
-            contact = entry.node.ssl_contact.contact
+            contact = self._nodes[entry.address].node.ssl_contact.contact
             if contact not in exclude:
                 contacts.append(contact)
 
