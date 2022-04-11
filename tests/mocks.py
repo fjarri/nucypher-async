@@ -68,14 +68,15 @@ class MockRESTClient:
         return await server.endpoint_reencrypt(reencryption_request_bytes)
 
 
-async def mock_serve_async(nursery, ursula_server, shutdown_trigger, *, task_status=trio.TASK_STATUS_IGNORED):
-    await ursula_server.start(nursery)
-    task_status.started()
-    await shutdown_trigger()
-    ursula_server.stop()
+class MockServerHandle(ServerHandle):
 
-
-async def mock_start_in_nursery(nursery, ursula_server):
-    handle = ServerHandle(ursula_server)
-    await nursery.start(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
-    return handle
+    async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
+        """
+        "Starts" the server without the ASGI app, assuming that REST interface is mocked,
+        and server endpoints will be invoked directly.
+        """
+        async with trio.open_nursery() as nursery:
+            await self.server.start(nursery)
+            task_status.started()
+            await self._shutdown_event.wait()
+            self.server.stop()

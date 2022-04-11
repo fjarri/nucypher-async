@@ -10,7 +10,7 @@ from nucypher_async.learner import Learner
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
-from nucypher_async.drivers.rest_server import start_in_nursery
+from nucypher_async.drivers.rest_server import ServerHandle
 from nucypher_async.drivers.rest_client import Contact, RESTClient
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.drivers.time import Clock, SystemClock
@@ -74,7 +74,8 @@ async def run_local_ursula_fleet(context, nursery):
             )
 
         server = await UrsulaServer.async_init(ursula, config)
-        handle = await start_in_nursery(nursery, server)
+        handle = ServerHandle(server)
+        await nursery.start(handle)
         handles.append(handle)
 
     return handles, Contact(LOCALHOST, PORT_BASE)

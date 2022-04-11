@@ -5,7 +5,6 @@ import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.payment import AmountMATIC
-from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.domain import Domain
 from nucypher_async.config import UrsulaServerConfig
@@ -16,7 +15,7 @@ from nucypher_async.learner import Learner
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
-from .mocks import MockNetwork, MockRESTClient, mock_start_in_nursery
+from .mocks import MockNetwork, MockRESTClient, MockServerHandle
 
 
 @pytest.fixture
@@ -59,7 +58,10 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
 
 async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger):
-    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [MockServerHandle(server) for server in ursula_servers]
+    for handle in handles:
+        await nursery.start(handle)
+
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
     learner = Learner(
         domain=Domain.MAINNET,
@@ -80,7 +82,9 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
 async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client,
         mock_payment_client):
 
-    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [MockServerHandle(server) for server in ursula_servers]
+    for handle in handles:
+        await nursery.start(handle)
 
     alice = Alice()
     bob = Bob()

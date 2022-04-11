@@ -4,7 +4,6 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
-from nucypher_async.drivers.rest_server import start_in_nursery
 from nucypher_async.drivers.rest_client import Contact
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
@@ -14,7 +13,7 @@ from nucypher_async.storage import InMemoryStorage
 from nucypher_async.learner import Learner
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
-from .mocks import MockNetwork, MockRESTClient, mock_start_in_nursery
+from .mocks import MockNetwork, MockRESTClient, MockServerHandle
 
 
 @pytest.fixture
@@ -59,8 +58,9 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
 async def test_learning(nursery, autojump_clock, ursula_servers):
 
-    # Create 10 Ursulas
-    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [MockServerHandle(server) for server in ursula_servers]
+    for handle in handles:
+        await nursery.start(handle)
 
     while True:
         # Wait multiple learning cycles
