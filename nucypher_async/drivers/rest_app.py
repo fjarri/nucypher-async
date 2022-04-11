@@ -97,7 +97,7 @@ def make_porter_app(porter_server):
 
     @app.before_serving
     async def on_startup():
-        porter_server.start(app.nursery)
+        await porter_server.start(app.nursery)
 
     @app.after_serving
     async def on_shutdown():

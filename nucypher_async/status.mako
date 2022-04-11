@@ -78,7 +78,6 @@
         verify_at = {
             entry.address: entry
             for entry in server.learner.fleet_sensor._verified_nodes_db._verify_at}
-        contacts = server.learner.fleet_sensor._contacts_db._contacts_to_addresses
 
         if code_info.release:
             version_str = code_info.version
@@ -167,30 +166,39 @@
     </table>
     %endif
 
+    <%
+        contacts = server.learner.fleet_sensor._contacts_db._addresses_to_contacts
+        staking_providers = server.learner.fleet_sensor._staking_providers
+    %>
+
     <h3>Contacts (${len(contacts)} total)</h3>
 
     %if contacts:
     <table class="contacts">
         <thead>
             <td></td>
-            <td>Reported staking provider(s)</td>
+            <td>Stake</td>
+            <td>Reported contact(s)</td>
         </thead>
         <tbody>
-        %for contact, addresses in contacts.items():
+        %for address, contacts in contacts.items():
             <tr>
                 <td>
-                <a href="https://${contact.host}:${contact.port}/status">
-                <span class="monospace">${contact.host}:${contact.port}</span>
-                </a>
+                <span class="monospace">${address.as_checksum()}</span>
                 </td>
                 <td>
-                %if addresses:
-                %for address in addresses:
-                <span class="monospace">${address.as_checksum()}</span><br/>
-                %endfor
+                %if address in staking_providers:
+                ${humanize.number.intword(int(staking_providers[address].as_ether()))} T
                 %else:
                 &mdash;
                 %endif
+                </td>
+                <td>
+                %for contact in contacts:
+                <a href="https://${contact.host}:${contact.port}/status">
+                <span class="monospace">${contact.host}:${contact.port}</span>
+                </a><br/>
+                %endfor
                 </td>
             </tr>
         %endfor

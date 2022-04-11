@@ -25,6 +25,41 @@ from .utils.producer import producer
 from .ursula import RemoteUrsula
 
 
+import random
+from bisect import bisect_right
+from itertools import accumulate
+
+
+class WeightedReservoir:
+
+    def __init__(self, elements, get_weight):
+        weights = [get_weight(elem) for elem in elements]
+        self.totals = list(accumulate(weights))
+        self.elements = elements
+        self._length = len(elements)
+
+    def draw(self):
+
+        position = random.randint(0, self.totals[-1] - 1)
+        idx = bisect_right(self.totals, position)
+        sample = self.elements[idx]
+
+        # Adjust the totals so that they correspond
+        # to the weight of the element `idx` being set to 0.
+        prev_total = self.totals[idx - 1] if idx > 0 else 0
+        weight = self.totals[idx] - prev_total
+        for j in range(idx, len(self.totals)):
+            self.totals[j] -= weight
+
+        self._length -= 1
+
+        return sample
+
+    def __len__(self):
+        return self._length
+
+
+
 class NodeVerificationError(Exception):
     pass
 
@@ -89,6 +124,7 @@ class Learner:
 
     VERIFICATION_TIMEOUT = 10
     LEARNING_TIMEOUT = 10
+    STAKING_PROVIDERS_TIMEOUT = 30
 
     def __init__(self, domain, identity_client, rest_client=None, my_metadata=None, seed_contacts=None,
             parent_logger=NULL_LOGGER, storage=None, clock=None):
@@ -147,7 +183,7 @@ class Learner:
                     if node_entry is None:
                         continue
 
-                    if verified_within and node_entry.verified_at < now - verified_within:
+                    if verified_within and node_entry.verified_at < now - datetime.timedelta(seconds=verified_within):
                         nursery.start_soon(self._verify_node_and_report, node_entry.node)
                         continue
 
@@ -173,27 +209,64 @@ class Learner:
                     await self.learning_round()
 
     @producer
-    async def random_verified_nodes_iter(self, yield_, exclude=None, verified_within=None):
+    async def random_verified_nodes_iter(self, yield_, amount, overhead=0, exclude=None, verified_within=None):
 
         if self.fleet_sensor.is_empty():
             await self.seed_round()
 
-        returned_addresses = exclude or set()
+        now = self._clock.utcnow()
+
+        providers = self.fleet_sensor.get_available_staking_providers(exclude=exclude)
+        reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
+
+        def is_usable(address, node_entries):
+            if drawn_entry.address not in node_entries:
+                return False
+
+            if verified_within is None:
+                return True
+
+            return now - node_entries[address].verified_at < datetime.timedelta(seconds=verified_within)
+
+        returned = 0
+        drawn = 0
+        failed = 0
+
+        send_channel, receive_channel = trio.open_memory_channel(0)
+
+        async def verify_and_yield(drawn_entry):
+            node = await self._verify_contact_and_report(drawn_entry.contact)
+            await send_channel.send(node)
+
         async with trio.open_nursery() as nursery:
             while True:
 
-                new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+                node_entries = self.fleet_sensor.verified_node_entries
 
-                all_addresses = self.fleet_sensor.verified_node_entries.keys() - returned_addresses
-                if len(all_addresses) > 0:
-                    address = random.choice(list(all_addresses))
-                    returned_addresses.add(address)
-                    await yield_(self.fleet_sensor.verified_node_entries[address].node)
+                while drawn < amount + failed + overhead and reservoir:
+                    drawn += 1
+                    drawn_entry = reservoir.draw()
+                    self._logger.debug("Drawn {}", drawn_entry.address)
+
+                    if is_usable(drawn_entry.address, node_entries):
+                        self._logger.debug("{} is instanlty usable", drawn_entry.address)
+                        returned += 1
+                        await yield_(node_entries[drawn_entry.address].node)
+                        if returned == amount:
+                            return
+                    else:
+                        self._logger.debug("Scheduling verification of {}", drawn_entry.address)
+                        nursery.start_soon(verify_and_yield, drawn_entry)
+
+                node = await receive_channel.receive()
+                if node is None:
+                    failed += 1
                 else:
-                    new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
-                    while not new_verified_nodes_event.is_set():
-                        await self.verification_round()
-                        await self.learning_round()
+                    self._logger.debug("Verified {}, yielding", node.staking_provider_address)
+                    returned += 1
+                    await yield_(node)
+                    if returned == amount:
+                        return
 
     async def _verify_contact(self, contact: Contact):
         self._logger.debug("Verifying a contact {}", contact)
@@ -287,13 +360,14 @@ class Learner:
                 self._logger.debug("Error when trying to verify {}: {}", contact, e)
                 self.fleet_sensor.report_bad_contact(contact)
                 self.fleet_state.remove_contact(contact)
-                return
+                return None
 
             self._logger.debug("Verified {}: {}", contact, node)
             self.fleet_sensor.report_verified_node(contact, node, staked_amount)
             self.fleet_state.add_metadatas([node.metadata])
 
         await self._learn_from_node_and_report(node)
+        return node
 
     # External API
 
@@ -311,6 +385,17 @@ class Learner:
             return self.fleet_sensor.next_verification_in()
         else:
             return None
+
+    async def load_staking_providers_and_report(self):
+        try:
+            with trio.fail_after(self.STAKING_PROVIDERS_TIMEOUT):
+                async with self._identity_client.session() as session:
+                    providers = await session.get_active_staking_providers()
+        except trio.TooSlowError as e:
+            self._logger.debug("Failed to get staking providers list from the blockchain: {}", e)
+            return
+
+        self.fleet_sensor.report_staking_providers(providers)
 
     async def seed_round(self):
         if not self._seed_contacts:

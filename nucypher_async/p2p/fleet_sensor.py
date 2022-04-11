@@ -24,6 +24,12 @@ class VerifyAtEntry(NamedTuple):
     verify_at: arrow.Arrow
 
 
+class StakingProviderEntry(NamedTuple):
+    address: IdentityAddress
+    contact: Contact
+    weight: AmountT
+
+
 class VerifiedNodesDB:
 
     def __init__(self):
@@ -75,7 +81,7 @@ class VerifiedNodesDB:
 
     def next_verification_in(self, now, exclude):
         for entry in self._verify_at:
-            if entry.node.ssl_contact.contact not in exclude:
+            if self._nodes[entry.address].node.ssl_contact.contact not in exclude:
                 return entry.verify_at - now
         return None
 
@@ -152,6 +158,8 @@ class FleetSensor:
 
         self._verified_nodes_db = VerifiedNodesDB()
         self._contacts_db = ContactsDB()
+        self._staking_providers = {}
+        self._staking_providers_updated = None
 
         self._locked_contacts = set()
 
@@ -228,6 +236,10 @@ class FleetSensor:
             metadata for metadata in metadatas
             if metadata.payload.host == sender_host]
         self._add_contacts(sender_metadatas)
+
+    def report_staking_providers(self, providers):
+        self._staking_providers = providers
+        self._staking_providers_updated = self._clock.utcnow()
 
     def verified_metadata(self):
         return [node.metadata for node in self._verified_nodes_db.all_nodes()]
@@ -316,6 +328,36 @@ class FleetSensor:
             if entry.node.ssl_contact.contact not in self._locked_contacts]
         sampled = random.sample(entries, min(nodes_num, len(entries)))
         return [entry.node for entry in sampled]
+
+    def _get_staked_amount(self, address):
+        now = self._clock.utcnow()
+        if address in self._verified_nodes_db._nodes:
+            staked = self._verified_nodes_db._nodes[address].staked_amount
+
+    def get_available_staking_providers(self, exclude):
+        now = self._clock.utcnow()
+        entries = []
+        for address, entry in self._verified_nodes_db._nodes.items():
+            if address in self._staking_providers and self._staking_providers_updated > entry.verified_at:
+                staked_amount = self._staking_providers[address]
+            else:
+                staked_amount = entry.staked_amount
+
+            entries.append(StakingProviderEntry(
+                address=address,
+                contact=entry.node.ssl_contact.contact,
+                weight=int(staked_amount.as_ether())))
+
+        for address, contacts in self._contacts_db._addresses_to_contacts.items():
+            if address in self._staking_providers:
+                staked_amount = self._staking_providers[address]
+                for contact in contacts:
+                    entries.append(StakingProviderEntry(
+                        address=address,
+                        contact=contact,
+                        weight=int(staked_amount.as_ether() / len(contacts))))
+
+        return entries
 
     @property
     def verified_node_entries(self):

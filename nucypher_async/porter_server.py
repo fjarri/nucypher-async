@@ -60,16 +60,20 @@ class PorterServer(Server):
     def into_app(self):
         return make_porter_app(self)
 
-    def start(self, nursery):
+    async def start(self, nursery):
         assert not self.started
+
+        await self.learner.seed_round()
 
         # TODO: can we move initialization to __init__()?
         self._verification_task = BackgroundTask(nursery, self._verification_worker)
         self._learning_task = BackgroundTask(nursery, self._learning_worker)
+        self._staker_query_task = BackgroundTask(nursery, self._staker_query)
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
         self._verification_task.start()
         self._learning_task.start()
+        self._staker_query_task.start()
 
         self.started = True
 
@@ -94,6 +98,14 @@ class PorterServer(Server):
         except Exception as e:
             self._logger.error("Uncaught exception in the learning task:", exc_info=sys.exc_info())
 
+    async def _staker_query(self, this_task):
+        try:
+            self._logger.debug("Starting a staker query round")
+            await self.learner.load_staking_providers_and_report()
+            this_task.restart_in(datetime.timedelta(days=1))
+        except Exception as e:
+            self._logger.error("Uncaught exception in the staker query task:", exc_info=sys.exc_info())
+
     def stop(self):
         assert self.started
 
@@ -111,11 +123,9 @@ class PorterServer(Server):
                     nodes.append(node)
 
             if len(nodes) < quantity:
-                async with self.learner.random_verified_nodes_iter(exclude_ursulas, verified_within=60) as aiter:
+                async with self.learner.random_verified_nodes_iter(exclude=exclude_ursulas, amount=quantity, verified_within=60) as aiter:
                     async for node in aiter:
                         nodes.append(node)
-                        if len(nodes) == quantity:
-                            break
 
         return nodes
 
