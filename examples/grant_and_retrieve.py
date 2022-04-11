@@ -74,7 +74,7 @@ async def run_local_ursula_fleet(context, nursery):
             )
 
         server = await UrsulaServer.async_init(ursula, config)
-        handle = start_in_nursery(nursery, server)
+        handle = await start_in_nursery(nursery, server)
         handles.append(handle)
 
     return handles, Contact(LOCALHOST, PORT_BASE)

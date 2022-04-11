@@ -118,7 +118,8 @@ class Learner:
         else:
             my_address = None
             my_contact = None
-        self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact, seed_contacts=seed_contacts)
+        self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact)
+        self._seed_contacts = seed_contacts or []
 
     def _add_verified_nodes(self, metadatas, stakes):
         for metadata, stake in zip(metadatas, stakes):
@@ -129,6 +130,9 @@ class Learner:
 
     @producer
     async def verified_nodes_iter(self, yield_, addresses, verified_within=None):
+
+        if self.fleet_sensor.is_empty():
+            await self.seed_round()
 
         addresses = set(addresses)
         now = self._clock.utcnow()
@@ -170,6 +174,10 @@ class Learner:
 
     @producer
     async def random_verified_nodes_iter(self, yield_, exclude=None, verified_within=None):
+
+        if self.fleet_sensor.is_empty():
+            await self.seed_round()
+
         returned_addresses = exclude or set()
         async with trio.open_nursery() as nursery:
             while True:
@@ -187,8 +195,20 @@ class Learner:
                         await self.verification_round()
                         await self.learning_round()
 
-    async def _verify_metadata(self, ssl_contact, metadata):
-        # NOTE: assuming this metadata is freshly obtained from the node itself
+    async def _verify_contact(self, contact: Contact):
+        self._logger.debug("Verifying a contact {}", contact)
+        try:
+            ssl_contact = await self._rest_client.fetch_certificate(contact)
+        # TODO: catch an error where the host in the cert is not the same as the host in the contact
+        except OSError:
+            raise ConnectionError(f"Failed to fetch the certificate from {contact}")
+
+        try:
+            metadata = await self._rest_client.public_information(ssl_contact)
+        # TODO: what other errors can be thrown? E.g. if there's a server on the other side,
+        # but it doesn't have this endpoint?
+        except OSError:
+            raise ConnectionError(f"Failed to get metadata from {contact}")
 
         payload = metadata.payload
 
@@ -218,24 +238,6 @@ class Learner:
 
         return RemoteUrsula(metadata, derived_operator_address), staked
 
-    async def _verify_contact(self, contact: Contact):
-        self._logger.debug("Resolving a contact {}", contact)
-        try:
-            ssl_contact = await self._rest_client.fetch_certificate(contact)
-        # TODO: catch an error where the host in the cert is not the same as the host in the contact
-        except OSError:
-            raise ConnectionError(f"Failed to fetch the certificate from {contact}")
-
-        try:
-            metadata = await self._rest_client.public_information(ssl_contact)
-        # TODO: what other errors can be thrown? E.g. if there's a server on the other side,
-        # but it doesn't have this endpoint?
-        except OSError:
-            raise ConnectionError(f"Failed to get metadata from {contact}")
-
-        node, staked_amount = await self._verify_metadata(ssl_contact, metadata)
-        return node, staked_amount
-
     async def _learn_from_node(self, node: RemoteUrsula):
         self._logger.debug(
             "Learning from {} ({})",
@@ -254,8 +256,8 @@ class Learner:
         return payload.announce_nodes
 
     async def _learn_from_node_and_report(self, node=None):
-        with self.fleet_sensor.try_lock_node_to_learn_from(node) as node:
-            if node is None:
+        with self.fleet_sensor.try_lock_contact(node.ssl_contact.contact) as contact:
+            if contact is None:
                 return
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
@@ -265,14 +267,17 @@ class Learner:
                     "Error when trying to learn from {} ({}): {}",
                     node.ssl_contact.contact, node.staking_provider_address.as_checksum(), e)
                 self.fleet_sensor.report_bad_contact(node.ssl_contact.contact)
+                self.fleet_state.remove_contact(node.ssl_contact.contact)
                 return
 
-            self._logger.debug("Learned from {}: {}", node.ssl_contact.contact, node)
+            self._logger.debug(
+                "Learned from {} ({})",
+                node.ssl_contact.contact, node.staking_provider_address.as_checksum())
             self.fleet_sensor.report_active_learning_results(node, metadatas)
             self.fleet_state.add_metadatas(metadatas)
 
-    async def _verify_contact_and_report(self, contact=None):
-        with self.fleet_sensor.try_lock_contact_to_verify(contact) as contact:
+    async def _verify_contact_and_report(self, contact):
+        with self.fleet_sensor.try_lock_contact(contact) as contact:
             if contact is None:
                 return
             try:
@@ -281,30 +286,14 @@ class Learner:
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
                 self._logger.debug("Error when trying to verify {}: {}", contact, e)
                 self.fleet_sensor.report_bad_contact(contact)
+                self.fleet_state.remove_contact(contact)
                 return
 
             self._logger.debug("Verified {}: {}", contact, node)
             self.fleet_sensor.report_verified_node(contact, node, staked_amount)
-            await self._learn_from_node_and_report(node)
+            self.fleet_state.add_metadatas([node.metadata])
 
-    async def _verify_node_and_report(self, node=None):
-        with self.fleet_sensor.try_lock_node_to_verify(node) as node:
-            if node is None:
-                return
-            try:
-                with trio.fail_after(self.VERIFICATION_TIMEOUT):
-                    new_node, staked_amount = await self._verify_contact(node.ssl_contact.contact)
-            except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
-                self._logger.debug(
-                    "Error when trying to re-verify {} ({}): {}",
-                    node, node.staking_provider_address.as_checksum(), e)
-                self.fleet_sensor.report_bad_node(node)
-                self.fleet_state.remove_metadata(node.metadata)
-                return
-
-            self._logger.debug("Re-verified {}: {}", node.ssl_contact.contact, node)
-            self.fleet_sensor.report_reverified_node(node, new_node, staked_amount)
-            self.fleet_state.replace_metadata(node.metadata, new_node.metadata)
+        await self._learn_from_node_and_report(node)
 
     # External API
 
@@ -323,25 +312,33 @@ class Learner:
         else:
             return None
 
-    async def verification_round(self):
+    async def seed_round(self):
+        if not self._seed_contacts:
+            return
 
-        # How many events to schedule simultaneusly
-        # TODO: this is a learning parameter
-        contacts_num = 1
-        nodes_num = 1
+        for contact in self._seed_contacts:
+            await self._verify_contact_and_report(contact)
+            if not self.fleet_sensor.is_empty():
+                return
 
-        # how long to wait until scheduling another round, even if there are already events available
-        # TODO: this is a learning parameter
-        min_time_between_rounds = 5
+        raise RuntimeError("Failed to learn from the seed nodes")
+
+    async def verification_round(self, new_contacts_num=1, old_contacts_num=1):
+        new_contacts = self.fleet_sensor.get_contacts_to_verify(new_contacts_num)
+        old_contacts = self.fleet_sensor.get_contacts_to_reverify(old_contacts_num)
+        to_verify = new_contacts + old_contacts
 
         async with trio.open_nursery() as nursery:
-            for _ in range(contacts_num):
-                nursery.start_soon(self._verify_contact_and_report)
-            for _ in range(nodes_num):
-                nursery.start_soon(self._verify_node_and_report)
+            for contact in to_verify:
+                nursery.start_soon(self._verify_contact_and_report, contact)
 
         return self.fleet_sensor.next_verification_in()
 
-    async def learning_round(self):
-        await self._learn_from_node_and_report()
+    async def learning_round(self, nodes_num=1):
+        nodes = self.fleet_sensor.get_nodes_to_learn_from(nodes_num)
+
+        async with trio.open_nursery() as nursery:
+            for node in nodes:
+                nursery.start_soon(self._learn_from_node_and_report, node)
+
         return self.fleet_sensor.next_verification_in(), self.fleet_sensor.next_learning_in()

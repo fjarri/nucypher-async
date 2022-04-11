@@ -71,7 +71,7 @@ class VerifiedNodesDB:
         return any(entry.node.ssl_contact.contact == contact for entry in self._nodes.values())
 
     def is_empty(self):
-        return bool(self._nodes)
+        return not bool(self._nodes)
 
     def next_verification_in(self, now, exclude):
         for entry in self._verify_at:
@@ -79,15 +79,17 @@ class VerifiedNodesDB:
                 return entry.verify_at - now
         return None
 
-    def get_next_verification(self, now, exclude):
+    def get_contacts_to_verify(self, now, contacts_num, exclude):
+        contacts = []
         for entry in self._verify_at:
             if entry.verify_at > now:
-                return None
+                return contacts
 
-            if entry.address not in exclude:
-                return entry.address
+            contact = entry.node.ssl_contact.contact
+            if contact not in exclude:
+                contacts.append(contact)
 
-        return None
+        return contacts
 
 
 class ContactsDB:
@@ -96,14 +98,12 @@ class ContactsDB:
         self._contacts_to_addresses = defaultdict(set)
         self._addresses_to_contacts = defaultdict(set)
 
-    def get_next_verification(self, exclude):
+    def get_contacts_to_verify(self, contacts_num, exclude):
         contacts = list(self._contacts_to_addresses.keys() - exclude)
-        if not contacts:
-            return None
 
         # TODO: choose the contact that was supplied by the majority of nodes
         # This will help neutralize contact spam from malicious nodes.
-        return random.choice(contacts)
+        return random.sample(contacts, min(contacts_num, len(contacts)))
 
     def add_contact(self, contact, address=None):
 
@@ -138,12 +138,12 @@ class ContactsDB:
             del self._addresses_to_contacts[address]
 
     def is_empty(self):
-        return bool(self._contacts_to_addresses)
+        return not bool(self._contacts_to_addresses)
 
 
 class FleetSensor:
 
-    def __init__(self, clock, my_staking_provider_address, my_contact, seed_contacts=None):
+    def __init__(self, clock, my_staking_provider_address, my_contact):
 
         self._clock = clock
 
@@ -159,9 +159,6 @@ class FleetSensor:
         self._new_verified_nodes = trio.Event()
         self._new_contacts = trio.Event()
         self._new_contacts_for_address = trio.Event()
-
-        self._seed_contacts = seed_contacts
-        self._add_seed_contacts()
 
     def _calculate_next_verification(self, node, verified_at, previously_verified_at=None):
 
@@ -269,14 +266,16 @@ class FleetSensor:
         # TODO: May be adjusted dynamically based on the network state
         return datetime.timedelta(seconds=90)
 
+    def is_empty(self):
+        return self._contacts_db.is_empty() and self._verified_nodes_db.is_empty()
+
     def next_verification_in(self) -> datetime.timedelta:
 
-        # If there is nothing to learn from, reintroduce seed contacts
-        if self._contacts_db.is_empty() and not self._verified_nodes_db.is_empty():
-            self._add_seed_contacts()
+        if self._contacts_db.is_empty() and self._verified_nodes_db.is_empty():
+            return datetime.timedelta.max
 
         # If there are contacts to check, do it asap
-        if self._contacts_db.get_next_verification(self._locked_contacts):
+        if not self._contacts_db.is_empty():
             return datetime.timedelta()
 
         now = self._clock.utcnow()
@@ -288,16 +287,10 @@ class FleetSensor:
             return next_verification_in
 
     @contextmanager
-    def try_lock_contact_to_verify(self, contact=None):
-        if contact is None:
-            contact = self._contacts_db.get_next_verification(self._locked_contacts)
-            if contact is None:
-                yield None
-                return
-        else:
-            if contact in self._locked_contacts:
-                yield None
-                return
+    def try_lock_contact(self, contact):
+        if contact in self._locked_contacts:
+            yield None
+            return
 
         self._locked_contacts.add(contact)
         try:
@@ -305,55 +298,19 @@ class FleetSensor:
         finally:
             self._locked_contacts.remove(contact)
 
-    @contextmanager
-    def try_lock_node_to_learn_from(self, node=None):
-        if node is None:
-            # TODO: here we might pick a node we haven't learned from for the longest time
-            addresses = list(self._verified_nodes_db._nodes.keys() - self._locked_verified_addresses)
-            if not addresses:
-                yield None
-                return
-            address = random.choice(addresses)
-        else:
-            if node.staking_provider_address in self._locked_verified_addresses:
-                yield None
-                return
-            address = node.staking_provider_address
+    def get_contacts_to_verify(self, contacts_num):
+        return self._contacts_db.get_contacts_to_verify(contacts_num, exclude=self._locked_contacts)
 
-        node = self._verified_nodes_db._nodes[address].node
-        self._locked_verified_addresses.add(address)
-        try:
-            yield node
-        finally:
-            self._locked_verified_addresses.remove(address)
+    def get_contacts_to_reverify(self, contacts_num):
+        now = self._clock.utcnow()
+        return self._verified_nodes_db.get_contacts_to_verify(now, contacts_num, exclude=self._locked_contacts)
 
-    @contextmanager
-    def try_lock_node_to_verify(self, node=None):
-        if node is None:
-            now = self._clock.utcnow()
-            address = self._verified_nodes_db.get_next_verification(now, exclude=self._locked_verified_addresses)
-            if address is None:
-                yield None
-                return
-        else:
-            if node.staking_provider_address in self._locked_verified_addresses:
-                yield None
-                return
-            address = node.staking_provider_address
-
-        node = self._verified_nodes_db._nodes[address].node
-        self._locked_verified_addresses.add(address)
-        try:
-            yield node
-        finally:
-            self._locked_verified_addresses.remove(address)
-
-    def _add_seed_contacts(self):
-        if self._seed_contacts:
-            for contact in self._seed_contacts:
-                self._contacts_db.add_contact(contact)
-
-    # ---
+    def get_nodes_to_learn_from(self, nodes_num):
+        entries = [
+            entry for entry in self._verified_nodes_db._nodes.values()
+            if entry.node.ssl_contact.contact not in self._locked_contacts]
+        sampled = random.sample(entries, min(nodes_num, len(entries)))
+        return [entry.node for entry in sampled]
 
     @property
     def verified_node_entries(self):

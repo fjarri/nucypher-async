@@ -181,8 +181,10 @@ class UrsulaServer(Server):
     def metadata(self):
         return self._metadata
 
-    def start(self, nursery):
+    async def start(self, nursery):
         assert not self.started
+
+        await self.learner.seed_round()
 
         # TODO: can we move initialization to __init__()?
         self._verification_task = BackgroundTask(nursery, self._verification_worker)

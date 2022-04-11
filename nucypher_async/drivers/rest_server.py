@@ -87,10 +87,10 @@ def make_config(server: Server):
     return config
 
 
-async def serve_async(server, shutdown_trigger=None):
+async def serve_async(server, shutdown_trigger=None, *, task_status=trio.TASK_STATUS_IGNORED):
     config = make_config(server)
     app = server.into_app()
-    await serve(app, config, shutdown_trigger=shutdown_trigger)
+    await serve(app, config, shutdown_trigger=shutdown_trigger, task_status=task_status)
 
 
 def serve_forever(server):
@@ -117,11 +117,11 @@ class ServerHandle:
         self._shutdown_event.set()
 
 
-def start_in_nursery(nursery, server):
+async def start_in_nursery(nursery, server):
     """
     Starts an Ursula web server in an external event loop.
     Useful for the cases when it needs to run in parallel with other servers or clients.
     """
     handle = ServerHandle(server)
-    nursery.start_soon(partial(serve_async, server, shutdown_trigger=handle._shutdown_trigger()))
+    await nursery.start(partial(serve_async, server, shutdown_trigger=handle._shutdown_trigger()))
     return handle

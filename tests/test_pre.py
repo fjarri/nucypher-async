@@ -59,7 +59,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
 
 async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger):
-    handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
     rest_client = MockRESTClient(mock_network, '127.0.0.1')
     learner = Learner(
         domain=Domain.MAINNET,
@@ -80,7 +80,7 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
 async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client,
         mock_payment_client):
 
-    handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
 
     alice = Alice()
     bob = Bob()

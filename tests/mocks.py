@@ -68,13 +68,14 @@ class MockRESTClient:
         return await server.endpoint_reencrypt(reencryption_request_bytes)
 
 
-async def mock_serve_async(nursery, ursula_server, shutdown_trigger):
-    ursula_server.start(nursery)
+async def mock_serve_async(nursery, ursula_server, shutdown_trigger, *, task_status=trio.TASK_STATUS_IGNORED):
+    await ursula_server.start(nursery)
+    task_status.started()
     await shutdown_trigger()
     ursula_server.stop()
 
 
-def mock_start_in_nursery(nursery, ursula_server):
+async def mock_start_in_nursery(nursery, ursula_server):
     handle = ServerHandle(ursula_server)
-    nursery.start_soon(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
+    await nursery.start(partial(mock_serve_async, nursery, ursula_server, shutdown_trigger=handle._shutdown_trigger()))
     return handle

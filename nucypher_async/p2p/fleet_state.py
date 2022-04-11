@@ -2,6 +2,8 @@ from typing import Iterable
 
 from nucypher_core import NodeMetadata, FleetStateChecksum
 
+from ..drivers.rest_client import Contact
+
 
 class FleetState:
     """
@@ -13,8 +15,17 @@ class FleetState:
         self._clock = clock
         self._my_metadata = my_metadata
         self._metadatas = {}
+        self._contacts = {}
         self._checksum = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
+
+    def _add_metadata(self, metadata):
+        payload = metadata.payload
+        address = payload.staking_provider_address
+        contact = Contact(payload.host, payload.port)
+
+        self._metadatas[address] = metadata
+        self._contacts[contact] = address
 
     def add_metadatas(self, metadatas: Iterable[NodeMetadata]):
         updated = False
@@ -22,23 +33,17 @@ class FleetState:
             payload = metadata.payload
             address = payload.staking_provider_address
             if address not in self._metadatas or payload.timestamp_epoch > self._metadatas[address].payload.timestamp_epoch:
-                self._metadatas[address] = metadata
+                self._add_metadata(metadata)
                 updated = True
 
         if updated:
             self._checksum = None
 
-    def remove_metadata(self, metadata: NodeMetadata):
-        address = metadata.payload.staking_provider_address
-        if address in self._metadatas:
-            if bytes(self._metadatas[address]) == bytes(metadata):
-                del self._metadatas[address]
-
-    def replace_metadata(self, old_metadata: NodeMetadata, new_metadata: NodeMetadata):
-        if bytes(old_metadata) == bytes(new_metadata):
-            return
-        self.remove_metadata(old_metadata)
-        self.add_metadatas([new_metadata])
+    def remove_contact(self, contact: Contact):
+        if contact in self._contacts:
+            address = self._contacts[contact]
+            del self._contacts[contact]
+            del self._metadatas[address]
 
     @property
     def checksum(self):

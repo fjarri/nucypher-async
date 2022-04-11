@@ -60,7 +60,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 async def test_learning(nursery, autojump_clock, ursula_servers):
 
     # Create 10 Ursulas
-    handles = [mock_start_in_nursery(nursery, server) for server in ursula_servers]
+    handles = [await mock_start_in_nursery(nursery, server) for server in ursula_servers]
 
     while True:
         # Wait multiple learning cycles

@@ -35,7 +35,7 @@ def ursula_server():
 
 
 async def test_client_real_server(nursery, capsys, ursula_server):
-    handle = start_in_nursery(nursery, ursula_server)
+    handle = await start_in_nursery(nursery, ursula_server)
 
     # TODO: have some event in the server that could be waited for to ensure finished startup?
     await trio.sleep(1)

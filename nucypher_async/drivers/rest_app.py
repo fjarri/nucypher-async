@@ -52,7 +52,7 @@ def make_ursula_app(ursula_server):
 
     @app.before_serving
     async def on_startup():
-        ursula_server.start(app.nursery)
+        await ursula_server.start(app.nursery)
 
     @app.after_serving
     async def on_shutdown():
