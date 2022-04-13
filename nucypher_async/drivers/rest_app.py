@@ -105,7 +105,8 @@ def make_porter_app(porter_server):
 
     @app.route('/get_ursulas')
     async def get_ursulas():
-        get_ursulas_request = await request.json
+        get_ursulas_request = await request.json or {}
+        get_ursulas_request.update(request.args)
         return await wrap_in_response(logger, porter_server.endpoint_get_ursulas, get_ursulas_request)
 
     @app.route("/retrieve_cfrags", methods=['POST'])
