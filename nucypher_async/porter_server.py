@@ -132,6 +132,8 @@ class PorterServer(Server):
     async def endpoint_get_ursulas(self, request_json):
         try:
             quantity = request_json['quantity']
+            if isinstance(quantity, str):
+                quantity = int(quantity)
             include_ursulas = request_json.get('include_ursulas', [])
             exclude_ursulas = request_json.get('exclude_ursulas', [])
 
@@ -139,6 +141,9 @@ class PorterServer(Server):
             exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
         except Exception as e:
             raise HTTPError(str(e), http.HTTPStatus.BAD_REQUEST)
+
+        if quantity > len(self.learner.fleet_sensor._staking_providers):
+            raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
         try:
             with trio.fail_after(5):
