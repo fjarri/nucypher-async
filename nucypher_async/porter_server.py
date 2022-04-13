@@ -123,7 +123,9 @@ class PorterServer(Server):
                     nodes.append(node)
 
             if len(nodes) < quantity:
-                async with self.learner.random_verified_nodes_iter(exclude=exclude_ursulas, amount=quantity, verified_within=60) as aiter:
+                overhead = max(1, (quantity - len(nodes)) // 5)
+                async with self.learner.random_verified_nodes_iter(
+                        token=token, exclude=exclude_ursulas, amount=quantity, overhead=overhead, verified_within=60) as aiter:
                     async for node in aiter:
                         nodes.append(node)
 
