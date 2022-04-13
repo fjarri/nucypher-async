@@ -30,6 +30,21 @@ class StakingProviderEntry(NamedTuple):
     weight: AmountT
 
 
+class BroadcastedValue:
+
+    def __init__(self):
+        self._value = None
+        self._event = trio.Event()
+
+    def set(self, value):
+        self._value = value
+        self._event.set()
+
+    async def wait(self):
+        await self._event.wait()
+        return self._value
+
+
 class VerifiedNodesDB:
 
     def __init__(self):
@@ -167,7 +182,7 @@ class FleetSensor:
         self._staking_providers = {}
         self._staking_providers_updated = None
 
-        self._locked_contacts = set()
+        self._locked_contacts = dict()
 
         self._new_verified_nodes = trio.Event()
         self._new_contacts = trio.Event()
@@ -300,7 +315,7 @@ class FleetSensor:
             return datetime.timedelta()
 
         now = self._clock.utcnow()
-        next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_contacts)
+        next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_contacts.keys())
         if next_verification_in is None:
             # Maybe someone will contact us during this time and leave some contacts.
             return datetime.timedelta(days=1)
@@ -310,21 +325,22 @@ class FleetSensor:
     @contextmanager
     def try_lock_contact(self, contact):
         if contact in self._locked_contacts:
-            yield None
+            yield None, self._locked_contacts[contact]
             return
 
-        self._locked_contacts.add(contact)
+        bval = BroadcastedValue()
+        self._locked_contacts[contact] = bval
         try:
-            yield contact
+            yield contact, bval
         finally:
-            self._locked_contacts.remove(contact)
+            del self._locked_contacts[contact]
 
     def get_contacts_to_verify(self, contacts_num):
-        return self._contacts_db.get_contacts_to_verify(contacts_num, exclude=self._locked_contacts)
+        return self._contacts_db.get_contacts_to_verify(contacts_num, exclude=self._locked_contacts.keys())
 
     def get_contacts_to_reverify(self, contacts_num):
         now = self._clock.utcnow()
-        return self._verified_nodes_db.get_contacts_to_verify(now, contacts_num, exclude=self._locked_contacts)
+        return self._verified_nodes_db.get_contacts_to_verify(now, contacts_num, exclude=self._locked_contacts.keys())
 
     def get_nodes_to_learn_from(self, nodes_num):
         entries = [
@@ -369,7 +385,7 @@ class FleetSensor:
 
     def try_get_possible_contacts_for(self, address):
         contacts = self._contacts_db._addresses_to_contacts.get(address, [])
-        return set(contacts) - self._locked_contacts
+        return set(contacts) - self._locked_contacts.keys()
 
     def print_status(self):
         import io
@@ -391,5 +407,5 @@ class FleetSensor:
             print(f"{address}: {contacts}", file=file)
         print(file=file)
         print("Locked contacts:", file=file)
-        print(self._locked_contacts, file=file)
+        print(list(self._locked_contacts.keys()), file=file)
         return file.getvalue()

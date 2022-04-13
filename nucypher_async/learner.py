@@ -253,6 +253,7 @@ class Learner:
                         returned += 1
                         await yield_(node_entries[drawn_entry.address].node)
                         if returned == amount:
+                            nursery.cancel_scope.cancel()
                             return
                     else:
                         self._logger.debug("Scheduling verification of {}", drawn_entry.address)
@@ -266,6 +267,7 @@ class Learner:
                     returned += 1
                     await yield_(node)
                     if returned == amount:
+                        nursery.cancel_scope.cancel()
                         return
 
     async def _verify_contact(self, contact: Contact):
@@ -329,44 +331,57 @@ class Learner:
         return payload.announce_nodes
 
     async def _learn_from_node_and_report(self, node=None):
-        with self.fleet_sensor.try_lock_contact(node.ssl_contact.contact) as contact:
+        with self.fleet_sensor.try_lock_contact(node.ssl_contact.contact) as (contact, result):
             if contact is None:
-                return
+                return await result.wait()
+
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
                     metadatas = await self._learn_from_node(node)
             except (OSError, ConnectionError, trio.TooSlowError, NodeVerificationError) as e:
+                if isinstance(e, trio.TooSlowError):
+                    message = "timed out"
+                else:
+                    message = str(e)
                 self._logger.debug(
                     "Error when trying to learn from {} ({}): {}",
-                    node.ssl_contact.contact, node.staking_provider_address.as_checksum(), e)
+                    node.ssl_contact.contact, node.staking_provider_address.as_checksum(), message)
                 self.fleet_sensor.report_bad_contact(node.ssl_contact.contact)
                 self.fleet_state.remove_contact(node.ssl_contact.contact)
-                return
-
-            self._logger.debug(
-                "Learned from {} ({})",
-                node.ssl_contact.contact, node.staking_provider_address.as_checksum())
-            self.fleet_sensor.report_active_learning_results(node, metadatas)
-            self.fleet_state.add_metadatas(metadatas)
+            else:
+                self._logger.debug(
+                    "Learned from {} ({})",
+                    node.ssl_contact.contact, node.staking_provider_address.as_checksum())
+                self.fleet_sensor.report_active_learning_results(node, metadatas)
+                self.fleet_state.add_metadatas(metadatas)
+            finally:
+                result.set(None)
 
     async def _verify_contact_and_report(self, contact):
-        with self.fleet_sensor.try_lock_contact(contact) as contact:
-            if contact is None:
-                return
+        with self.fleet_sensor.try_lock_contact(contact) as (contact_, result):
+            if contact_ is None:
+                self._logger.debug("{} is already being verified", contact)
+                return await result.wait()
+
+            node = None
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
             except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
-                self._logger.debug("Error when trying to verify {}: {}", contact, e)
+                if isinstance(e, trio.TooSlowError):
+                    message = "timed out"
+                else:
+                    message = str(e)
+                self._logger.debug("Error when trying to verify {}: {}", contact, message)
                 self.fleet_sensor.report_bad_contact(contact)
                 self.fleet_state.remove_contact(contact)
-                return None
+            else:
+                self._logger.debug("Verified {}: {}", contact, node)
+                self.fleet_sensor.report_verified_node(contact, node, staked_amount)
+                self.fleet_state.add_metadatas([node.metadata])
+            finally:
+                result.set(node)
 
-            self._logger.debug("Verified {}: {}", contact, node)
-            self.fleet_sensor.report_verified_node(contact, node, staked_amount)
-            self.fleet_state.add_metadatas([node.metadata])
-
-        await self._learn_from_node_and_report(node)
         return node
 
     # External API
@@ -408,13 +423,19 @@ class Learner:
 
         raise RuntimeError("Failed to learn from the seed nodes")
 
-    async def verification_round(self, new_contacts_num=1, old_contacts_num=1):
+    async def verification_round(self, new_contacts_num=10, old_contacts_num=10):
         new_contacts = self.fleet_sensor.get_contacts_to_verify(new_contacts_num)
         old_contacts = self.fleet_sensor.get_contacts_to_reverify(old_contacts_num)
-        to_verify = new_contacts + old_contacts
+
+        async def verify_and_learn(contact):
+            node = await self._verify_contact_and_report(contact)
+            if node:
+                await self._learn_from_node_and_report(node)
 
         async with trio.open_nursery() as nursery:
-            for contact in to_verify:
+            for contact in new_contacts:
+                nursery.start_soon(verify_and_learn, contact)
+            for contact in old_contacts:
                 nursery.start_soon(self._verify_contact_and_report, contact)
 
         return self.fleet_sensor.next_verification_in()
