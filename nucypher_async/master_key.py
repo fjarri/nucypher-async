@@ -8,6 +8,7 @@ from .drivers.ssl import SSLPrivateKey
 from .utils.passwords import (
     derive_key_material_from_password,
     secret_box_decrypt,
+    secret_box_encrypt,
     SecretBoxAuthenticationError,
     )
 
@@ -43,9 +44,9 @@ class EncryptedMasterKey:
             version="2.0",
             # TODO: do we need this field? Don't want to pass Clock here
             created=str(arrow.utcnow().timestamp()),
-            key=self.encrypted_key,
-            password_salt=self.password_salt,
-            wrapper_salt=self.wrapper_salt,)
+            key=self.encrypted_key.hex(),
+            password_salt=self.password_salt.hex(),
+            wrapper_salt=self.wrapper_salt.hex())
 
 
 class MasterKey:
@@ -54,7 +55,7 @@ class MasterKey:
     def random_mnemonic(cls):
         mnemonic = Mnemonic('english')
         words = mnemonic.generate(strength=256)
-        secret = mnemonic.to_entropy(words)
+        secret = bytes(mnemonic.to_entropy(words))
         return words, cls(secret)
 
     @classmethod
@@ -76,10 +77,10 @@ class MasterKey:
                                                          salt=password_salt)
 
         wrapper_salt = token_bytes(16)
-        encrypted_key = secret_box_encrypt(plaintext=self.skf.to_secret_bytes(),
+        encrypted_key = secret_box_encrypt(plaintext=self.__skf.to_secret_bytes(),
                                            key_material=key_material,
                                            salt=wrapper_salt)
-        return EncryptedKeyStore(encrypted_key, password_salt, wrapper_salt)
+        return EncryptedMasterKey(encrypted_key, password_salt, wrapper_salt)
 
     def make_ssl_private_key(self):
         sk = self.__skf.make_key(b'NuCypher/tls')
