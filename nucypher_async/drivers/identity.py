@@ -42,6 +42,18 @@ class IbexContracts:
     PRE_APPLICATION = IdentityAddress.from_hex('0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35')
 
 
+class OryxContracts:
+    """
+    Registry for Ropsten.
+    """
+    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
+    T = None # TODO: we don't need it for now, but update when it's known
+    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
+    TOKEN_STAKING = None # TODO: we don't need it for now, but update when it's known
+    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
+    PRE_APPLICATION = IdentityAddress.from_hex('0xb6f98dA65174CE8F50eA0ea4350D96B2d3eFde9a')
+
+
 class MainnetContracts:
     """
     Registry for mainnet.
@@ -122,6 +134,8 @@ class IdentityClient:
             registry = MainnetContracts
         elif domain == Domain.IBEX:
             registry = IbexContracts
+        elif domain == Domain.ORYX:
+            registry = OryxContracts
         else:
             raise ValueError(f"Unknown domain: {domain}")
 

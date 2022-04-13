@@ -72,6 +72,8 @@ class UrsulaServerConfig:
         elif domain == Domain.IBEX:
             seed_contacts = [
                 Contact('ibex.nucypher.network', 9151)]
+        else:
+            seed_contacts = []
 
         rest_client = RESTClient()
 
@@ -142,6 +144,8 @@ class PorterServerConfig:
         elif domain == Domain.IBEX:
             seed_contacts = [
                 Contact('ibex.nucypher.network', 9151)]
+        else:
+            seed_contacts = []
 
         rest_client = RESTClient()
 

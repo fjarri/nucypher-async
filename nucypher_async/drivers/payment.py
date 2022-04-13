@@ -34,6 +34,14 @@ class IbexContracts:
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
 
 
+class OryxContracts:
+    """
+    Registry for Polygon-Mumbai.
+    """
+    # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
+
+
 class MainnetContracts:
     """
     Registry for Polygon-Mainnet.
@@ -94,6 +102,8 @@ class PaymentClient:
             registry = MainnetContracts
         elif domain == Domain.IBEX:
             registry = IbexContracts
+        elif domain == Domain.ORYX:
+            registry = OryxContracts
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
