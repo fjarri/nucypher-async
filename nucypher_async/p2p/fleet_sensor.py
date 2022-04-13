@@ -70,6 +70,12 @@ class VerifiedNodesDB:
         del self._nodes[node.staking_provider_address]
         self._del_verify_at(node)
 
+    def remove_by_contact(self, contact):
+        for address, entry in self._nodes.items():
+            if entry.node.ssl_contact.contact == contact:
+                del self._nodes[address]
+                self._del_verify_at(entry.node)
+
     def all_nodes(self):
         return [entry.node for entry in self._nodes.values()]
 
@@ -188,9 +194,7 @@ class FleetSensor:
 
     def report_bad_contact(self, contact):
         self._contacts_db.remove_contact(contact)
-
-    def report_bad_node(self, node):
-        self._verified_nodes_db.remove_node(node)
+        self._verified_nodes_db.remove_by_contact(contact)
 
     def report_verified_node(self, contact, node, staked_amount):
         # Note that we do not use the node's `ssl_contact`:
