@@ -88,7 +88,7 @@ class VerifiedNodesDB:
     def next_verification_in(self, now, exclude):
         for entry in self._verify_at:
             if self._nodes[entry.address].node.ssl_contact.contact not in exclude:
-                return entry.verify_at - now
+                return entry.verify_at - now if entry.verify_at > now else datetime.timedelta()
         return None
 
     def get_contacts_to_verify(self, now, contacts_num, exclude):
