@@ -53,6 +53,7 @@ class VerifiedNodesDB:
 
     def add_node(self, node, staked_amount, verified_at, verify_at):
         assert node.staking_provider_address not in self._nodes
+        assert not any(entry.node.ssl_contact.contact == node.ssl_contact.contact for entry in self._nodes.values())
         self._nodes[node.staking_provider_address] = NodeEntry(
             node=node,
             verified_at=verified_at,
@@ -90,6 +91,7 @@ class VerifiedNodesDB:
             if entry.node.ssl_contact.contact == contact:
                 del self._nodes[address]
                 self._del_verify_at(entry.node)
+                break
 
     def all_nodes(self):
         return [entry.node for entry in self._nodes.values()]
@@ -212,23 +214,30 @@ class FleetSensor:
         self._verified_nodes_db.remove_by_contact(contact)
 
     def report_verified_node(self, contact, node, staked_amount):
-        # Note that we do not use the node's `ssl_contact`:
-        # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
-        # TODO: IPs should be typed properly.
 
         verified_at = self._clock.utcnow()
 
-        if node.staking_provider_address not in self._verified_nodes_db._nodes:
+        # Note that we do not use the node's `ssl_contact`:
+        # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
+        # TODO: IPs should be typed properly.
+        self._contacts_db.remove_contact(contact)
+        self._contacts_db.remove_address(node.staking_provider_address)
+
+        entry_by_staker = self._verified_nodes_db._nodes.get(node.staking_provider_address, None)
+
+        if not entry_by_staker:
             # New verification
 
-            self._contacts_db.remove_contact(contact)
-            self._contacts_db.remove_address(node.staking_provider_address)
+            # This IP may have had another staking provider associated with it, unverify the old one
+            # (if it is the same node, no harm done, we're doing _add_node() anyway).
+            self._verified_nodes_db.remove_by_contact(node.ssl_contact.contact)
 
             verify_at = self._calculate_next_verification(node, verified_at)
             self._add_node(node, staked_amount, verified_at, verify_at)
+
         else:
             # Re-verification
-            old_node = self._verified_nodes_db._nodes[node.staking_provider_address].node
+            old_node = entry_by_staker.node
 
             if bytes(node.metadata) == bytes(old_node.metadata):
                 previously_verified_at = self._verified_nodes_db.get_verified_at(node)
