@@ -155,7 +155,7 @@ class PorterServer(Server):
             raise HTTPError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
 
         node_list = [dict(
-            checksum_address=node.staking_provider_address.as_checksum(),
+            checksum_address=node.staking_provider_address.checksum,
             uri=f"https://{node.ssl_contact.contact.host}:{node.ssl_contact.contact.port}",
             encrypting_key=bytes(node.encrypting_key).hex()
         ) for node in nodes]

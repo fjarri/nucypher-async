@@ -345,13 +345,13 @@ class Learner:
                     message = str(e)
                 self._logger.debug(
                     "Error when trying to learn from {} ({}): {}",
-                    node.ssl_contact.contact, node.staking_provider_address.as_checksum(), message)
+                    node.ssl_contact.contact, node.staking_provider_address.checksum, message)
                 self.fleet_sensor.report_bad_contact(node.ssl_contact.contact)
                 self.fleet_state.remove_contact(node.ssl_contact.contact)
             else:
                 self._logger.debug(
                     "Learned from {} ({})",
-                    node.ssl_contact.contact, node.staking_provider_address.as_checksum())
+                    node.ssl_contact.contact, node.staking_provider_address.checksum)
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
                 self.fleet_state.add_metadatas(metadatas)
             finally:

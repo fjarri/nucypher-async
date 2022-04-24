@@ -184,7 +184,7 @@
         %for address, contacts in contacts.items():
             <tr>
                 <td>
-                <span class="monospace">${address.as_checksum()}</span>
+                <span class="monospace">${address.checksum}</span>
                 </td>
                 <td>
                 %if address in staking_providers:

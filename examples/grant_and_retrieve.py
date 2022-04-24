@@ -54,12 +54,8 @@ async def run_local_ursula_fleet(context, nursery):
 
         # Initialize the newly created staking provider and operator
         staking_provider_account = IdentityAccount.random()
-        context.identity_client.mock_approve(staking_provider_account.address, AmountT.ether(40000))
-        context.identity_client.mock_stake(staking_provider_account.address, AmountT.ether(40000))
-        context.identity_client.mock_bond_operator(staking_provider_account.address, ursula.operator_address)
-        # TODO: UrsulaServer should do it on startup
-        context.identity_client.mock_confirm_operator(ursula.operator_address)
-
+        context.identity_client.mock_set_up(
+            staking_provider_account.address, ursula.operator_address, AmountT.ether(40000))
 
         config = UrsulaServerConfig(
             domain=context.domain,

@@ -30,11 +30,8 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
         staking_provider_address = IdentityAddress(os.urandom(20))
 
-        mock_identity_client.mock_approve(staking_provider_address, AmountT.ether(40000))
-        mock_identity_client.mock_stake(staking_provider_address, AmountT.ether(40000))
-        mock_identity_client.mock_bond_operator(staking_provider_address, ursulas[i].operator_address)
-        # TODO: UrsulaServer should do it on startup
-        mock_identity_client.mock_confirm_operator(ursulas[i].operator_address)
+        mock_identity_client.mock_set_up(
+            staking_provider_address, ursulas[i].operator_address, AmountT.ether(40000))
 
         config = UrsulaServerConfig(
             domain=Domain.MAINNET,

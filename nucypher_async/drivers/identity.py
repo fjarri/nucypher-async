@@ -19,25 +19,51 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_account._utils.signing import to_standard_signature_bytes
 
-from pons import HTTPProvider, Client, ContractABI, DeployedContract, Address, Amount
+from pons import (
+    HTTPProvider, Client, ContractABI, DeployedContract, Address, Amount,
+    ReadMethod, abi)
 
 from ..domain import Domain
 
 
-class IdentityAddress(Address):
+_PRE_APP_ABI = ContractABI(
+    read=[
+        ReadMethod(
+            name='authorizedStake',
+            inputs=dict(_stakingProvider=abi.address),
+            outputs=abi.uint(96)),
+        ReadMethod(
+            name='stakingProviderFromOperator',
+            inputs=dict(_operator=abi.address),
+            outputs=abi.address),
+        ReadMethod(
+            name='getOperatorFromStakingProvider',
+            inputs=dict(_stakingProvider=abi.address),
+            outputs=abi.address),
+        ReadMethod(
+            name='isAuthorized',
+            inputs=dict(_stakingProvider=abi.address),
+            outputs=abi.bool),
+        ReadMethod(
+            name='isOperatorConfirmed',
+            inputs=dict(_operator=abi.address),
+            outputs=abi.bool),
+        ReadMethod(
+            name='getActiveStakingProviders',
+            inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
+            outputs=[abi.uint(256), abi.uint(256)[2][...]]
+            ),
+    ])
 
-    def __repr__(self):
-        return f"IdentityAddress.from_hex({self.as_checksum()})"
+
+class IdentityAddress(Address):
+    pass
 
 
 class IbexContracts:
     """
     Registry for Rinkeby.
     """
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
-    T = IdentityAddress.from_hex('0xc3871E2C11Ff18d809Bce74d1e4229d561aa3F09')
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
-    TOKEN_STAKING = IdentityAddress.from_hex('0x18eFb520dA5D387982C860a64855C14C0AcADF3F')
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex('0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35')
 
@@ -46,10 +72,6 @@ class OryxContracts:
     """
     Registry for Ropsten.
     """
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
-    T = None # TODO: we don't need it for now, but update when it's known
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
-    TOKEN_STAKING = None # TODO: we don't need it for now, but update when it's known
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex('0xb6f98dA65174CE8F50eA0ea4350D96B2d3eFde9a')
 
@@ -58,25 +80,8 @@ class MainnetContracts:
     """
     Registry for mainnet.
     """
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/token/T.sol
-    T = IdentityAddress.from_hex('0xCdF7028ceAB81fA0C6971208e83fa7872994beE5')
-    # https://github.com/threshold-network/solidity-contracts/blob/main/contracts/staking/TokenStaking.sol
-    TOKEN_STAKING = IdentityAddress.from_hex('0x01b67b1194c75264d06f808a921228a95c765dd7')
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex('0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd')
-
-
-ABI_DIR = Path(__file__).parent / 'eth_abi'
-
-with open(ABI_DIR / 'T.json') as f:
-    T_ABI = json.load(f)['abi']
-
-with open(ABI_DIR / 'TokenStaking.json') as f:
-    TOKEN_STAKING_ABI = json.load(f)['abi']
-
-with open(ABI_DIR / 'SimplePREApplication.json') as f:
-    PRE_APPLICATION_ABI = json.load(f)['abi']
-
 
 
 class IdentityAccount:
@@ -102,17 +107,11 @@ class IdentityAccount:
 
 class AmountETH(Amount):
 
-    def __repr__(self):
-        return f"AmountETH({self.as_wei()})"
-
     def __str__(self):
         return f"{self.as_ether()} ETH"
 
 
 class AmountT(Amount):
-
-    def __repr__(self):
-        return f"AmountT({self.as_wei()})"
 
     def __str__(self):
         return f"{self.as_ether()} T"
@@ -139,12 +138,7 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        self._t = DeployedContract(
-            address=registry.T, abi=ContractABI(T_ABI))
-        self._token_staking = DeployedContract(
-            address=registry.TOKEN_STAKING, abi=ContractABI(TOKEN_STAKING_ABI))
-        self._pre_application = DeployedContract(
-            address=registry.PRE_APPLICATION, abi=ContractABI(PRE_APPLICATION_ABI))
+        self._pre_application = DeployedContract(address=registry.PRE_APPLICATION, abi=_PRE_APP_ABI)
 
     @asynccontextmanager
     async def session(self):
@@ -157,67 +151,44 @@ class IdentityClientSession:
     def __init__(self, identity_client, backend_session):
         self._identity_client = identity_client
         self._backend_session = backend_session
-
-    """
-    async def approve(self, staking_provider_address, t_amount_wei):
-        call = self._t.functions.approve(Registry.TOKEN_STAKING, t_amount_wei)
-        await self._transact(call)
-
-    async def stake(self, staking_provider_address, t_amount_wei):
-        call = self._token_staking.functions.stake(staking_provider_address, staking_provider_address, staking_provider_address, t_amount_wei)
-        await self._transact(call)
-
-    async def bond(self, staking_provider_address, operator_address):
-        call = self._pre_application.functions.bondOperator(staking_provider_address, operator_address)
-        await self._transact(call)
-    """
+        self._pre_application = identity_client._pre_application
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.authorizedStake(bytes(staking_provider_address)))
-        return AmountT(staked_amount)
+            self._pre_application.read.authorizedStake(staking_provider_address))
+        return AmountT.wei(staked_amount)
 
     async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.stakingProviderFromOperator(bytes(operator_address)))
-        return IdentityAddress.from_hex(address)
+            self._pre_application.read.stakingProviderFromOperator(operator_address))
+        return IdentityAddress(bytes(address))
 
     async def get_operator_address(self, staking_provider_address: IdentityAddress) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.getOperatorFromStakingProvider(bytes(staking_provider_address)))
-        return IdentityAddress.from_hex(address)
+            self._pre_application.read.getOperatorFromStakingProvider(staking_provider_address))
+        return IdentityAddress(bytes(address))
 
     async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
-        result = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.isAuthorized(bytes(staking_provider_address)))
-        assert isinstance(result, bool)
-        return result
+        return await self._backend_session.call(
+            self._pre_application.read.isAuthorized(staking_provider_address))
 
     async def is_operator_confirmed(self, operator_address: IdentityAddress):
-        result = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.isOperatorConfirmed(bytes(operator_address)))
-        assert isinstance(result, bool)
-        return result
+        return await self._backend_session.call(
+            self._pre_application.read.isOperatorConfirmed(operator_address))
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
         amount = await self._backend_session.get_balance(address)
-        return AmountETH(amount.as_wei())
+        return AmountETH.wei(amount.as_wei())
 
     async def get_active_staking_providers(
             self,
             start_index: int = 0,
             max_staking_providers: int = 0) -> Dict[IdentityAddress, AmountT]:
         _total_staked, staking_providers_data = await self._backend_session.call(
-            self._identity_client._pre_application.address,
-            self._identity_client._pre_application.abi.getActiveStakingProviders(start_index, max_staking_providers))
+            self._pre_application.read.getActiveStakingProviders(start_index, max_staking_providers))
 
         staking_providers = {
-            IdentityAddress(address.to_bytes(20, byteorder='big')): AmountT(amount)
+            IdentityAddress(bytes(address)): AmountT.wei(amount)
             for address, amount in staking_providers_data
         }
 

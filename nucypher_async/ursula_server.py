@@ -84,7 +84,7 @@ class UrsulaServer(Server):
 
         async with config.identity_client.session() as session:
             staking_provider_address = await session.get_staking_provider_address(ursula.operator_address)
-            logger.info("Operator bonded to {}", staking_provider_address.as_checksum())
+            logger.info("Operator bonded to {}", staking_provider_address.checksum)
 
             balance = await session.get_balance(ursula.operator_address)
             logger.info("Operator balance: {}", balance)

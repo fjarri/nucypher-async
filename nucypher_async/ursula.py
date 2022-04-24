@@ -40,7 +40,7 @@ class Ursula:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
     def __str__(self):
-        operator_short = self.operator_address.as_checksum()[:10]
+        operator_short = self.operator_address.checksum[:10]
         return f"Ursula(operator={operator_short})"
 
 
@@ -58,4 +58,4 @@ class RemoteUrsula:
         self.ssl_contact = SSLContact.from_metadata(metadata)
 
     def __str__(self):
-        return f"RemoteUrsula({self.staking_provider_address.as_checksum()})"
+        return f"RemoteUrsula({self.staking_provider_address.checksum})"
