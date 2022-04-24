@@ -177,7 +177,7 @@ class IdentityClientSession:
             self._pre_application.read.isOperatorConfirmed(operator_address))
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
-        amount = await self._backend_session.get_balance(address)
+        amount = await self._backend_session.eth_get_balance(address)
         return AmountETH.wei(amount.as_wei())
 
     async def get_active_staking_providers(
