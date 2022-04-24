@@ -138,10 +138,10 @@ class PaymentClientSession:
         self._manager = self._payment_client._manager
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
-        return await self._backend_session.call(self._manager.read.isPolicyActive(bytes(hrac)))
+        return await self._backend_session.eth_call(self._manager.read.isPolicyActive(bytes(hrac)))
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
-        amount = await self._backend_session.call(
+        amount = await self._backend_session.eth_call(
             self._manager.read.getPolicyCost(shares, policy_start, policy_end))
         return AmountMATIC.wei(amount)
 

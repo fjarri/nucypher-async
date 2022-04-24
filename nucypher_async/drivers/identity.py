@@ -154,26 +154,26 @@ class IdentityClientSession:
         self._pre_application = identity_client._pre_application
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
-        staked_amount = await self._backend_session.call(
+        staked_amount = await self._backend_session.eth_call(
             self._pre_application.read.authorizedStake(staking_provider_address))
         return AmountT.wei(staked_amount)
 
     async def get_staking_provider_address(self, operator_address: IdentityAddress) -> IdentityAddress:
-        address = await self._backend_session.call(
+        address = await self._backend_session.eth_call(
             self._pre_application.read.stakingProviderFromOperator(operator_address))
         return IdentityAddress(bytes(address))
 
     async def get_operator_address(self, staking_provider_address: IdentityAddress) -> IdentityAddress:
-        address = await self._backend_session.call(
+        address = await self._backend_session.eth_call(
             self._pre_application.read.getOperatorFromStakingProvider(staking_provider_address))
         return IdentityAddress(bytes(address))
 
     async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
-        return await self._backend_session.call(
+        return await self._backend_session.eth_call(
             self._pre_application.read.isAuthorized(staking_provider_address))
 
     async def is_operator_confirmed(self, operator_address: IdentityAddress):
-        return await self._backend_session.call(
+        return await self._backend_session.eth_call(
             self._pre_application.read.isOperatorConfirmed(operator_address))
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
@@ -184,7 +184,7 @@ class IdentityClientSession:
             self,
             start_index: int = 0,
             max_staking_providers: int = 0) -> Dict[IdentityAddress, AmountT]:
-        _total_staked, staking_providers_data = await self._backend_session.call(
+        _total_staked, staking_providers_data = await self._backend_session.eth_call(
             self._pre_application.read.getActiveStakingProviders(start_index, max_staking_providers))
 
         staking_providers = {
