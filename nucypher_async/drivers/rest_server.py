@@ -97,11 +97,6 @@ class ServerHandle:
         self.server = server
         self._shutdown_event = trio.Event()
 
-    async def _serve_async(self, *, task_status=trio.TASK_STATUS_IGNORED):
-        config = make_config(self.server)
-        app = self.server.into_app()
-        await serve(app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status)
-
     async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
         """
         Starts the server in an external event loop.
