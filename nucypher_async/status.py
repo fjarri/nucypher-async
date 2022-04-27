@@ -6,7 +6,7 @@ import humanize
 from mako import exceptions as mako_exceptions
 from mako.template import Template
 
-from .drivers.rest_client import HTTPError
+from .drivers.rest_client import RPCError
 from .version import CodeInfo
 
 
@@ -25,4 +25,4 @@ def render_status(logger, clock, server, is_active_peer):
         text_error = mako_exceptions.text_error_template().render()
         html_error = mako_exceptions.html_error_template().render()
         logger.error("Template Rendering Exception:\n{}", text_error)
-        raise HTTPError(html_error, HTTPStatus.INTERNAL_SERVER_ERROR) from e
+        raise RPCError(html_error, HTTPStatus.INTERNAL_SERVER_ERROR) from e

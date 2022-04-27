@@ -9,13 +9,12 @@ import random
 import arrow
 import trio
 
-from nucypher_core import FleetStateChecksum
+from nucypher_core import FleetStateChecksum, MetadataRequest
 
 from .drivers.identity import IdentityAddress
-from .drivers.rest_client import Contact, SSLContact, HTTPError, ConnectionError, RESTClient
+from .drivers.rest_client import Contact, SSLContact, RESTClient, P2PNetworkError
 from .drivers.ssl import SSLCertificate
 from .drivers.time import SystemClock
-from .client import NetworkClient
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
 from .storage import InMemoryStorage
@@ -57,7 +56,6 @@ class WeightedReservoir:
 
     def __len__(self):
         return self._length
-
 
 
 class NodeVerificationError(Exception):
@@ -139,7 +137,7 @@ class Learner:
             storage = InMemoryStorage()
         self._storage = storage
 
-        self._rest_client = NetworkClient(rest_client)
+        self._rest_client = rest_client
         self._identity_client = identity_client
 
         self._my_metadata = my_metadata
@@ -272,18 +270,8 @@ class Learner:
 
     async def _verify_contact(self, contact: Contact):
         self._logger.debug("Verifying a contact {}", contact)
-        try:
-            ssl_contact = await self._rest_client.fetch_certificate(contact)
-        # TODO: catch an error where the host in the cert is not the same as the host in the contact
-        except OSError:
-            raise ConnectionError(f"Failed to fetch the certificate from {contact}")
-
-        try:
-            metadata = await self._rest_client.public_information(ssl_contact)
-        # TODO: what other errors can be thrown? E.g. if there's a server on the other side,
-        # but it doesn't have this endpoint?
-        except OSError:
-            raise ConnectionError(f"Failed to get metadata from {contact}")
+        ssl_contact = await self._rest_client.handshake(contact)
+        metadata = await self._rest_client.public_information(ssl_contact)
 
         payload = metadata.payload
 
@@ -320,8 +308,9 @@ class Learner:
 
         metadata_to_announce = [self._my_metadata] if self._my_metadata else []
 
-        metadata_response = await self._rest_client.node_metadata_post(
-            node.ssl_contact, self.fleet_state.checksum, metadata_to_announce)
+        # TODO: use `node_metadata/GET` for the cases when the Learner is not a node itself
+        request = MetadataRequest(self.fleet_state.checksum, metadata_to_announce)
+        metadata_response = await self._rest_client.node_metadata_post(node.ssl_contact, request)
 
         try:
             payload = metadata_response.verify(node.verifying_key)
@@ -338,7 +327,7 @@ class Learner:
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
                     metadatas = await self._learn_from_node(node)
-            except (OSError, ConnectionError, trio.TooSlowError, NodeVerificationError) as e:
+            except (OSError, P2PNetworkError, trio.TooSlowError, NodeVerificationError) as e:
                 if isinstance(e, trio.TooSlowError):
                     message = "timed out"
                 else:
@@ -367,7 +356,7 @@ class Learner:
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
-            except (HTTPError, ConnectionError, NodeVerificationError, trio.TooSlowError) as e:
+            except (P2PNetworkError, NodeVerificationError, trio.TooSlowError) as e:
                 if isinstance(e, trio.TooSlowError):
                     message = "timed out"
                 else:

@@ -6,22 +6,44 @@ It is the "client" countrerpart of ``rest_app``.
 
 from contextlib import asynccontextmanager
 import http
-import httpx
+from ipaddress import IPv4Address, AddressValueError
 
-from nucypher_core import NodeMetadata
+import httpx
+from nucypher_core import (
+    NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .ssl import SSLCertificate, fetch_certificate
 from ..utils import temp_file
 
 
-class HTTPError(Exception):
+class P2PNetworkError(Exception):
+    pass
 
-    def __init__(self, message, status_code):
+
+class RPCError(P2PNetworkError):
+
+    def __init__(self, message, http_status_code):
         super().__init__(message)
-        self.status_code = status_code
+        self.http_status_code = http_status_code
 
 
-class ConnectionError(Exception):
+class MessageFormatError(RPCError):
+    http_status_code = http.HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @classmethod
+    def for_message(cls, message_cls, exc):
+        cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
+
+
+class InactivePolicy(RPCError):
+    http_status_code = http.HTTPStatus.PAYMENT_REQUIRED
+
+
+class ConnectionError(P2PNetworkError):
+    pass
+
+
+class HandshakeError(P2PNetworkError):
     pass
 
 
@@ -48,11 +70,6 @@ class Contact:
 class SSLContact:
 
     def __init__(self, contact: Contact, certificate: SSLCertificate):
-        if certificate.declared_host != contact.host:
-            raise ValueError(
-                f"Host mismatch: contact has {contact.host}, "
-                f"but certificate has {certificate.declared_host}")
-
         self.contact = contact
         self.certificate = certificate
 
@@ -70,54 +87,92 @@ class SSLContact:
         return f"https://{self.contact.host}:{self.contact.port}"
 
 
-@asynccontextmanager
-async def async_client_ssl(certificate: SSLCertificate):
-    # It would be nice avoid saving the certificate to disk at each request.
-    # Having a cache directory requires too much architectural overhead,
-    # and with the current frequency of REST calls it just isn't worth it.
-    # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
-    # and we will be able to load certificates from memory.
-    with temp_file(certificate.to_pem_bytes()) as filename:
-        # Timeouts are caught at top level, as per `trio` style.
-        async with httpx.AsyncClient(verify=filename, timeout=None) as client:
-            try:
-                yield client
-            except httpx.HTTPError as e:
-                raise ConnectionError(str(e)) from e
-            except OSError as e:
-                raise ConnectionError(str(e)) from e
-
-
-def unwrap_bytes(response):
-    if not response.status_code == http.HTTPStatus.OK:
-        raise HTTPError(response, response.status_code)
-    return response.read()
+def unwrap_bytes(response, cls):
+    if response.status_code != http.HTTPStatus.OK:
+        raise RPCError.from_status_code(response.text, response.status_code)
+    message_bytes = response.read()
+    try:
+        message = cls.from_bytes(message_bytes)
+    except ValueError as exc:
+        raise MessageFormatError.for_message(cls, exc) from exc
+    return message
 
 
 class RESTClient:
 
-    async def fetch_certificate(self, contact: Contact):
+    @asynccontextmanager
+    async def _http_client(self, certificate: SSLCertificate):
+        # It would be nice avoid saving the certificate to disk at each request.
+        # Having a cache directory requires too much architectural overhead,
+        # and with the current frequency of REST calls it just isn't worth it.
+        # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
+        # and we will be able to load certificates from memory.
+        with temp_file(certificate.to_pem_bytes()) as filename:
+            # Timeouts are caught at top level, as per `trio` style.
+            async with httpx.AsyncClient(verify=filename, timeout=None) as client:
+                try:
+                    yield client
+                except httpx.HTTPError as e:
+                    raise ConnectionError(str(e)) from e
+                except OSError as e:
+                    raise ConnectionError(str(e)) from e
+
+    async def _fetch_certificate(self, contact: Contact):
         try:
             return await fetch_certificate(contact.host, contact.port)
         except OSError as e:
             raise ConnectionError(str(e)) from e
 
-    async def ping(self, ssl_contact: SSLContact):
-        async with async_client_ssl(ssl_contact.certificate) as client:
+    async def _resolve_address(self, contact: Contact):
+        # TODO: what does it raise? Intercept and re-raise ConnectionError
+        addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+
+        # TODO: or should we select a specific entry?
+        family, type_, proto, canonname, sockaddr = addrinfo[0]
+        ip_addr, port = sockaddr
+
+        # Sanity check. When would it not be the case?
+        assert port == contact.port
+
+        return Contact(ip_addr, port)
+
+    async def handshake(self, contact: Contact) -> SSLContact:
+        # TODO: wrap anything that can happen here in a HandshakeError
+        try:
+            addr = IPv4Address(contact.host)
+        except AddressValueError:
+            # If host is not an IP address, resolve it to an IP.
+            # Nucypher nodes have their IPs included in the certificates,
+            # so we will need it to check that the certificate is made for the right address.
+            resolved_contact = await self._resolve_address(contact)
+        else:
+            resolved_contact = contact
+
+        certificate = await self._fetch_certificate(contact)
+
+        if certificate.declared_host != resolved_contact.host:
+            raise HandshakeError(
+                f"Host mismatch: contact has {contact.host}, "
+                f"but certificate has {certificate.declared_host}")
+
+        return SSLContact(contact, certificate)
+
+    async def ping(self, ssl_contact: SSLContact) -> str:
+        async with self._http_client(ssl_contact.certificate) as client:
             response = await client.get(ssl_contact.url + '/ping')
-        return response.data()
+        return response.text
 
-    async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request_bytes):
-        async with async_client_ssl(ssl_contact.certificate) as client:
-            response = await client.post(ssl_contact.url + '/node_metadata', data=metadata_request_bytes)
-        return unwrap_bytes(response)
+    async def node_metadata_post(self, ssl_contact: SSLContact, metadata_request: MetadataRequest):
+        async with self._http_client(ssl_contact.certificate) as client:
+            response = await client.post(ssl_contact.url + '/node_metadata', data=bytes(metadata_request))
+        return unwrap_bytes(response, MetadataResponse)
 
-    async def public_information(self, ssl_contact):
-        async with async_client_ssl(ssl_contact.certificate) as client:
+    async def public_information(self, ssl_contact: SSLContact):
+        async with self._http_client(ssl_contact.certificate) as client:
             response = await client.get(ssl_contact.url + '/public_information')
-        return unwrap_bytes(response)
+        return unwrap_bytes(response, NodeMetadata)
 
-    async def reencrypt(self, ssl_contact: SSLContact, reencryption_request_bytes):
-        async with async_client_ssl(ssl_contact.certificate) as client:
-            response = await client.post(ssl_contact.url + '/reencrypt', data=reencryption_request_bytes)
-        return unwrap_bytes(response)
+    async def reencrypt(self, ssl_contact: SSLContact, reencryption_request: ReencryptionRequest):
+        async with self._http_client(ssl_contact.certificate) as client:
+            response = await client.post(ssl_contact.url + '/reencrypt', data=bytes(reencryption_request))
+        return unwrap_bytes(response, ReencryptionResponse)

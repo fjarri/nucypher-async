@@ -5,7 +5,7 @@ out of ``UrsulaServer`` (namely, Quart).
 This is a thin layer that serves the following purposes:
 - pass raw data from requests made to the app to ``UrsulaServer``;
 - wrap the returned raw data into a response;
-- catch ``HTTPError`` from ``UrsulaServer`` and wrap them in corresponding responses.
+- catch ``RPCError`` from ``UrsulaServer`` and wrap them in corresponding responses.
 Nothing else should be happening here, the bulk of the server logic
 is located in ``UrsulaServer``.
 
@@ -18,21 +18,36 @@ import sys
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from .rest_client import HTTPError
+from .rest_client import RPCError
 
 
-async def wrap_in_response(logger, callable, *args, **kwds):
+async def call_endpoint(endpoint_future):
     try:
-        result = await callable(*args, **kwds)
-    # TODO: we can have a small subset of errors here that are a part of the protocol,
-    # and correspond to HTTP status codes
-    except HTTPError as e:
-        return await make_response(e.args[0], e.status_code)
+        result_bytes = await endpoint_future
+    except RPCError as exc:
+        return exc.http_serialize()
+    return result_bytes, http.HTTPStatus.OK
+
+
+async def wrap_in_response(logger, endpoint_future):
+    try:
+        result_bytes, status_code = await call_endpoint(endpoint_future)
     except Exception as e:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
         return await make_response(str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return await make_response(result)
+    return await make_response(result_bytes, status_code)
+
+
+class Request:
+
+    @classmethod
+    async def from_contextvar(cls):
+        return cls(request.remote_addr, await request.get_data(cache=False))
+
+    def __init__(self, remote_host, data):
+        self.remote_host = remote_host
+        self.data = data
 
 
 def make_ursula_app(ursula_server):
@@ -60,31 +75,32 @@ def make_ursula_app(ursula_server):
 
     @app.route("/ping")
     async def ping():
-        return await wrap_in_response(logger, ursula_server.endpoint_ping, request.remote_addr)
+        req = await Request.from_contextvar()
+        return await wrap_in_response(logger, ursula_server.endpoint_ping(req))
 
     @app.route("/node_metadata")
     async def node_metadata_get():
-        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_get)
+        req = await Request.from_contextvar()
+        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_get(req))
 
     @app.route("/node_metadata", methods=['POST'])
     async def node_metadata_post():
-        metadata_request_bytes = await request.data
-        return await wrap_in_response(
-            logger, ursula_server.endpoint_node_metadata_post,
-            request.remote_addr, metadata_request_bytes)
+        req = await Request.from_contextvar()
+        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_post(req))
 
     @app.route("/public_information")
     async def public_information():
-        return await wrap_in_response(logger, ursula_server.endpoint_public_information)
+        req = await Request.from_contextvar()
+        return await wrap_in_response(logger, ursula_server.endpoint_public_information(req))
 
     @app.route("/reencrypt", methods=["POST"])
     async def reencrypt():
-        reencryption_request_bytes = await request.data
-        return await wrap_in_response(logger, ursula_server.endpoint_reencrypt, reencryption_request_bytes)
+        req = await Request.from_contextvar()
+        return await wrap_in_response(logger, ursula_server.endpoint_reencrypt(req))
 
     @app.route("/status")
     async def status():
-        return await wrap_in_response(logger, ursula_server.endpoint_status)
+        return await wrap_in_response(logger, ursula_server.endpoint_status())
 
     return app
 
@@ -107,15 +123,15 @@ def make_porter_app(porter_server):
     async def get_ursulas():
         get_ursulas_request = await request.json or {}
         get_ursulas_request.update(request.args)
-        return await wrap_in_response(logger, porter_server.endpoint_get_ursulas, get_ursulas_request)
+        return await wrap_in_response(logger, porter_server.endpoint_get_ursulas(get_ursulas_request))
 
     @app.route("/retrieve_cfrags", methods=['POST'])
     async def retrieve_cfrags():
         retrieve_cfrags_request = await request.json
-        return await wrap_in_response(logger, porter_server.endpoint_retrieve_cfrags, retrieve_cfrags_request)
+        return await wrap_in_response(logger, porter_server.endpoint_retrieve_cfrags(retrieve_cfrags_request))
 
     @app.route("/status")
     async def status():
-        return await wrap_in_response(logger, porter_server.endpoint_status)
+        return await wrap_in_response(logger, porter_server.endpoint_status())
 
     return app

@@ -12,7 +12,7 @@ from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_app import make_porter_app
 from .drivers.rest_server import Server
-from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
+from .drivers.rest_client import RESTClient, Contact, SSLContact, RPCError
 from .drivers.time import Clock
 from .master_key import MasterKey
 from .learner import Learner, verify_metadata_shared
@@ -142,17 +142,17 @@ class PorterServer(Server):
             include_ursulas = [IdentityAddress.from_hex(address) for address in include_ursulas]
             exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
         except Exception as e:
-            raise HTTPError(str(e), http.HTTPStatus.BAD_REQUEST)
+            raise RPCError(str(e), http.HTTPStatus.BAD_REQUEST)
 
         if quantity > len(self.learner.fleet_sensor._staking_providers):
-            raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
+            raise RPCError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
         try:
             with trio.fail_after(5):
                 nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
 
         except trio.TooSlowError as e:
-            raise HTTPError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
+            raise RPCError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
 
         node_list = [dict(
             checksum_address=node.staking_provider_address.checksum,

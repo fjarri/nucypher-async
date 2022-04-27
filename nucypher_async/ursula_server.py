@@ -9,7 +9,7 @@ from nucypher_core import (
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
-from .drivers.rest_client import RESTClient, Contact, SSLContact, HTTPError
+from .drivers.rest_client import RESTClient, Contact, SSLContact, InactivePolicy
 from .drivers.rest_app import make_ursula_app
 from .drivers.rest_server import Server
 from .drivers.time import Clock
@@ -225,17 +225,20 @@ class UrsulaServer(Server):
 
         self.started = False
 
-    async def endpoint_ping(self, remote_address):
-        return remote_address
+    async def endpoint_ping(self, request):
+        return request.remote_host
 
-    async def endpoint_node_metadata_get(self):
+    async def endpoint_node_metadata_get(self, _request):
         response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                    announce_nodes=self.learner.metadata_to_announce())
         response = MetadataResponse(self.ursula.signer, response_payload)
         return bytes(response)
 
-    async def endpoint_node_metadata_post(self, remote_address, metadata_request_bytes):
-        metadata_request = MetadataRequest.from_bytes(metadata_request_bytes)
+    async def endpoint_node_metadata_post(self, request):
+        try:
+            metadata_request = MetadataRequest.from_bytes(request.data)
+        except ValueError as exc:
+            raise MessageFormatError.for_message(MetadataRequest, exc) from exc
 
         if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
@@ -245,32 +248,37 @@ class UrsulaServer(Server):
 
         new_metadatas = metadata_request.announce_nodes
 
-        next_verification_in = self.learner.passive_learning(remote_address, new_metadatas)
+        next_verification_in = self.learner.passive_learning(request.remote_host, new_metadatas)
         if next_verification_in is not None:
             self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
             # TODO: don't reset if there's less than a certain timeout before awakening
             self._verification_task.reset(next_verification_in)
 
-        return await self.endpoint_node_metadata_get()
+        return await self.endpoint_node_metadata_get(request)
 
-    async def endpoint_public_information(self):
+    async def endpoint_public_information(self, _request):
         return bytes(self._metadata)
 
-    async def endpoint_reencrypt(self, reencryption_request_bytes):
-        reencryption_request = ReencryptionRequest.from_bytes(reencryption_request_bytes)
+    async def endpoint_reencrypt(self, request):
+        try:
+            reencryption_request = ReencryptionRequest.from_bytes(request.data)
+        except ValueError as exc:
+            raise MessageFormatError.for_message(ReencryptionRequest, exc) from exc
 
         hrac = reencryption_request.hrac
 
         # TODO: check if the policy is marked as revoked
         async with self._payment_client.session() as session:
             if not await session.is_policy_active(hrac):
-                raise HTTPError(f"Policy {hrac} is not active", status=HTTPStatus.PAYMENT_REQUIRED)
+                raise InactivePolicy(f"Policy {hrac} is not active")
 
+        # TODO: catch decryption errors and raise RPC error here
         verified_kfrag = self.ursula.decrypt_kfrag(
             encrypted_kfrag=reencryption_request.encrypted_kfrag,
             hrac=hrac,
             publisher_verifying_key=reencryption_request.publisher_verifying_key)
 
+        # TODO: catch reencryption errors (if any) and raise RPC error here
         vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=reencryption_request.capsules)
 
         response = ReencryptionResponse(
