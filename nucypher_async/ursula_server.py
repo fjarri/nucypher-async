@@ -8,102 +8,31 @@ from nucypher_core import (
 
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
-from .drivers.ssl import SSLPrivateKey, SSLCertificate
-from .drivers.rest_client import RESTClient, Contact, SSLContact, InactivePolicy
+from .drivers.peer import Contact, SecureContact, InactivePolicy
 from .drivers.rest_app import make_ursula_app
 from .drivers.rest_server import Server
 from .drivers.time import Clock
-from .learner import Learner, verify_metadata_shared
+from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
-from .utils.logging import NULL_LOGGER
-
-
-def generate_metadata(clock, ssl_private_key, ursula, domain, staking_provider_address, contact):
-    ssl_certificate = SSLCertificate.self_signed(clock, ssl_private_key, contact.host)
-    payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
-                                  domain=domain.value,
-                                  timestamp_epoch=int(clock.utcnow().timestamp()),
-                                  operator_signature=ursula.operator_signature,
-                                  verifying_key=ursula.signer.verifying_key(),
-                                  encrypting_key=ursula.encrypting_key,
-                                  certificate_der=ssl_certificate.to_der_bytes(),
-                                  host=contact.host,
-                                  port=contact.port,
-                                  )
-    return NodeMetadata(signer=ursula.signer, payload=payload)
-
-
-def verify_metadata(clock, metadata, ssl_private_key, ursula, domain, staking_provider_address, contact):
-
-    derived_operator_address = verify_metadata_shared(clock, metadata, contact, domain)
-
-    payload = metadata.payload
-
-    certificate = SSLCertificate.from_der_bytes(payload.certificate_der)
-    if certificate.public_key() != ssl_private_key.public_key():
-        raise NodeVerificationError(
-            f"Certificate public key mismatch: expected {ssl_private_key.public_key()},"
-            f"{certificate.public_key()} in the certificate")
-
-    payload_staking_provider_address = IdentityAddress(payload.staking_provider_address)
-    if payload_staking_provider_address != staking_provider_address:
-        raise ValueError(
-            f"Staking provider address mismatch: {payload_staking_provider_address} in the metadata, "
-            f"{staking_provider_address} recorded in the blockchain")
-
-    if derived_operator_address != ursula.operator_address:
-        raise ValueError(
-            f"Operator address mismatch: {derived_operator_address} derived from the metadata, "
-            f"{ursula.operator_address} supplied on start")
-
-    if payload.verifying_key != ursula.signer.verifying_key():
-        raise ValueError(
-            f"Verifying key mismatch: {payload.verifying_key} in the metadata, "
-            f"{ursula.signer.verifying_key()} derived from the master key")
-
-    if payload.encrypting_key != ursula.encrypting_key:
-        raise ValueError(
-            f"Encrypting key mismatch: {payload.encrypting_key} in the metadata, "
-            f"{ursula.encrypting_key} derived from the master key")
+from .verification import PublicUrsula, verify_staking_local
 
 
 class UrsulaServer(Server):
 
     @classmethod
-    async def async_init(
-            cls,
-            ursula: Ursula,
-            config: UrsulaServerConfig,
-            **kwds):
-
-        logger = config.parent_logger.get_child('UrsulaServerInit')
+    async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig):
 
         async with config.identity_client.session() as session:
-            staking_provider_address = await session.get_staking_provider_address(ursula.operator_address)
-            logger.info("Operator bonded to {}", staking_provider_address.checksum)
-
-            balance = await session.get_balance(ursula.operator_address)
-            logger.info("Operator balance: {}", balance)
-
-            if not await session.is_staking_provider_authorized(staking_provider_address):
-                logger.info("Staking provider {} is not authorized", staking_provider_address)
-                raise RuntimeError("Staking provider is not authorized")
-
-            # TODO: we can call confirm_operator_address() here if the operator is not confirmed
-            confirmed = await session.is_operator_confirmed(ursula.operator_address)
-            if not confirmed:
-                logger.info("Operator {} is not confirmed", ursula.operator_address)
-                raise RuntimeError("Operator is not confirmed")
+            staking_provider_address = await verify_staking_local(session, ursula.operator_address)
 
         return cls(
             ursula=ursula,
             config=config,
-            staking_provider_address=staking_provider_address,
-            **kwds)
+            staking_provider_address=staking_provider_address)
 
     def __init__(
             self,
@@ -112,23 +41,20 @@ class UrsulaServer(Server):
             staking_provider_address: IdentityAddress):
 
         self.ursula = ursula
-        self.staking_provider_address = staking_provider_address
 
         self._clock = config.clock
         self._logger = config.parent_logger.get_child('UrsulaServer')
         self._storage = config.storage
-        self._ssl_private_key = ursula.make_ssl_private_key()
 
         metadata = self._storage.get_my_metadata()
         if metadata is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
-                verify_metadata(
-                    clock=self._clock,
+                node = PublicUrsula.checked_local(
                     metadata=metadata,
-                    ssl_private_key=self._ssl_private_key,
+                    clock=self._clock,
                     ursula=self.ursula,
-                    staking_provider_address=self.staking_provider_address,
+                    staking_provider_address=staking_provider_address,
                     contact=config.contact,
                     domain=config.domain)
             except Exception as e:
@@ -137,25 +63,21 @@ class UrsulaServer(Server):
 
         if metadata is None:
             self._logger.debug("Generating new metadata")
-            metadata = generate_metadata(
+            node = PublicUrsula.generate(
                 clock=self._clock,
-                ssl_private_key=self._ssl_private_key,
                 ursula=self.ursula,
-                staking_provider_address=self.staking_provider_address,
+                staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain)
-            self._storage.set_my_metadata(metadata)
+            self._storage.set_my_metadata(node.metadata)
 
-        self._ssl_certificate = SSLCertificate.from_der_bytes(metadata.payload.certificate_der)
-        self._metadata = metadata
-
-        self._ssl_contact = SSLContact(config.contact, self._ssl_certificate)
+        self._node = node
 
         self.learner = Learner(
-            rest_client=config.rest_client,
+            peer_client=config.peer_client,
             identity_client=config.identity_client,
             storage=config.storage,
-            my_metadata=self._metadata,
+            this_node=node,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
             domain=config.domain,
@@ -165,21 +87,16 @@ class UrsulaServer(Server):
 
         self._started_at = self._clock.utcnow()
 
-        self.domain = config.domain
-
         self.started = False
 
-    def ssl_contact(self):
-        return self._ssl_contact
+    def secure_contact(self):
+        return self._node.secure_contact
 
-    def ssl_private_key(self):
-        return self._ssl_private_key
+    def peer_private_key(self):
+        return self.ursula.peer_private_key()
 
     def into_app(self):
         return make_ursula_app(self)
-
-    def metadata(self):
-        return self._metadata
 
     async def start(self, nursery):
         assert not self.started
@@ -257,7 +174,7 @@ class UrsulaServer(Server):
         return await self.endpoint_node_metadata_get(request)
 
     async def endpoint_public_information(self, _request):
-        return bytes(self._metadata)
+        return bytes(self._node.metadata)
 
     async def endpoint_reencrypt(self, request):
         try:

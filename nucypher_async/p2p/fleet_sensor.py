@@ -9,12 +9,12 @@ from sortedcontainers import SortedKeyList
 import trio
 
 from ..drivers.identity import IdentityAddress, AmountT
-from ..drivers.rest_client import Contact
-from ..ursula import RemoteUrsula
+from ..drivers.peer import Contact
+from ..verification import PublicUrsula
 
 
 class NodeEntry(NamedTuple):
-    node: RemoteUrsula
+    node: PublicUrsula
     verified_at: arrow.Arrow
     staked_amount: AmountT
 
@@ -53,7 +53,7 @@ class VerifiedNodesDB:
 
     def add_node(self, node, staked_amount, verified_at, verify_at):
         assert node.staking_provider_address not in self._nodes
-        assert not any(entry.node.ssl_contact.contact == node.ssl_contact.contact for entry in self._nodes.values())
+        assert not any(entry.node.secure_contact.contact == node.secure_contact.contact for entry in self._nodes.values())
         self._nodes[node.staking_provider_address] = NodeEntry(
             node=node,
             verified_at=verified_at,
@@ -88,7 +88,7 @@ class VerifiedNodesDB:
 
     def remove_by_contact(self, contact):
         for address, entry in self._nodes.items():
-            if entry.node.ssl_contact.contact == contact:
+            if entry.node.secure_contact.contact == contact:
                 del self._nodes[address]
                 self._del_verify_at(entry.node)
                 break
@@ -97,14 +97,14 @@ class VerifiedNodesDB:
         return [entry.node for entry in self._nodes.values()]
 
     def has_contact(self, contact):
-        return any(entry.node.ssl_contact.contact == contact for entry in self._nodes.values())
+        return any(entry.node.secure_contact.contact == contact for entry in self._nodes.values())
 
     def is_empty(self):
         return not bool(self._nodes)
 
     def next_verification_in(self, now, exclude):
         for entry in self._verify_at:
-            if self._nodes[entry.address].node.ssl_contact.contact not in exclude:
+            if self._nodes[entry.address].node.secure_contact.contact not in exclude:
                 return entry.verify_at - now if entry.verify_at > now else datetime.timedelta()
         return None
 
@@ -114,7 +114,7 @@ class VerifiedNodesDB:
             if entry.verify_at > now:
                 return contacts
 
-            contact = self._nodes[entry.address].node.ssl_contact.contact
+            contact = self._nodes[entry.address].node.secure_contact.contact
             if contact not in exclude:
                 contacts.append(contact)
 
@@ -198,9 +198,9 @@ class FleetSensor:
         else:
             verify_at = verified_at.shift(hours=1)
 
-        # If there's certificate expiry incoming, verify then
-        certificate_expires_at = node.ssl_contact.certificate.not_valid_after
-        verify_at = min(certificate_expires_at.shift(seconds=1), verify_at)
+        # If there's public key expiry incoming, verify then
+        expires_at = node.secure_contact.not_valid_after
+        verify_at = min(expires_at.shift(seconds=1), verify_at)
 
         # TODO: other limits for increasing the verification interval are possible.
         # How big is the unstaking timeout?
@@ -217,7 +217,7 @@ class FleetSensor:
 
         verified_at = self._clock.utcnow()
 
-        # Note that we do not use the node's `ssl_contact`:
+        # Note that we do not use the node's `secure_contact`:
         # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
         # TODO: IPs should be typed properly.
         self._contacts_db.remove_contact(contact)
@@ -230,7 +230,7 @@ class FleetSensor:
 
             # This IP may have had another staking provider associated with it, unverify the old one
             # (if it is the same node, no harm done, we're doing _add_node() anyway).
-            self._verified_nodes_db.remove_by_contact(node.ssl_contact.contact)
+            self._verified_nodes_db.remove_by_contact(node.secure_contact.contact)
 
             verify_at = self._calculate_next_verification(node, verified_at)
             self._add_node(node, staked_amount, verified_at, verify_at)
@@ -252,7 +252,7 @@ class FleetSensor:
         for metadata in metadatas:
             payload = metadata.payload
             contact = Contact(payload.host, payload.port)
-            if contact == teacher_node.ssl_contact.contact and bytes(metadata) != bytes(teacher_node.metadata):
+            if contact == teacher_node.secure_contact.contact and bytes(metadata) != bytes(teacher_node.metadata):
                 self._verified_nodes_db.remove_node(teacher_node)
         self._add_contacts(metadatas)
 
@@ -354,7 +354,7 @@ class FleetSensor:
     def get_nodes_to_learn_from(self, nodes_num):
         entries = [
             entry for entry in self._verified_nodes_db._nodes.values()
-            if entry.node.ssl_contact.contact not in self._locked_contacts]
+            if entry.node.secure_contact.contact not in self._locked_contacts]
         sampled = random.sample(entries, min(nodes_num, len(entries)))
         return [entry.node for entry in sampled]
 
@@ -374,7 +374,7 @@ class FleetSensor:
 
             entries.append(StakingProviderEntry(
                 address=address,
-                contact=entry.node.ssl_contact.contact,
+                contact=entry.node.secure_contact.contact,
                 weight=int(staked_amount.as_ether())))
 
         for address, contacts in self._contacts_db._addresses_to_contacts.items():

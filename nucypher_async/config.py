@@ -5,10 +5,9 @@ import attrs
 from appdirs import AppDirs
 
 from .drivers.time import Clock, SystemClock
-from .drivers.rest_client import Contact
 from .drivers.identity import IdentityClient
 from .drivers.payment import PaymentClient
-from .drivers.rest_client import RESTClient, Contact
+from .drivers.peer import PeerClient, Contact
 from .domain import Domain
 from .storage import Storage, InMemoryStorage, FileSystemStorage
 from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
@@ -21,7 +20,7 @@ class UrsulaServerConfig:
     contact: Contact
     identity_client: IdentityClient
     payment_client: PaymentClient
-    rest_client: RESTClient
+    peer_client: PeerClient
     parent_logger: Logger
     storage: Storage
     seed_contacts: List[Contact]
@@ -75,14 +74,14 @@ class UrsulaServerConfig:
         else:
             seed_contacts = []
 
-        rest_client = RESTClient()
+        peer_client = PeerClient()
 
         return cls(
             domain=domain,
             contact=contact,
             identity_client=identity_client,
             payment_client=payment_client,
-            rest_client=rest_client,
+            peer_client=peer_client,
             parent_logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
@@ -96,7 +95,7 @@ class PorterServerConfig:
     domain: Domain
     contact: Contact
     identity_client: IdentityClient
-    rest_client: RESTClient
+    peer_client: PeerClient
     parent_logger: Logger
     storage: Storage
     seed_contacts: List[Contact]
@@ -147,13 +146,13 @@ class PorterServerConfig:
         else:
             seed_contacts = []
 
-        rest_client = RESTClient()
+        peer_client = PeerClient()
 
         return cls(
             domain=domain,
             contact=contact,
             identity_client=identity_client,
-            rest_client=rest_client,
+            peer_client=peer_client,
             parent_logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,

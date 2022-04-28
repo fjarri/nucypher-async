@@ -7,7 +7,7 @@ import trio
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.ssl import SSLCertificate
-from nucypher_async.drivers.rest_client import Contact, SSLContact, RESTClient
+from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.rest_app import Request, call_endpoint
 from nucypher_async.drivers.rest_server import ServerHandle
 from nucypher_async.pre import HRAC
@@ -30,10 +30,10 @@ class MockNetwork:
     def add_server(self, ursula_server):
         # Breaking the reference loop
         # UrsulaServer ---> MockRestClient ---> MockNetwork -x-> UrsulaServer
-        self.known_servers[ursula_server.ssl_contact().contact] = weakref.proxy(ursula_server)
+        self.known_servers[ursula_server.secure_contact().contact] = weakref.proxy(ursula_server)
 
 
-class MockRESTClient(RESTClient):
+class MockPeerClient(PeerClient):
     """
     A counterpart of NetworkMiddleware with raw data/response pass-through directly to the server.
     """
@@ -49,7 +49,7 @@ class MockRESTClient(RESTClient):
 
     async def _fetch_certificate(self, contact: Contact):
         server = self._mock_network.known_servers[contact]
-        return server.ssl_contact().certificate
+        return server.secure_contact().public_key._certificate
 
     @asynccontextmanager
     async def _http_client(self, certificate: SSLCertificate):
@@ -75,7 +75,7 @@ class MockHTTPClient:
         assert proto == "https:"
         host, port = host_port.split(":")
         server = self._mock_network.known_servers[Contact(host, int(port))]
-        assert self._certificate == server.ssl_contact().certificate
+        assert self._certificate == server.secure_contact().public_key._certificate
         return getattr(server, self._endpoints[(endpoint, method)])
 
     async def get(self, url: str):

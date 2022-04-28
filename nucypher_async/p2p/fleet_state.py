@@ -2,7 +2,7 @@ from typing import Iterable
 
 from nucypher_core import NodeMetadata, FleetStateChecksum
 
-from ..drivers.rest_client import Contact
+from ..drivers.peer import Contact
 
 
 class FleetState:

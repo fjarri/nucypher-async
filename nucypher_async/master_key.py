@@ -4,7 +4,7 @@ import arrow
 from mnemonic.mnemonic import Mnemonic
 from nucypher_core.umbral import SecretKeyFactory, SecretKey, Signer
 
-from .drivers.ssl import SSLPrivateKey
+from .drivers.peer import PeerPrivateKey
 from .utils.passwords import (
     derive_key_material_from_password,
     secret_box_decrypt,
@@ -82,9 +82,9 @@ class MasterKey:
                                            salt=wrapper_salt)
         return EncryptedMasterKey(encrypted_key, password_salt, wrapper_salt)
 
-    def make_ssl_private_key(self):
+    def make_peer_private_key(self):
         sk = self.__skf.make_key(b'NuCypher/tls')
-        return SSLPrivateKey.from_seed(sk.to_secret_bytes())
+        return PeerPrivateKey(sk.to_secret_bytes())
 
     def make_signer(self):
         return Signer(self.__skf.make_key(b'NuCypher/signing'))

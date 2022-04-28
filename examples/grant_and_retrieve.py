@@ -11,7 +11,7 @@ from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
 from nucypher_async.drivers.rest_server import ServerHandle
-from nucypher_async.drivers.rest_client import Contact, RESTClient
+from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.drivers.time import Clock, SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
@@ -62,7 +62,7 @@ async def run_local_ursula_fleet(context, nursery):
             contact=Contact(LOCALHOST, PORT_BASE + i),
             identity_client=context.identity_client,
             payment_client=context.payment_client,
-            rest_client=RESTClient(),
+            peer_client=PeerClient(),
             parent_logger=context.logger.get_child(f"Ursula{i+1}"),
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,

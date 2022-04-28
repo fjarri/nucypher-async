@@ -5,7 +5,7 @@ import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.payment import AmountMATIC
-from nucypher_async.drivers.rest_client import Contact
+from nucypher_async.drivers.peer import Contact
 from nucypher_async.domain import Domain
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.ursula import Ursula
@@ -15,7 +15,7 @@ from nucypher_async.learner import Learner
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
-from .mocks import MockNetwork, MockRESTClient, MockServerHandle
+from .mocks import MockNetwork, MockPeerClient, MockServerHandle
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
             payment_client=mock_payment_client,
-            rest_client=MockRESTClient(mock_network, '127.0.0.1'),
+            peer_client=MockPeerClient(mock_network, '127.0.0.1'),
             parent_logger=logger.get_child(str(i)),
             storage=InMemoryStorage(),
             seed_contacts=[],
@@ -47,9 +47,9 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
     # pre-learn about other Ursulas
     for i in range(10):
-        metadatas = [server.metadata() for server in servers]
+        nodes = [server._node for server in servers]
         stakes = [AmountT.ether(40000) for server in servers]
-        servers[i].learner._add_verified_nodes(metadatas, stakes)
+        servers[i].learner._add_verified_nodes(nodes, stakes)
 
     yield servers
 
@@ -59,15 +59,15 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
     for handle in handles:
         await nursery.start(handle)
 
-    rest_client = MockRESTClient(mock_network, '127.0.0.1')
+    peer_client = MockPeerClient(mock_network, '127.0.0.1')
     learner = Learner(
         domain=Domain.MAINNET,
-        rest_client=rest_client,
+        peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].ssl_contact().contact],
+        seed_contacts=[ursula_servers[0].secure_contact().contact],
         parent_logger=logger)
 
-    addresses = [server.staking_provider_address for server in ursula_servers[:3]]
+    addresses = [server._node.staking_provider_address for server in ursula_servers[:3]]
     nodes = []
     async with learner.verified_nodes_iter(addresses) as aiter:
         async for node in aiter:
@@ -85,13 +85,13 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
 
     alice = Alice()
     bob = Bob()
-    rest_client = MockRESTClient(mock_network, '127.0.0.1')
+    peer_client = MockPeerClient(mock_network, '127.0.0.1')
 
     alice_learner = Learner(
         domain=Domain.MAINNET,
-        rest_client=rest_client,
+        peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].ssl_contact().contact])
+        seed_contacts=[ursula_servers[0].secure_contact().contact])
 
     # Fund Alice
     mock_payment_client.mock_set_balance(alice.payment_address, AmountMATIC.ether(1))
@@ -104,16 +104,16 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
         threshold=2,
         shares=3,
         # TODO: using preselected Ursulas since blockchain is not implemeneted yet
-        handpicked_addresses=[server.staking_provider_address for server in ursula_servers[:3]])
+        handpicked_addresses=[server._node.staking_provider_address for server in ursula_servers[:3]])
 
     message = b'a secret message'
     message_kit = encrypt(policy.encrypting_key, message)
 
     bob_learner = Learner(
         domain=Domain.MAINNET,
-        rest_client=rest_client,
+        peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].ssl_contact().contact])
+        seed_contacts=[ursula_servers[0].secure_contact().contact])
     message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map,
         remote_alice=alice.public_info())
     assert message_back == message

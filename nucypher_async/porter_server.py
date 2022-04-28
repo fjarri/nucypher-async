@@ -12,7 +12,7 @@ from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.rest_app import make_porter_app
 from .drivers.rest_server import Server
-from .drivers.rest_client import RESTClient, Contact, SSLContact, RPCError
+from .drivers.peer import Contact, SecureContact, RPCError
 from .drivers.time import Clock
 from .master_key import MasterKey
 from .learner import Learner, verify_metadata_shared
@@ -35,7 +35,7 @@ class PorterServer(Server):
         # TODO: use a proper CA cert
         self._ssl_private_key = master_key.make_ssl_private_key()
         certificate = SSLCertificate.self_signed(self._clock, self._ssl_private_key, contact.host)
-        self._ssl_contact = SSLContact(contact, certificate)
+        self._ssl_contact = SecureContact(contact, certificate)
 
         self._logger = config.parent_logger.get_child('PorterServer')
 
@@ -156,7 +156,7 @@ class PorterServer(Server):
 
         node_list = [dict(
             checksum_address=node.staking_provider_address.checksum,
-            uri=f"https://{node.ssl_contact.contact.host}:{node.ssl_contact.contact.port}",
+            uri=node.secure_contact.uri,
             encrypting_key=bytes(node.encrypting_key).hex()
         ) for node in nodes]
 

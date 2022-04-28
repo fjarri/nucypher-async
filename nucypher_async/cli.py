@@ -5,7 +5,7 @@ from appdirs import AppDirs
 import trio
 import click
 
-from .drivers.rest_client import Contact
+from .drivers.peer import Contact
 from .drivers.rest_server import serve_forever
 from .drivers.identity import IdentityClient, IdentityAccount
 from .drivers.payment import PaymentClient

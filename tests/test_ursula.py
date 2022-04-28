@@ -4,7 +4,7 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
-from nucypher_async.drivers.rest_client import Contact
+from nucypher_async.drivers.peer import Contact
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.config import UrsulaServerConfig
@@ -13,7 +13,7 @@ from nucypher_async.storage import InMemoryStorage
 from nucypher_async.learner import Learner
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 
-from .mocks import MockNetwork, MockRESTClient, MockServerHandle
+from .mocks import MockNetwork, MockPeerClient, MockServerHandle
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
             payment_client=mock_payment_client,
-            rest_client=MockRESTClient(mock_network, '127.0.0.1'),
+            peer_client=MockPeerClient(mock_network, '127.0.0.1'),
             parent_logger=logger.get_child(str(i)),
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
@@ -65,7 +65,7 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         await trio.sleep(100)
 
         known_nodes = {
-            handle.server.staking_provider_address: handle.server.learner.metadata_to_announce()
+            handle.server._node.staking_provider_address: handle.server.learner.metadata_to_announce()
             for handle in handles}
 
         # Each Ursula should know about every other Ursula by now.

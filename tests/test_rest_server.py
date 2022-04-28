@@ -5,7 +5,7 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.rest_client import RESTClient, Contact
+from nucypher_async.drivers.peer import PeerClient, Contact
 from nucypher_async.drivers.rest_server import ServerHandle
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.storage import InMemoryStorage
@@ -24,7 +24,7 @@ def ursula_server():
         contact=Contact('127.0.0.1', 9151),
         identity_client=MockIdentityClient(),
         payment_client=MockPaymentClient(),
-        rest_client=RESTClient(),
+        peer_client=PeerClient(),
         parent_logger=NULL_LOGGER,
         storage=InMemoryStorage(),
         seed_contacts=[],
@@ -38,8 +38,8 @@ async def test_client_real_server(nursery, capsys, ursula_server):
     handle = ServerHandle(ursula_server)
     await nursery.start(handle)
 
-    client = RESTClient()
-    response = await client.ping(ursula_server.ssl_contact())
+    client = PeerClient()
+    response = await client.ping(ursula_server.secure_contact())
     assert response == '127.0.0.1'
 
     handle.shutdown()

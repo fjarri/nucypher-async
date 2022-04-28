@@ -148,7 +148,7 @@
             %>
             <tr>
                 <td><span class="monospace">
-                <a href="https://${node.ssl_contact.contact.host}:${node.ssl_contact.contact.port}/status">${node.staking_provider_address}</a>
+                <a href="${node.secure_contact.uri}/status">${node.staking_provider_address}</a>
                 </span></td>
                 <td>${humanize.number.intword(int(node_entry.staked_amount.as_ether()))} T</td>
                 <td>${arrow.get(node.metadata.payload.timestamp_epoch).humanize(now)}</td>

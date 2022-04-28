@@ -61,11 +61,11 @@ class InMemoryCertificateConfig(Config):
 class Server(ABC):
 
     @abstractmethod
-    def ssl_contact(self):
+    def secure_contact(self):
         ...
 
     @abstractmethod
-    def ssl_private_key(self):
+    def peer_private_key(self):
         ...
 
     @abstractmethod
@@ -75,13 +75,13 @@ class Server(ABC):
 
 def make_config(server: Server):
 
-    ssl_contact = server.ssl_contact()
+    secure_contact = server.secure_contact()
 
     config = InMemoryCertificateConfig(
-        ssl_certificate=ssl_contact.certificate,
-        ssl_private_key=server.ssl_private_key())
+        ssl_certificate=secure_contact.public_key._certificate,
+        ssl_private_key=server.peer_private_key().as_ssl_private_key())
 
-    config.bind = [f"{ssl_contact.contact.host}:{ssl_contact.contact.port}"]
+    config.bind = [f"{secure_contact.contact.host}:{secure_contact.contact.port}"]
     config.worker_class = "trio"
 
     return config

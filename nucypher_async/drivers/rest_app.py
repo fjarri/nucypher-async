@@ -9,7 +9,7 @@ This is a thin layer that serves the following purposes:
 Nothing else should be happening here, the bulk of the server logic
 is located in ``UrsulaServer``.
 
-In a sense, this is a "server" counterpart of ``rest_client``.
+In a sense, this is a "server" counterpart of ``PeerClient``.
 """
 
 import http
@@ -18,7 +18,7 @@ import sys
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from .rest_client import RPCError
+from .peer import RPCError
 
 
 async def call_endpoint(endpoint_future):

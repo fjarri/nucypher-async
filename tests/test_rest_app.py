@@ -6,7 +6,7 @@ import trio
 
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.rest_app import make_ursula_app
-from nucypher_async.drivers.rest_client import RESTClient, Contact
+from nucypher_async.drivers.peer import PeerClient, Contact
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.domain import Domain
 from nucypher_async.storage import InMemoryStorage
@@ -24,7 +24,7 @@ def ursula_server():
         contact=Contact('127.0.0.1', 9151),
         identity_client=MockIdentityClient(),
         payment_client=MockPaymentClient(),
-        rest_client=RESTClient(),
+        peer_client=PeerClient(),
         parent_logger=NULL_LOGGER,
         storage=InMemoryStorage(),
         seed_contacts=[],

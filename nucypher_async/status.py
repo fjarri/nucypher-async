@@ -6,7 +6,7 @@ import humanize
 from mako import exceptions as mako_exceptions
 from mako.template import Template
 
-from .drivers.rest_client import RPCError
+from .drivers.peer import RPCError
 from .version import CodeInfo
 
 
