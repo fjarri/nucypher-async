@@ -5,8 +5,7 @@ from appdirs import AppDirs
 import trio
 import click
 
-from .drivers.peer import Contact
-from .drivers.asgi_server import serve_forever
+from .drivers.peer import Contact, serve_forever
 from .drivers.identity import IdentityClient, IdentityAccount
 from .drivers.payment import PaymentClient
 from .config import UrsulaServerConfig, PorterServerConfig

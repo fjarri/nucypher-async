@@ -8,9 +8,10 @@ from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.ssl import SSLCertificate
 from nucypher_async.drivers.peer import Contact, PeerClient
-from nucypher_async.drivers.asgi_app import Request, call_endpoint
+from nucypher_async.drivers.asgi_app import QuartRequest, call_endpoint
 from nucypher_async.drivers.asgi_server import ASGIServerHandle
 from nucypher_async.pre import HRAC
+from nucypher_async.peer_api import PeerAPI
 
 
 class MockClock:
@@ -80,12 +81,12 @@ class MockHTTPClient:
 
     async def get(self, url: str):
         endpoint = self._resolve_url(url, 'get')
-        response_bytes, status_code = await call_endpoint(endpoint(Request(self._host, None)))
+        response_bytes, status_code = await call_endpoint(endpoint(QuartRequest(self._host, None)))
         return MockResponse(status_code, response_bytes)
 
     async def post(self, url: str, data: bytes):
         endpoint = self._resolve_url(url, 'post')
-        response_bytes, status_code = await call_endpoint(endpoint(Request(self._host, data)))
+        response_bytes, status_code = await call_endpoint(endpoint(QuartRequest(self._host, data)))
         return MockResponse(status_code, response_bytes)
 
 
@@ -103,7 +104,11 @@ class MockResponse:
         return self._data.decode()
 
 
-class MockServerHandle(ASGIServerHandle):
+class MockServerHandle:
+
+    def __init__(self, server: PeerAPI):
+        self.server = server
+        self._shutdown_event = trio.Event()
 
     async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
         """
@@ -114,4 +119,4 @@ class MockServerHandle(ASGIServerHandle):
             await self.server.start(nursery)
             task_status.started()
             await self._shutdown_event.wait()
-            self.server.stop()
+            await self.server.stop()

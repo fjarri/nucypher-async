@@ -15,9 +15,10 @@ from nucypher_core import (
     NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .asgi_server import ASGIServer
-from .asgi_app import make_ursula_app, HTTPError
+from .asgi_server import ASGIServer, ASGIServerHandle
+from .asgi_app import make_peer_asgi_app, HTTPError
 from ..utils import temp_file
+from ..peer_api import PeerServer, PeerServerHandle
 
 
 class P2PNetworkError(Exception):
@@ -274,38 +275,41 @@ class PeerPrivateKey:
     def __init__(self, seed: bytes):
         self.__seed = seed
 
-    def as_ssl_private_key(self):
+    def as_ssl_private_key(self) -> SSLPrivateKey:
         return SSLPrivateKey.from_seed(self.__seed)
 
 
 class PeerPublicKey:
 
-    def __init__(self, certificate):
+    def __init__(self, certificate: SSLCertificate):
         self._certificate = certificate
 
     def __bytes__(self):
         return self._certificate.to_der_bytes()
 
 
-class PeerServer(ASGIServer):
+class PeerServerWrapper(ASGIServer):
 
-    @abstractmethod
-    def secure_contact(self) -> SecureContact:
-        ...
-
-    @abstractmethod
-    def peer_private_key(self) -> PeerPrivateKey:
-        ...
+    def __init__(self, server: PeerServer):
+        self.server = server
 
     def host_and_port(self) -> (str, int):
-        contact = self.secure_contact().contact
+        contact = self.server.secure_contact().contact
         return contact.host, contact.port
 
     def ssl_certificate(self):
-        return self.secure_contact().public_key._certificate
+        return self.server.secure_contact().public_key._certificate
 
     def ssl_private_key(self):
-        return self.peer_private_key().as_ssl_private_key()
+        return self.server.peer_private_key().as_ssl_private_key()
 
     def into_asgi_app(self):
-        return make_ursula_app(self)
+        return make_peer_asgi_app(self.server.peer_api())
+
+
+def make_server_handle(server: PeerServer) -> PeerServerHandle:
+    return ASGIServerHandle(PeerServerWrapper(server))
+
+
+def serve_forever(server: PeerServer):
+    trio.run(make_server_handle(server))

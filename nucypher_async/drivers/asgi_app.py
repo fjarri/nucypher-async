@@ -19,6 +19,8 @@ import sys
 from quart_trio import QuartTrio
 from quart import make_response, request
 
+from ..peer_api import PeerRequest, PeerAPI
+
 
 class HTTPError(ABC, Exception):
 
@@ -45,18 +47,24 @@ async def wrap_in_response(logger, endpoint_future):
     return await make_response(result_bytes, status_code)
 
 
-class Request:
+class QuartRequest(PeerRequest):
 
     @classmethod
     async def from_contextvar(cls):
         return cls(request.remote_addr, await request.get_data(cache=False))
 
     def __init__(self, remote_host, data):
-        self.remote_host = remote_host
-        self.data = data
+        self._remote_host = remote_host
+        self._data = data
+
+    def remote_host(self):
+        return self._remote_host
+
+    def data(self):
+        return self._data
 
 
-def make_ursula_app(ursula_server):
+def make_peer_asgi_app(api: PeerAPI):
     """
     Creates and returns an ASGI app.
     """
@@ -66,47 +74,44 @@ def make_ursula_app(ursula_server):
 
     app = QuartTrio('ursula_async')
 
-    # TODO: this is a little backwards; the app encompasses UrsulaServer,
-    # but this new logger is a child of UrsulaServer's logger.
-    # Is there a more logical way to create a logger?
-    logger = ursula_server._logger.get_child('App')
+    logger = api.logger().get_child('App')
 
     @app.before_serving
     async def on_startup():
-        await ursula_server.start(app.nursery)
+        await api.start(app.nursery)
 
     @app.after_serving
     async def on_shutdown():
-        ursula_server.stop()
+        await api.stop()
 
     @app.route("/ping")
     async def ping():
-        req = await Request.from_contextvar()
-        return await wrap_in_response(logger, ursula_server.endpoint_ping(req))
+        req = await QuartRequest.from_contextvar()
+        return await wrap_in_response(logger, api.endpoint_ping(req))
 
     @app.route("/node_metadata")
     async def node_metadata_get():
-        req = await Request.from_contextvar()
-        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_get(req))
+        req = await QuartRequest.from_contextvar()
+        return await wrap_in_response(logger, api.endpoint_node_metadata_get(req))
 
     @app.route("/node_metadata", methods=['POST'])
     async def node_metadata_post():
-        req = await Request.from_contextvar()
-        return await wrap_in_response(logger, ursula_server.endpoint_node_metadata_post(req))
+        req = await QuartRequest.from_contextvar()
+        return await wrap_in_response(logger, api.endpoint_node_metadata_post(req))
 
     @app.route("/public_information")
     async def public_information():
-        req = await Request.from_contextvar()
-        return await wrap_in_response(logger, ursula_server.endpoint_public_information(req))
+        req = await QuartRequest.from_contextvar()
+        return await wrap_in_response(logger, api.endpoint_public_information(req))
 
     @app.route("/reencrypt", methods=["POST"])
     async def reencrypt():
-        req = await Request.from_contextvar()
-        return await wrap_in_response(logger, ursula_server.endpoint_reencrypt(req))
+        req = await QuartRequest.from_contextvar()
+        return await wrap_in_response(logger, api.endpoint_reencrypt(req))
 
     @app.route("/status")
     async def status():
-        return await wrap_in_response(logger, ursula_server.endpoint_status())
+        return await wrap_in_response(logger, api.endpoint_status())
 
     return app
 

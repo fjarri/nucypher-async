@@ -5,7 +5,7 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.asgi_app import make_ursula_app
+from nucypher_async.drivers.asgi_app import make_peer_asgi_app
 from nucypher_async.drivers.peer import PeerClient, Contact
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.domain import Domain
@@ -36,7 +36,7 @@ def ursula_server():
 
 async def test_client_with_background_tasks(ursula_server):
 
-    ursula_app = make_ursula_app(ursula_server)
+    ursula_app = make_peer_asgi_app(ursula_server)
 
     async with ursula_app.test_app() as test_app:
 
@@ -56,7 +56,7 @@ async def test_client_with_background_tasks(ursula_server):
 
 async def test_client_no_background_tasks(ursula_server):
 
-    ursula_app = make_ursula_app(ursula_server)
+    ursula_app = make_peer_asgi_app(ursula_server)
 
     test_client = ursula_app.test_client()
 

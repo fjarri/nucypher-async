@@ -7,17 +7,18 @@ from nucypher_core import (
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .drivers.identity import IdentityAddress
-from .drivers.peer import PeerServer, Contact, SecureContact, InactivePolicy
+from .drivers.peer import Contact, SecureContact, InactivePolicy
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
+from .peer_api import PeerServer, PeerAPI
 from .verification import PublicUrsula, verify_staking_local
 
 
-class UrsulaServer(PeerServer):
+class UrsulaServer(PeerServer, PeerAPI):
 
     @classmethod
     async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig):
@@ -91,6 +92,12 @@ class UrsulaServer(PeerServer):
     def peer_private_key(self):
         return self.ursula.peer_private_key()
 
+    def logger(self):
+        return self._logger
+
+    def peer_api(self):
+        return self
+
     async def start(self, nursery):
         assert not self.started
 
@@ -127,7 +134,7 @@ class UrsulaServer(PeerServer):
         except Exception as e:
             self._logger.error("Uncaught exception in the learning task:", exc_info=sys.exc_info())
 
-    def stop(self):
+    async def stop(self):
         assert self.started
 
         self._verification_task.stop()
@@ -136,7 +143,7 @@ class UrsulaServer(PeerServer):
         self.started = False
 
     async def endpoint_ping(self, request):
-        return request.remote_host
+        return request.remote_host()
 
     async def endpoint_node_metadata_get(self, _request):
         response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
@@ -146,7 +153,7 @@ class UrsulaServer(PeerServer):
 
     async def endpoint_node_metadata_post(self, request):
         try:
-            metadata_request = MetadataRequest.from_bytes(request.data)
+            metadata_request = MetadataRequest.from_bytes(request.data())
         except ValueError as exc:
             raise MessageFormatError.for_message(MetadataRequest, exc) from exc
 
@@ -158,7 +165,7 @@ class UrsulaServer(PeerServer):
 
         new_metadatas = metadata_request.announce_nodes
 
-        next_verification_in = self.learner.passive_learning(request.remote_host, new_metadatas)
+        next_verification_in = self.learner.passive_learning(request.remote_host(), new_metadatas)
         if next_verification_in is not None:
             self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
             # TODO: don't reset if there's less than a certain timeout before awakening
@@ -171,7 +178,7 @@ class UrsulaServer(PeerServer):
 
     async def endpoint_reencrypt(self, request):
         try:
-            reencryption_request = ReencryptionRequest.from_bytes(request.data)
+            reencryption_request = ReencryptionRequest.from_bytes(request.data())
         except ValueError as exc:
             raise MessageFormatError.for_message(ReencryptionRequest, exc) from exc
 

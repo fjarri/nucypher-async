@@ -78,8 +78,6 @@ class ASGIServer(ABC):
 
 def make_config(server: ASGIServer):
 
-    secure_contact = server.secure_contact()
-
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
         ssl_private_key=server.ssl_private_key())
@@ -115,10 +113,3 @@ class ASGIServerHandle:
 
     def shutdown(self):
         self._shutdown_event.set()
-
-
-def serve_forever(server: ASGIServer):
-    """
-    Runs the Ursula web server and blocks.
-    """
-    trio.run(ASGIServerHandle(server))
