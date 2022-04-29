@@ -12,7 +12,6 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from .rest_app import make_ursula_app
 from .ssl import SSLCertificate, SSLPrivateKey
 from ..utils import temp_file
 
@@ -58,42 +57,48 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-class Server(ABC):
+class ASGIServer(ABC):
 
     @abstractmethod
-    def secure_contact(self):
+    def host_and_port(self) -> (str, int):
         ...
 
     @abstractmethod
-    def peer_private_key(self):
+    def ssl_certificate(self) -> SSLCertificate:
         ...
 
     @abstractmethod
-    def into_app(self):
+    def ssl_private_key(self) -> SSLPrivateKey:
+        ...
+
+    @abstractmethod
+    def into_asgi_app(self):
         ...
 
 
-def make_config(server: Server):
+def make_config(server: ASGIServer):
 
     secure_contact = server.secure_contact()
 
     config = InMemoryCertificateConfig(
-        ssl_certificate=secure_contact.public_key._certificate,
-        ssl_private_key=server.peer_private_key().as_ssl_private_key())
+        ssl_certificate=server.ssl_certificate(),
+        ssl_private_key=server.ssl_private_key())
 
-    config.bind = [f"{secure_contact.contact.host}:{secure_contact.contact.port}"]
+    host, port = server.host_and_port()
+
+    config.bind = [f"{host}:{port}"]
     config.worker_class = "trio"
 
     return config
 
 
-class ServerHandle:
+class ASGIServerHandle:
     """
     A handle for a running web server.
     Can be used to shut it down.
     """
 
-    def __init__(self, server):
+    def __init__(self, server: ASGIServer):
         self.server = server
         self._shutdown_event = trio.Event()
 
@@ -105,15 +110,15 @@ class ServerHandle:
         Supports start-up reporting when invoked via `nursery.start()`.
         """
         config = make_config(self.server)
-        app = self.server.into_app()
+        app = self.server.into_asgi_app()
         await serve(app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status)
 
     def shutdown(self):
         self._shutdown_event.set()
 
 
-def serve_forever(server):
+def serve_forever(server: ASGIServer):
     """
     Runs the Ursula web server and blocks.
     """
-    trio.run(ServerHandle(server))
+    trio.run(ASGIServerHandle(server))

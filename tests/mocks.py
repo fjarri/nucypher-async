@@ -8,8 +8,8 @@ from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.drivers.ssl import SSLCertificate
 from nucypher_async.drivers.peer import Contact, PeerClient
-from nucypher_async.drivers.rest_app import Request, call_endpoint
-from nucypher_async.drivers.rest_server import ServerHandle
+from nucypher_async.drivers.asgi_app import Request, call_endpoint
+from nucypher_async.drivers.asgi_server import ASGIServerHandle
 from nucypher_async.pre import HRAC
 
 
@@ -103,7 +103,7 @@ class MockResponse:
         return self._data.decode()
 
 
-class MockServerHandle(ServerHandle):
+class MockServerHandle(ASGIServerHandle):
 
     async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
         """

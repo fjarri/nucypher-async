@@ -10,8 +10,8 @@ from nucypher_core import (
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
-from .drivers.rest_app import make_porter_app
-from .drivers.rest_server import Server
+from .drivers.asgi_app import make_porter_app
+from .drivers.asgi_server import ASGIServer
 from .drivers.peer import Contact, SecureContact, RPCError
 from .drivers.time import Clock
 from .master_key import MasterKey
@@ -23,7 +23,7 @@ from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 
 
-class PorterServer(Server):
+class PorterServer(ASGIServer):
 
     def __init__(self, config):
 

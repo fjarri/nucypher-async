@@ -10,7 +10,7 @@ from nucypher_async.learner import Learner
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
-from nucypher_async.drivers.rest_server import ServerHandle
+from nucypher_async.drivers.asgi_server import ASGIServerHandle
 from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.drivers.time import Clock, SystemClock

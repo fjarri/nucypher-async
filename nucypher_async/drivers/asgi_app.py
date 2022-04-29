@@ -12,20 +12,26 @@ is located in ``UrsulaServer``.
 In a sense, this is a "server" counterpart of ``PeerClient``.
 """
 
+from abc import ABC, abstractmethod
 import http
 import sys
 
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from .peer import RPCError
+
+class HTTPError(ABC, Exception):
+
+    @abstractmethod
+    def serialize(self) -> (str, http.HTTPStatus):
+        ...
 
 
 async def call_endpoint(endpoint_future):
     try:
         result_bytes = await endpoint_future
-    except RPCError as exc:
-        return exc.http_serialize()
+    except HTTPError as exc:
+        return exc.serialize()
     return result_bytes, http.HTTPStatus.OK
 
 

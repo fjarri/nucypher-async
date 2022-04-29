@@ -6,12 +6,8 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .drivers.identity import IdentityAddress, IdentityClient
-from .drivers.payment import PaymentClient
-from .drivers.peer import Contact, SecureContact, InactivePolicy
-from .drivers.rest_app import make_ursula_app
-from .drivers.rest_server import Server
-from .drivers.time import Clock
+from .drivers.identity import IdentityAddress
+from .drivers.peer import PeerServer, Contact, SecureContact, InactivePolicy
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
@@ -21,7 +17,7 @@ from .utils import BackgroundTask
 from .verification import PublicUrsula, verify_staking_local
 
 
-class UrsulaServer(Server):
+class UrsulaServer(PeerServer):
 
     @classmethod
     async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig):
@@ -94,9 +90,6 @@ class UrsulaServer(Server):
 
     def peer_private_key(self):
         return self.ursula.peer_private_key()
-
-    def into_app(self):
-        return make_ursula_app(self)
 
     async def start(self, nursery):
         assert not self.started

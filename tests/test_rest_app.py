@@ -5,7 +5,7 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.rest_app import make_ursula_app
+from nucypher_async.drivers.asgi_app import make_ursula_app
 from nucypher_async.drivers.peer import PeerClient, Contact
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.domain import Domain

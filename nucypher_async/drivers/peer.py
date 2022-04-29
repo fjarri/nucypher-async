@@ -1,9 +1,10 @@
 """
 The job of the REST dirver is to encapsulate dealing with the specific request library
 (currently ``httpx``), extract request data and convert status codes to exceptions.
-It is the "client" countrerpart of ``rest_app``.
+It is the "client" countrerpart of ``asgi_app``.
 """
 
+from abc import abstractmethod
 from contextlib import asynccontextmanager
 import http
 from ipaddress import IPv4Address, AddressValueError
@@ -14,6 +15,8 @@ from nucypher_core import (
     NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
+from .asgi_server import ASGIServer
+from .asgi_app import make_ursula_app, HTTPError
 from ..utils import temp_file
 
 
@@ -21,11 +24,14 @@ class P2PNetworkError(Exception):
     pass
 
 
-class RPCError(P2PNetworkError):
+class RPCError(P2PNetworkError, HTTPError):
 
     def __init__(self, message, http_status_code):
         super().__init__(message)
         self.http_status_code = http_status_code
+
+    def serialize(self):
+        return self.args[0], self.http_status_code
 
 
 class MessageFormatError(RPCError):
@@ -279,3 +285,27 @@ class PeerPublicKey:
 
     def __bytes__(self):
         return self._certificate.to_der_bytes()
+
+
+class PeerServer(ASGIServer):
+
+    @abstractmethod
+    def secure_contact(self) -> SecureContact:
+        ...
+
+    @abstractmethod
+    def peer_private_key(self) -> PeerPrivateKey:
+        ...
+
+    def host_and_port(self) -> (str, int):
+        contact = self.secure_contact().contact
+        return contact.host, contact.port
+
+    def ssl_certificate(self):
+        return self.secure_contact().public_key._certificate
+
+    def ssl_private_key(self):
+        return self.peer_private_key().as_ssl_private_key()
+
+    def into_asgi_app(self):
+        return make_ursula_app(self)
