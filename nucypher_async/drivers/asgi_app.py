@@ -19,21 +19,26 @@ import sys
 from quart_trio import QuartTrio
 from quart import make_response, request
 
-from ..peer_api import PeerRequest, PeerAPI
+from ..peer_api import PeerRequest, PeerAPI, PeerError, InactivePolicy
 
 
-class HTTPError(ABC, Exception):
-
-    @abstractmethod
-    def serialize(self) -> (str, http.HTTPStatus):
-        ...
+_HTTP_STATUS = {
+    InactivePolicy: http.HTTPStatus.PAYMENT_REQUIRED
+}
 
 
 async def call_endpoint(endpoint_future):
     try:
         result_bytes = await endpoint_future
-    except HTTPError as exc:
-        return exc.serialize()
+    except PeerError as exc:
+        message = exc.to_json()
+        status = http.HTTPStatus.INTERNAL_SERVER_ERROR
+        for tp, code in _HTTP_STATUS:
+            if isinstance(exc, tp):
+                status = code
+                break
+        return message, status
+
     return result_bytes, http.HTTPStatus.OK
 
 

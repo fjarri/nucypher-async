@@ -1,6 +1,58 @@
 from abc import ABC, abstractmethod
+from enum import Enum
+import json
 
 from .utils.logging import Logger
+
+
+class PeerErrorCode(Enum):
+    UNKNOWN_ERROR = 0
+    GENERIC_ERROR = 1 # TODO: should we have it at all?
+    INVALID_MESSAGE = 2
+    INACTIVE_POLICY = 3
+
+
+class PeerError(Exception):
+
+    @staticmethod
+    def error_code(self):
+        return PeerErrorCode.GENERIC_ERROR
+
+    def to_json(self) -> dict:
+        return dict(error=self.args[0], code=self.error_code())
+
+    @classmethod
+    def from_json(self, message: str):
+        parsed_message = json.loads(message)
+        code = message["code"]
+        error = message["error"]
+
+        if code == InvalidMessage.error_code():
+            return InvalidMessage(error)
+        elif code == PaymentRequired.error_code():
+            return PaymentRequired(error)
+        elif code == PeerError.error_code():
+            return PeerError(error)
+        else:
+            return PeerError(f"Unknown code {code}: {error}")
+
+
+class InvalidMessage(PeerError):
+
+    @staticmethod
+    def error_code(self):
+        return PeerErrorCode.INVALID_MESSAGE
+
+    @classmethod
+    def for_message(cls, message_cls, exc):
+        cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
+
+
+class InactivePolicy(PeerError):
+
+    @staticmethod
+    def error_code(self):
+        return PeerErrorCode.INACTIVE_POLICY
 
 
 class PeerRequest(ABC):

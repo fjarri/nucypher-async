@@ -7,14 +7,14 @@ from nucypher_core import (
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
 from .drivers.identity import IdentityAddress
-from .drivers.peer import Contact, SecureContact, InactivePolicy
+from .drivers.peer import Contact, SecureContact
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
-from .peer_api import PeerServer, PeerAPI
+from .peer_api import PeerServer, PeerAPI, InactivePolicy
 from .verification import PublicUrsula, verify_staking_local
 
 

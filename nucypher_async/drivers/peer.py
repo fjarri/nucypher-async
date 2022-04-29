@@ -16,42 +16,20 @@ from nucypher_core import (
 
 from .ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
 from .asgi_server import ASGIServer, ASGIServerHandle
-from .asgi_app import make_peer_asgi_app, HTTPError
+from .asgi_app import make_peer_asgi_app
 from ..utils import temp_file
-from ..peer_api import PeerServer, PeerServerHandle
+from ..peer_api import PeerServer, PeerServerHandle, PeerError, InvalidMessage
 
 
-class P2PNetworkError(Exception):
+class PeerNetworkError(PeerError):
     pass
 
 
-class RPCError(P2PNetworkError, HTTPError):
-
-    def __init__(self, message, http_status_code):
-        super().__init__(message)
-        self.http_status_code = http_status_code
-
-    def serialize(self):
-        return self.args[0], self.http_status_code
-
-
-class MessageFormatError(RPCError):
-    http_status_code = http.HTTPStatus.INTERNAL_SERVER_ERROR
-
-    @classmethod
-    def for_message(cls, message_cls, exc):
-        cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
-
-
-class InactivePolicy(RPCError):
-    http_status_code = http.HTTPStatus.PAYMENT_REQUIRED
-
-
-class ConnectionError(P2PNetworkError):
+class ConnectionError(PeerNetworkError):
     pass
 
 
-class HandshakeError(P2PNetworkError):
+class HandshakeError(PeerNetworkError):
     pass
 
 
@@ -118,12 +96,18 @@ class SecureContact:
 
 def unwrap_bytes(response, cls):
     if response.status_code != http.HTTPStatus.OK:
-        raise RPCError.from_status_code(response.text, response.status_code)
+        try:
+            peer_exc = PeerError.from_json(response.text)
+        except Exception as exc:
+            # This is mainly to support other implementations that just return plaintext errors
+            raise PeerError(f"Error code {response.status_code}: {response.text}") from exc
+        raise peer_exc
     message_bytes = response.read()
     try:
         message = cls.from_bytes(message_bytes)
     except ValueError as exc:
-        raise MessageFormatError.for_message(cls, exc) from exc
+        # Should we have a different error type for message format errors on client side?
+        raise InvalidMessage.for_message(cls, exc) from exc
     return message
 
 
@@ -154,7 +138,10 @@ class PeerClient:
 
     async def _resolve_address(self, contact: Contact):
         # TODO: what does it raise? Intercept and re-raise ConnectionError
-        addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+        try:
+            addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+        except OSError as e:
+            raise ConnectionError(str(e)) from e
 
         # TODO: or should we select a specific entry?
         family, type_, proto, canonname, sockaddr = addrinfo[0]
@@ -206,7 +193,7 @@ class PeerClient:
         return unwrap_bytes(response, ReencryptionResponse)
 
 
-class PeerVerificationError(Exception):
+class PeerVerificationError(PeerError):
     pass
 
 

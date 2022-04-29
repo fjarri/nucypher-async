@@ -12,15 +12,16 @@ import trio
 from nucypher_core import FleetStateChecksum, MetadataRequest
 
 from .drivers.identity import IdentityAddress
-from .drivers.peer import Contact, PeerClient, P2PNetworkError
+from .drivers.peer import Contact, PeerClient
 from .drivers.time import SystemClock
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
+from .peer_api import PeerError
 from .storage import InMemoryStorage
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 from .utils.producer import producer
-from .verification import PublicUrsula, NodeVerificationError, verify_staking_remote
+from .verification import PublicUrsula, verify_staking_remote
 
 import random
 from bisect import bisect_right
@@ -255,7 +256,7 @@ class Learner:
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
                     metadatas = await self._learn_from_node(node)
-            except (OSError, P2PNetworkError, trio.TooSlowError, NodeVerificationError) as e:
+            except (PeerError, trio.TooSlowError) as e:
                 if isinstance(e, trio.TooSlowError):
                     message = "timed out"
                 else:
@@ -284,7 +285,7 @@ class Learner:
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
-            except (P2PNetworkError, NodeVerificationError, trio.TooSlowError) as e:
+            except (PeerError, trio.TooSlowError) as e:
                 if isinstance(e, trio.TooSlowError):
                     message = "timed out"
                 else:

@@ -2,9 +2,10 @@ from nucypher_core import NodeMetadataPayload, NodeMetadata
 
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Peer, SecureContact
+from .peer_api import PeerError
 
 
-class NodeVerificationError(Exception):
+class NodeVerificationError(PeerError):
     pass
 
 
