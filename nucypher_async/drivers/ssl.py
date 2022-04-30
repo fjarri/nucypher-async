@@ -11,6 +11,7 @@ from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives.asymmetric import ec, padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509.oid import NameOID
 import trio
 
@@ -28,6 +29,10 @@ class SSLPrivateKey:
 
     def public_key(self):
         return SSLPublicKey(self._private_key.public_key())
+
+    @classmethod
+    def from_pem_bytes(cls, data: bytes, password: Optional[bytes] = None) -> "SSLPrivateKey":
+        return cls(load_pem_private_key(data, password=password))
 
     def to_pem_bytes(self, password: bytes) -> bytes:
         return self._private_key.private_bytes(

@@ -4,6 +4,7 @@ from pathlib import Path
 import attrs
 from appdirs import AppDirs
 
+from .drivers.ssl import SSLCertificate, SSLPrivateKey
 from .drivers.time import Clock, SystemClock
 from .drivers.identity import IdentityClient
 from .drivers.payment import PaymentClient
@@ -30,14 +31,15 @@ class UrsulaServerConfig:
     def from_config_values(
             cls,
             *,
-            domain,
             identity_endpoint,
             payment_endpoint,
             host,
-            port,
-            log_to_console,
-            log_to_file,
-            persistent_storage,
+            port=9151,
+            domain=Domain.MAINNET,
+            log_to_console=True,
+            log_to_file=True,
+            persistent_storage=True,
+            profile_name="ursula",
             identity_client_factory=IdentityClient.from_endpoint,
             payment_client_factory=PaymentClient.from_endpoint,
             ):
@@ -48,14 +50,16 @@ class UrsulaServerConfig:
         payment_client = payment_client_factory(payment_endpoint, domain)
 
         dirs = AppDirs(appname='nucypher-async')
+        log_dir = Path(dirs.user_log_dir).resolve() / profile_name
+        data_dir = Path(dirs.user_data_dir).resolve() / profile_name
 
         log_handlers = (
             ([ConsoleHandler()] if log_to_console else []) +
-            ([RotatingFileHandler(log_file=Path(dirs.user_log_dir).resolve() / 'nucypher.log')] if log_to_file else []))
+            ([RotatingFileHandler(log_file=log_dir / 'nucypher.log')] if log_to_file else []))
         logger = Logger(handlers=log_handlers)
 
         if persistent_storage:
-            storage = FileSystemStorage(dirs.user_data_dir)
+            storage = FileSystemStorage(data_dir)
         else:
             storage = InMemoryStorage()
 
@@ -93,7 +97,10 @@ class UrsulaServerConfig:
 class PorterServerConfig:
 
     domain: Domain
-    contact: Contact
+    host: str
+    port: int
+    ssl_certificate: SSLCertificate
+    ssl_private_key: SSLPrivateKey
     identity_client: IdentityClient
     peer_client: PeerClient
     parent_logger: Logger
@@ -105,29 +112,38 @@ class PorterServerConfig:
     def from_config_values(
             cls,
             *,
-            domain,
             identity_endpoint,
-            host,
-            port,
-            log_to_console,
-            log_to_file,
-            persistent_storage,
+            ssl_certificate_path,
+            ssl_private_key_path,
+            profile_name="porter",
+            domain=Domain.MAINNET,
+            log_to_console=True,
+            log_to_file=True,
+            persistent_storage=True,
+            host="0.0.0.0",
+            port=443,
             identity_client_factory=IdentityClient.from_endpoint,
             ):
 
-        contact = Contact(host, port)
-
         identity_client = identity_client_factory(identity_endpoint, domain)
 
+        with open(ssl_certificate, 'rb') as f:
+            ssl_certificate = SSLCertificate.from_pem_bytes(f.read())
+
+        with open(ssl_private_key, 'rb') as f:
+            ssl_private_key = SSLPrivateKey.from_pem_bytes(f.read())
+
         dirs = AppDirs(appname='nucypher-async')
+        log_dir = Path(dirs.user_log_dir).resolve() / profile_name
+        data_dir = Path(dirs.user_data_dir).resolve() / profile_name
 
         log_handlers = (
             ([ConsoleHandler()] if log_to_console else []) +
-            ([RotatingFileHandler(log_file=Path(dirs.user_log_dir).resolve() / 'porter.log')] if log_to_file else []))
+            ([RotatingFileHandler(log_file=log_dir / 'porter.log')] if log_to_file else []))
         logger = Logger(handlers=log_handlers)
 
         if persistent_storage:
-            storage = FileSystemStorage(dirs.user_data_dir)
+            storage = FileSystemStorage(data_dir)
         else:
             storage = InMemoryStorage()
 
@@ -150,7 +166,10 @@ class PorterServerConfig:
 
         return cls(
             domain=domain,
-            contact=contact,
+            host=host,
+            port=port,
+            ssl_certificate=ssl_certificate,
+            ssl_private_key=ssl_private_key,
             identity_client=identity_client,
             peer_client=peer_client,
             parent_logger=logger,

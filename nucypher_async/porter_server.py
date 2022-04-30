@@ -26,19 +26,9 @@ from .utils.logging import NULL_LOGGER
 class PorterServer(ASGIServer):
 
     def __init__(self, config):
-
         self._clock = config.clock
-        self.domain = config.domain
-
-        master_key = MasterKey.random()
-        contact = config.contact
-        # TODO: use a proper CA cert
-        self._ssl_private_key = master_key.make_ssl_private_key()
-        certificate = SSLCertificate.self_signed(self._clock, self._ssl_private_key, contact.host)
-        self._ssl_contact = SecureContact(contact, certificate)
-
+        self._config = config
         self._logger = config.parent_logger.get_child('PorterServer')
-
         self.learner = Learner(
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
@@ -51,13 +41,16 @@ class PorterServer(ASGIServer):
 
         self.started = False
 
-    def ssl_contact(self):
-        return self._ssl_contact
+    def host_and_port(self) -> (str, int):
+        return self._config.host, self._config.port
 
-    def ssl_private_key(self):
-        return self._ssl_private_key
+    def ssl_certificate(self) -> SSLCertificate:
+        return self._config.ssl_certificate
 
-    def into_app(self):
+    def ssl_private_key(self) -> SSLPrivateKey:
+        return self._config.ssl_private_key
+
+    def into_asgi_app(self):
         return make_porter_app(self)
 
     async def start(self, nursery):
