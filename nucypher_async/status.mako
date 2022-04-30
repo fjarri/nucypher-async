@@ -92,7 +92,7 @@
         %if is_active_peer:
         <tr>
             <td></td>
-            <td><span class="this-node monospace">${server.staking_provider_address}</span></td>
+            <td><span class="this-node monospace">${server._node.staking_provider_address}</span></td>
         </tr>
         %endif
         <tr>
@@ -115,12 +115,12 @@
         %endif
         <tr>
             <td><i>Domain:</i></td>
-            <td><span class="monospace">${ server.domain.value }</span></td>
+            <td><span class="monospace">${ server.learner.domain.value }</span></td>
         </tr>
         %if is_active_peer:
         <tr>
             <td><i>Metadata created:</i></td>
-            <td>${arrow.get(server._metadata.payload.timestamp_epoch).humanize(now)}</td>
+            <td>${arrow.get(server._node.metadata.payload.timestamp_epoch).humanize(now)}</td>
         </tr>
         %endif
         <tr>

@@ -186,9 +186,8 @@ class IdentityClientSession:
             max_staking_providers: int = 0) -> Dict[IdentityAddress, AmountT]:
         _total_staked, staking_providers_data = await self._backend_session.eth_call(
             self._pre_application.read.getActiveStakingProviders(start_index, max_staking_providers))
-
         staking_providers = {
-            IdentityAddress(bytes(address)): AmountT.wei(amount)
+            IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
             for address, amount in staking_providers_data
         }
 

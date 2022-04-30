@@ -127,10 +127,10 @@ class PorterServerConfig:
 
         identity_client = identity_client_factory(identity_endpoint, domain)
 
-        with open(ssl_certificate, 'rb') as f:
+        with open(ssl_certificate_path, 'rb') as f:
             ssl_certificate = SSLCertificate.from_pem_bytes(f.read())
 
-        with open(ssl_private_key, 'rb') as f:
+        with open(ssl_private_key_path, 'rb') as f:
             ssl_private_key = SSLPrivateKey.from_pem_bytes(f.read())
 
         dirs = AppDirs(appname='nucypher-async')

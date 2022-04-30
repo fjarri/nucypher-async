@@ -42,13 +42,13 @@ async def call_endpoint(endpoint_future):
     return result_bytes, http.HTTPStatus.OK
 
 
-async def wrap_in_response(logger, endpoint_future):
+async def peer_api_call(logger, endpoint_future):
     try:
         result_bytes, status_code = await call_endpoint(endpoint_future)
-    except Exception as e:
+    except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
-        return await make_response(str(e), http.HTTPStatus.INTERNAL_SERVER_ERROR)
+        return await make_response(str(exc), http.HTTPStatus.INTERNAL_SERVER_ERROR)
     return await make_response(result_bytes, status_code)
 
 
@@ -92,33 +92,54 @@ def make_peer_asgi_app(api: PeerAPI):
     @app.route("/ping")
     async def ping():
         req = await QuartRequest.from_contextvar()
-        return await wrap_in_response(logger, api.endpoint_ping(req))
+        return await peer_api_call(logger, api.endpoint_ping(req))
 
     @app.route("/node_metadata")
     async def node_metadata_get():
         req = await QuartRequest.from_contextvar()
-        return await wrap_in_response(logger, api.endpoint_node_metadata_get(req))
+        return await peer_api_call(logger, api.endpoint_node_metadata_get(req))
 
     @app.route("/node_metadata", methods=['POST'])
     async def node_metadata_post():
         req = await QuartRequest.from_contextvar()
-        return await wrap_in_response(logger, api.endpoint_node_metadata_post(req))
+        return await peer_api_call(logger, api.endpoint_node_metadata_post(req))
 
     @app.route("/public_information")
     async def public_information():
         req = await QuartRequest.from_contextvar()
-        return await wrap_in_response(logger, api.endpoint_public_information(req))
+        return await peer_api_call(logger, api.endpoint_public_information(req))
 
     @app.route("/reencrypt", methods=["POST"])
     async def reencrypt():
         req = await QuartRequest.from_contextvar()
-        return await wrap_in_response(logger, api.endpoint_reencrypt(req))
+        return await peer_api_call(logger, api.endpoint_reencrypt(req))
 
     @app.route("/status")
     async def status():
-        return await wrap_in_response(logger, api.endpoint_status())
+        # This is technically not a peer API, so we need special handling
+        return await rest_api_call(logger, api.endpoint_status())
 
     return app
+
+
+class HTTPError(Exception):
+
+    def __init__(self, message, status_code):
+        super().__init__(message, status_code)
+        self.message = message
+        self.status_code = status_code
+
+
+async def rest_api_call(logger, endpoint_future):
+    try:
+        result_str = await endpoint_future
+    except HTTPError as exc:
+        return await make_response(exc.message, exc.status_code)
+    except Exception as exc:
+        # A catch-all for any unexpected errors
+        logger.error("Uncaught exception:", exc_info=True)
+        return await make_response(str(exc), http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    return await make_response(result_str, http.HTTPStatus.OK)
 
 
 def make_porter_app(porter_server):
@@ -137,17 +158,18 @@ def make_porter_app(porter_server):
 
     @app.route('/get_ursulas')
     async def get_ursulas():
-        get_ursulas_request = await request.json or {}
-        get_ursulas_request.update(request.args)
-        return await wrap_in_response(logger, porter_server.endpoint_get_ursulas(get_ursulas_request))
+        json_request = await request.json or {}
+        json_request.update(request.args)
+        return await rest_api_call(logger, porter_server.endpoint_get_ursulas(json_request))
 
     @app.route("/retrieve_cfrags", methods=['POST'])
     async def retrieve_cfrags():
-        retrieve_cfrags_request = await request.json
-        return await wrap_in_response(logger, porter_server.endpoint_retrieve_cfrags(retrieve_cfrags_request))
+        json_request = await request.json or {}
+        json_request.update(request.args)
+        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(json_request))
 
-    @app.route("/status")
+    @app.route("/")
     async def status():
-        return await wrap_in_response(logger, porter_server.endpoint_status())
+        return await rest_api_call(logger, porter_server.endpoint_status())
 
     return app

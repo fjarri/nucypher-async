@@ -3,6 +3,7 @@ from nucypher_core import NodeMetadataPayload, NodeMetadata
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Peer, SecureContact
 from .peer_api import PeerError
+from .domain import Domain
 
 
 class NodeVerificationError(PeerError):
@@ -110,6 +111,7 @@ class PublicUrsula:
         self.operator_address = IdentityAddress(payload.derive_operator_address())
         self.verifying_key = payload.verifying_key
         self.encrypting_key = payload.encrypting_key
+        self.domain = Domain.from_string(payload.domain)
 
         self.secure_contact = peer.secure_contact
 

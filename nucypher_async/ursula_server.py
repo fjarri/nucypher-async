@@ -55,7 +55,7 @@ class UrsulaServer(PeerServer, PeerAPI):
                     contact=config.contact,
                     domain=config.domain)
             except Exception as e:
-                self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e))
+                self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e), exc_info=True)
                 metadata = None
 
         if metadata is None:

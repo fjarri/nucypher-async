@@ -10,12 +10,12 @@ from nucypher_core import (
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
-from .drivers.asgi_app import make_porter_app
+from .drivers.asgi_app import make_porter_app, HTTPError
 from .drivers.asgi_server import ASGIServer
-from .drivers.peer import Contact, SecureContact, RPCError
+from .drivers.peer import Contact, SecureContact
 from .drivers.time import Clock
 from .master_key import MasterKey
-from .learner import Learner, verify_metadata_shared
+from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
@@ -118,7 +118,8 @@ class PorterServer(ASGIServer):
             if len(nodes) < quantity:
                 overhead = max(1, (quantity - len(nodes)) // 5)
                 async with self.learner.random_verified_nodes_iter(
-                        token=token, exclude=exclude_ursulas, amount=quantity, overhead=overhead, verified_within=60) as aiter:
+                        exclude=exclude_ursulas, amount=quantity,
+                        overhead=overhead, verified_within=60) as aiter:
                     async for node in aiter:
                         nodes.append(node)
 
@@ -135,17 +136,17 @@ class PorterServer(ASGIServer):
             include_ursulas = [IdentityAddress.from_hex(address) for address in include_ursulas]
             exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
         except Exception as e:
-            raise RPCError(str(e), http.HTTPStatus.BAD_REQUEST)
+            raise HTTPError(str(e), http.HTTPStatus.BAD_REQUEST)
 
         if quantity > len(self.learner.fleet_sensor._staking_providers):
-            raise RPCError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
+            raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
         try:
             with trio.fail_after(5):
                 nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
 
         except trio.TooSlowError as e:
-            raise RPCError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
+            raise HTTPError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
 
         node_list = [dict(
             checksum_address=node.staking_provider_address.checksum,

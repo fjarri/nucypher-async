@@ -13,6 +13,7 @@ import arrow
 import httpx
 from nucypher_core import (
     NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse)
+import trio
 
 from .ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
 from .asgi_server import ASGIServer, ASGIServerHandle
@@ -202,7 +203,7 @@ class Peer:
     @staticmethod
     def _get_certificate(payload):
         try:
-            certificate = SSLCertificate.from_der_bytes(payload.certificate_der)
+            return SSLCertificate.from_der_bytes(payload.certificate_der)
         except Exception as e:
             raise PeerVerificationError(f"Invalid certificate bytes in the payload: {e}") from e
 

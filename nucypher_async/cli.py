@@ -41,7 +41,7 @@ async def make_ursula_server(config_path, nucypher_password, geth_password):
     ursula = Ursula(master_key=key, identity_account=acc)
 
     config = UrsulaServerConfig.from_config_values(
-        profile_name=config.get('profile_name', 'ursula' + config['domain']),
+        profile_name=config.get('profile_name', 'ursula-' + config['domain']),
         domain=Domain.from_string(config['domain']),
         host=config['rest_host'],
         port=config['rest_port'],
@@ -63,7 +63,7 @@ def make_porter_server(config_path):
         config = json.load(f)
 
     config = PorterServerConfig.from_config_values(
-        profile_name=config.get('profile_name', 'porter' + config['domain']),
+        profile_name=config.get('profile_name', 'porter-' + config['domain']),
         domain=Domain.from_string(config['domain']),
         identity_endpoint=config['eth_provider_uri'],
         ssl_certificate_path=config['ssl_certificate'],
