@@ -235,11 +235,11 @@ class Learner:
             "Learning from {} ({})",
             node.secure_contact.contact, node.staking_provider_address)
 
-        metadata_to_announce = [self._my_metadata] if self._my_metadata else []
-
-        # TODO: use `node_metadata/GET` for the cases when the Learner is not a node itself
-        request = MetadataRequest(self.fleet_state.checksum, metadata_to_announce)
-        metadata_response = await self._peer_client.node_metadata_post(node.secure_contact, request)
+        if self._my_node:
+            request = MetadataRequest(self.fleet_state.checksum, [self._my_metadata])
+            metadata_response = await self._peer_client.node_metadata_post(node.secure_contact, request)
+        else:
+            metadata_response = await self._peer_client.node_metadata_get(node.secure_contact)
 
         try:
             payload = metadata_response.verify(node.verifying_key)

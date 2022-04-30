@@ -177,6 +177,11 @@ class PeerClient:
             response = await client.get(secure_contact.uri + '/ping')
         return response.text
 
+    async def node_metadata_get(self, secure_contact: SecureContact):
+        async with self._http_client(secure_contact.public_key._certificate) as client:
+            response = await client.get(secure_contact.uri + '/node_metadata')
+        return unwrap_bytes(response, MetadataResponse)
+
     async def node_metadata_post(self, secure_contact: SecureContact, metadata_request: MetadataRequest):
         async with self._http_client(secure_contact.public_key._certificate) as client:
             response = await client.post(secure_contact.uri + '/node_metadata', data=bytes(metadata_request))
