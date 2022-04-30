@@ -88,16 +88,16 @@ class Learner:
         if this_node:
             my_address = this_node.staking_provider_address
             my_contact = this_node.secure_contact.contact
-            my_metadata = this_node.metadata
+            # Only need to maintain it for compatibility purposes if we are a peer ourselves.
+            fleet_state = FleetState(self._clock, this_node.metadata)
         else:
             my_address = None
             my_contact = None
-            my_metadata = None
+            fleet_state = None
 
-        self._my_metadata = my_metadata
         self._my_node = this_node
 
-        self.fleet_state = FleetState(self._clock, my_metadata)
+        self.fleet_state = fleet_state
         self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact)
         self._seed_contacts = seed_contacts or []
 
@@ -236,7 +236,7 @@ class Learner:
             node.secure_contact.contact, node.staking_provider_address)
 
         if self._my_node:
-            request = MetadataRequest(self.fleet_state.checksum, [self._my_metadata])
+            request = MetadataRequest(self.fleet_state.checksum, [self._my_node.metadata])
             metadata_response = await self._peer_client.node_metadata_post(node.secure_contact, request)
         else:
             metadata_response = await self._peer_client.node_metadata_get(node.secure_contact)
@@ -265,13 +265,15 @@ class Learner:
                     "Error when trying to learn from {} ({}): {}",
                     node.secure_contact.contact, node.staking_provider_address.checksum, message)
                 self.fleet_sensor.report_bad_contact(node.secure_contact.contact)
-                self.fleet_state.remove_contact(node.secure_contact.contact)
+                if self._my_node:
+                    self.fleet_state.remove_contact(node.secure_contact.contact)
             else:
                 self._logger.debug(
                     "Learned from {} ({})",
                     node.secure_contact.contact, node.staking_provider_address.checksum)
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
-                self.fleet_state.add_metadatas(metadatas)
+                if self._my_node:
+                    self.fleet_state.add_metadatas(metadatas)
             finally:
                 result.set(None)
 
@@ -292,11 +294,13 @@ class Learner:
                     message = str(e)
                 self._logger.debug("Error when trying to verify {}: {}", contact, message)
                 self.fleet_sensor.report_bad_contact(contact)
-                self.fleet_state.remove_contact(contact)
+                if self._my_node:
+                    self.fleet_state.remove_contact(contact)
             else:
                 self._logger.debug("Verified {}: {}", contact, node)
                 self.fleet_sensor.report_verified_node(contact, node, staked_amount)
-                self.fleet_state.add_metadatas([node.metadata])
+                if self._my_node:
+                    self.fleet_state.add_metadatas([node.metadata])
             finally:
                 result.set(node)
 
@@ -305,13 +309,15 @@ class Learner:
     # External API
 
     def metadata_to_announce(self):
-        my_metadata = [self._my_metadata] if self._my_metadata else []
+        my_metadata = [self._my_node.metadata] if self._my_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
     def passive_learning(self, sender_host, metadatas):
 
         # Unfiltered metadata goes into FleetState for compatibility
-        self.fleet_state.add_metadatas(metadatas)
+        if self._my_node:
+            self.fleet_state.add_metadatas(metadatas)
+
         new_contacts_added = self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
         if new_contacts_added:
