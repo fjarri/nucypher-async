@@ -142,18 +142,18 @@ class UrsulaServer(PeerServer, PeerAPI):
 
         self.started = False
 
-    async def endpoint_ping(self, request):
-        return request.remote_host()
+    async def endpoint_ping(self, remote_host: str) -> bytes:
+        return remote_host.encode()
 
-    async def endpoint_node_metadata_get(self, _request):
+    async def endpoint_node_metadata_get(self):
         response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                    announce_nodes=self.learner.metadata_to_announce())
         response = MetadataResponse(self.ursula.signer, response_payload)
         return bytes(response)
 
-    async def endpoint_node_metadata_post(self, request):
+    async def endpoint_node_metadata_post(self, remote_host, request_bytes):
         try:
-            metadata_request = MetadataRequest.from_bytes(request.data())
+            metadata_request = MetadataRequest.from_bytes(request_bytes)
         except ValueError as exc:
             raise MessageFormatError.for_message(MetadataRequest, exc) from exc
 
@@ -165,20 +165,20 @@ class UrsulaServer(PeerServer, PeerAPI):
 
         new_metadatas = metadata_request.announce_nodes
 
-        next_verification_in = self.learner.passive_learning(request.remote_host(), new_metadatas)
+        next_verification_in = self.learner.passive_learning(remote_host, new_metadatas)
         if next_verification_in is not None:
             self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
             # TODO: don't reset if there's less than a certain timeout before awakening
             self._verification_task.reset(next_verification_in)
 
-        return await self.endpoint_node_metadata_get(request)
+        return await self.endpoint_node_metadata_get()
 
-    async def endpoint_public_information(self, _request):
+    async def endpoint_public_information(self):
         return bytes(self._node.metadata)
 
-    async def endpoint_reencrypt(self, request):
+    async def endpoint_reencrypt(self, request_bytes):
         try:
-            reencryption_request = ReencryptionRequest.from_bytes(request.data())
+            reencryption_request = ReencryptionRequest.from_bytes(request_bytes)
         except ValueError as exc:
             raise MessageFormatError.for_message(ReencryptionRequest, exc) from exc
 

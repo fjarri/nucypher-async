@@ -55,16 +55,6 @@ class InactivePolicy(PeerError):
         return PeerErrorCode.INACTIVE_POLICY
 
 
-class PeerRequest(ABC):
-
-    @abstractmethod
-    def remote_host(self) -> str:
-        ...
-
-    def data(self) -> bytes:
-        ...
-
-
 class PeerAPI(ABC):
 
     @abstractmethod
@@ -76,23 +66,23 @@ class PeerAPI(ABC):
         ...
 
     @abstractmethod
-    async def endpoint_ping(self, req: PeerRequest) -> str:
+    async def endpoint_ping(self, remote_host: str) -> str:
         ...
 
     @abstractmethod
-    async def endpoint_node_metadata_get(self, req: PeerRequest) -> bytes:
+    async def endpoint_node_metadata_get(self) -> bytes:
         ...
 
     @abstractmethod
-    async def endpoint_node_metadata_post(self, req: PeerRequest) -> bytes:
+    async def endpoint_node_metadata_post(self, remote_host: str, request_bytes: bytes) -> bytes:
         ...
 
     @abstractmethod
-    async def endpoint_public_information(self, req: PeerRequest) -> bytes:
+    async def endpoint_public_information(self) -> bytes:
         ...
 
     @abstractmethod
-    async def endpoint_reencrypt(self, req: PeerRequest) -> bytes:
+    async def endpoint_reencrypt(self, request_bytes: bytes) -> bytes:
         ...
 
     # NOTE: This method really does not belong in the PeerAPI, because it is strictly HTTP,
@@ -100,7 +90,7 @@ class PeerAPI(ABC):
     # But the way the protocol works now, it is hardcoded that the status page
     # should be available at the same port as the rest of the API, so it has to stay here.
     @abstractmethod
-    async def endpoint_status(self, req: PeerRequest) -> str:
+    async def endpoint_status(self) -> str:
         ...
 
     # TODO: this is a little backwards; the app encompasses the server state,

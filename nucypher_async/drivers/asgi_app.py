@@ -22,7 +22,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
 
-from ..peer_api import PeerRequest, PeerAPI, PeerError, InactivePolicy
+from ..peer_api import PeerAPI, PeerError, InactivePolicy
 
 
 _HTTP_STATUS = {
@@ -67,23 +67,6 @@ def make_lifespan(on_startup, on_shutdown):
     return lifespan_context
 
 
-class StarletteRequest(PeerRequest):
-
-    @classmethod
-    async def from_request(cls, request):
-        return cls(request.client.host, await request.body())
-
-    def __init__(self, remote_host, data):
-        self._remote_host = remote_host
-        self._data = data
-
-    def remote_host(self):
-        return self._remote_host
-
-    def data(self):
-        return self._data
-
-
 def make_peer_asgi_app(api: PeerAPI):
     """
     Creates and returns an ASGI app.
@@ -92,24 +75,22 @@ def make_peer_asgi_app(api: PeerAPI):
     logger = api.logger().get_child('App')
 
     async def ping(request):
-        req = await StarletteRequest.from_request(request)
-        return await peer_api_call(logger, api.endpoint_ping(req))
+        return await peer_api_call(logger, api.endpoint_ping(request.client.host))
 
     async def node_metadata_get(request):
-        req = await StarletteRequest.from_request(request)
-        return await peer_api_call(logger, api.endpoint_node_metadata_get(req))
+        return await peer_api_call(logger, api.endpoint_node_metadata_get())
 
     async def node_metadata_post(request):
-        req = await StarletteRequest.from_request(request)
-        return await peer_api_call(logger, api.endpoint_node_metadata_post(req))
+        remote_host = request.client.host
+        request_bytes = await request.body()
+        return await peer_api_call(logger, api.endpoint_node_metadata_post(remote_host, request_bytes))
 
     async def public_information(request):
-        req = await StarletteRequest.from_request(request)
-        return await peer_api_call(logger, api.endpoint_public_information(req))
+        return await peer_api_call(logger, api.endpoint_public_information())
 
     async def reencrypt(request):
-        req = await StarletteRequest.from_request(request)
-        return await peer_api_call(logger, api.endpoint_reencrypt(req))
+        request_bytes = await request.body()
+        return await peer_api_call(logger, api.endpoint_reencrypt(request_bytes))
 
     async def status(request):
         # This is technically not a peer API, so we need special handling
