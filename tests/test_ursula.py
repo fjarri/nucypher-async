@@ -4,16 +4,14 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
-from nucypher_async.drivers.peer import Contact
+from nucypher_async.drivers.peer import Contact, PeerServerWrapper
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.domain import Domain
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.learner import Learner
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
-
-from .mocks import MockNetwork, MockPeerClient, MockServerHandle
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient
 
 
 @pytest.fixture
@@ -48,16 +46,14 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
         server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
         servers.append(server)
-        mock_network.add_server(server)
+        mock_network.add_server(PeerServerWrapper(server))
 
+    await mock_network.start_all()
     yield servers
+    await mock_network.stop_all()
 
 
 async def test_learning(nursery, autojump_clock, ursula_servers):
-
-    handles = [MockServerHandle(server) for server in ursula_servers]
-    for handle in handles:
-        await nursery.start(handle)
 
     while True:
         # Wait multiple learning cycles
@@ -65,8 +61,8 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
         await trio.sleep(100)
 
         known_nodes = {
-            handle.server._node.staking_provider_address: handle.server.learner.metadata_to_announce()
-            for handle in handles}
+            server._node.staking_provider_address: server.learner.metadata_to_announce()
+            for server in ursula_servers}
 
         # Each Ursula should know about every other Ursula by now.
         if all(len(nodes) == 10 for nodes in known_nodes.values()):

@@ -13,11 +13,14 @@ In a sense, this is a "server" counterpart of ``PeerClient``.
 """
 
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
 import http
 import sys
 
-from quart_trio import QuartTrio
-from quart import make_response, request
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
+import trio
 
 from ..peer_api import PeerRequest, PeerAPI, PeerError, InactivePolicy
 
@@ -48,15 +51,27 @@ async def peer_api_call(logger, endpoint_future):
     except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
-        return await make_response(str(exc), http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return await make_response(result_bytes, status_code)
+        return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    return Response(result_bytes, status_code=status_code)
 
 
-class QuartRequest(PeerRequest):
+def make_lifespan(on_startup, on_shutdown):
+
+    @asynccontextmanager
+    async def lifespan_context(app):
+        async with trio.open_nursery() as nursery:
+            await on_startup(nursery)
+            yield
+            await on_shutdown()
+
+    return lifespan_context
+
+
+class StarletteRequest(PeerRequest):
 
     @classmethod
-    async def from_contextvar(cls):
-        return cls(request.remote_addr, await request.get_data(cache=False))
+    async def from_request(cls, request):
+        return cls(request.client.host, await request.body())
 
     def __init__(self, remote_host, data):
         self._remote_host = remote_host
@@ -74,50 +89,50 @@ def make_peer_asgi_app(api: PeerAPI):
     Creates and returns an ASGI app.
     """
 
-    # Since we need to use an externally passed context in the app (``ursula_server``),
-    # we have to create the app inside a function.
-
-    app = QuartTrio('ursula_async')
-
     logger = api.logger().get_child('App')
 
-    @app.before_serving
-    async def on_startup():
-        await api.start(app.nursery)
+    async def ping(request):
+        req = await StarletteRequest.from_request(request)
+        return await peer_api_call(logger, api.endpoint_ping(req))
 
-    @app.after_serving
+    async def node_metadata_get(request):
+        req = await StarletteRequest.from_request(request)
+        return await peer_api_call(logger, api.endpoint_node_metadata_get(req))
+
+    async def node_metadata_post(request):
+        req = await StarletteRequest.from_request(request)
+        return await peer_api_call(logger, api.endpoint_node_metadata_post(req))
+
+    async def public_information(request):
+        req = await StarletteRequest.from_request(request)
+        return await peer_api_call(logger, api.endpoint_public_information(req))
+
+    async def reencrypt(request):
+        req = await StarletteRequest.from_request(request)
+        return await peer_api_call(logger, api.endpoint_reencrypt(req))
+
+    async def status(request):
+        # This is technically not a peer API, so we need special handling
+        return await rest_api_call(logger, api.endpoint_status())
+
+    async def on_startup(nursery):
+        await api.start(nursery)
+
     async def on_shutdown():
         await api.stop()
 
-    @app.route("/ping")
-    async def ping():
-        req = await QuartRequest.from_contextvar()
-        return await peer_api_call(logger, api.endpoint_ping(req))
+    routes = [
+        Route("/ping", ping),
+        Route("/node_metadata", node_metadata_get),
+        Route("/node_metadata", node_metadata_post, methods=["POST"]),
+        Route("/public_information", public_information),
+        Route("/reencrypt", reencrypt, methods=["POST"]),
+        Route("/status", status),
+    ]
 
-    @app.route("/node_metadata")
-    async def node_metadata_get():
-        req = await QuartRequest.from_contextvar()
-        return await peer_api_call(logger, api.endpoint_node_metadata_get(req))
-
-    @app.route("/node_metadata", methods=['POST'])
-    async def node_metadata_post():
-        req = await QuartRequest.from_contextvar()
-        return await peer_api_call(logger, api.endpoint_node_metadata_post(req))
-
-    @app.route("/public_information")
-    async def public_information():
-        req = await QuartRequest.from_contextvar()
-        return await peer_api_call(logger, api.endpoint_public_information(req))
-
-    @app.route("/reencrypt", methods=["POST"])
-    async def reencrypt():
-        req = await QuartRequest.from_contextvar()
-        return await peer_api_call(logger, api.endpoint_reencrypt(req))
-
-    @app.route("/status")
-    async def status():
-        # This is technically not a peer API, so we need special handling
-        return await rest_api_call(logger, api.endpoint_status())
+    app = Starlette(
+        lifespan=make_lifespan(on_startup, on_shutdown),
+        routes=routes)
 
     return app
 
@@ -134,42 +149,48 @@ async def rest_api_call(logger, endpoint_future):
     try:
         result_str = await endpoint_future
     except HTTPError as exc:
-        return await make_response(exc.message, exc.status_code)
+        return Response(exc.message, status_code=exc.status_code)
     except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
-        return await make_response(str(exc), http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return await make_response(result_str, http.HTTPStatus.OK)
+        return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    if isinstance(result_str, str):
+        return Response(result_str)
+    else:
+        return JSONResponse(result_str)
 
 
 def make_porter_app(porter_server):
 
-    app = QuartTrio('porter_async')
-
     logger = porter_server._logger.get_child('App')
 
-    @app.before_serving
-    async def on_startup():
-        await porter_server.start(app.nursery)
-
-    @app.after_serving
-    async def on_shutdown():
-        porter_server.stop()
-
-    @app.route('/get_ursulas')
-    async def get_ursulas():
-        json_request = await request.json or {}
-        json_request.update(request.args)
+    async def get_ursulas(request):
+        json_request = await request.json() if await request.body() else {}
+        json_request.update(request.query_params)
         return await rest_api_call(logger, porter_server.endpoint_get_ursulas(json_request))
 
-    @app.route("/retrieve_cfrags", methods=['POST'])
-    async def retrieve_cfrags():
-        json_request = await request.json or {}
-        json_request.update(request.args)
+    async def retrieve_cfrags(request):
+        json_request = await request.json() if await request.body() else {}
+        json_request.update(request.query_params)
         return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(json_request))
 
-    @app.route("/")
-    async def status():
+    async def status(request):
         return await rest_api_call(logger, porter_server.endpoint_status())
+
+    async def on_startup(nursery):
+        await porter_server.start(nursery)
+
+    async def on_shutdown():
+        await porter_server.stop()
+
+    routes = [
+        Route("/get_ursulas", get_ursulas),
+        Route("/retrieve_cfrags", retrieve_cfrags),
+        Route("/status", status),
+    ]
+
+    app = Starlette(
+        lifespan=make_lifespan(on_startup, on_shutdown),
+        routes=routes)
 
     return app

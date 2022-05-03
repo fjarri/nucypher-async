@@ -3,8 +3,7 @@ import pytest
 import nucypher_async.utils.logging as logging
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
 from nucypher_async.ursula import Ursula
-
-from .mocks import MockNetwork
+from nucypher_async.mocks import MockNetwork
 
 
 @pytest.fixture(scope='session')
@@ -26,8 +25,8 @@ def ursulas():
 
 
 @pytest.fixture
-def mock_network():
-    yield MockNetwork()
+async def mock_network(nursery):
+    yield MockNetwork(nursery)
 
 
 @pytest.fixture

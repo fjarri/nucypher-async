@@ -5,7 +5,7 @@ import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.payment import AmountMATIC
-from nucypher_async.drivers.peer import Contact
+from nucypher_async.drivers.peer import Contact, PeerServerWrapper
 from nucypher_async.domain import Domain
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.ursula import Ursula
@@ -13,9 +13,7 @@ from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob, encrypt
 from nucypher_async.learner import Learner
 from nucypher_async.storage import InMemoryStorage
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
-
-from .mocks import MockNetwork, MockPeerClient, MockServerHandle
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient
 
 
 @pytest.fixture
@@ -43,7 +41,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
         server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
         servers.append(server)
-        mock_network.add_server(server)
+        mock_network.add_server(PeerServerWrapper(server))
 
     # pre-learn about other Ursulas
     for i in range(10):
@@ -51,13 +49,12 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
         stakes = [AmountT.ether(40000) for server in servers]
         servers[i].learner._add_verified_nodes(nodes, stakes)
 
+    await mock_network.start_all()
     yield servers
+    await mock_network.stop_all()
 
 
 async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger):
-    handles = [MockServerHandle(server) for server in ursula_servers]
-    for handle in handles:
-        await nursery.start(handle)
 
     peer_client = MockPeerClient(mock_network, '127.0.0.1')
     learner = Learner(
@@ -78,10 +75,6 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
 
 async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client,
         mock_payment_client):
-
-    handles = [MockServerHandle(server) for server in ursula_servers]
-    for handle in handles:
-        await nursery.start(handle)
 
     alice = Alice()
     bob = Bob()

@@ -184,7 +184,7 @@ class PeerClient:
 
     async def node_metadata_post(self, secure_contact: SecureContact, metadata_request: MetadataRequest):
         async with self._http_client(secure_contact.public_key._certificate) as client:
-            response = await client.post(secure_contact.uri + '/node_metadata', data=bytes(metadata_request))
+            response = await client.post(secure_contact.uri + '/node_metadata', content=bytes(metadata_request))
         return unwrap_bytes(response, MetadataResponse)
 
     async def public_information(self, secure_contact: SecureContact, clock):
@@ -195,7 +195,7 @@ class PeerClient:
 
     async def reencrypt(self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest):
         async with self._http_client(secure_contact.public_key._certificate) as client:
-            response = await client.post(secure_contact.uri + '/reencrypt', data=bytes(reencryption_request))
+            response = await client.post(secure_contact.uri + '/reencrypt', content=bytes(reencryption_request))
         return unwrap_bytes(response, ReencryptionResponse)
 
 

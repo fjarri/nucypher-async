@@ -98,6 +98,7 @@ class ASGIServerHandle:
 
     def __init__(self, server: ASGIServer):
         self.server = server
+        self.app = server.into_asgi_app()
         self._shutdown_event = trio.Event()
 
     async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
@@ -108,8 +109,7 @@ class ASGIServerHandle:
         Supports start-up reporting when invoked via `nursery.start()`.
         """
         config = make_config(self.server)
-        app = self.server.into_asgi_app()
-        await serve(app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status)
+        await serve(self.app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status)
 
     def shutdown(self):
         self._shutdown_event.set()
