@@ -54,8 +54,9 @@ class MockNetwork:
             await manager.run(self.nursery)
 
     async def stop_all(self):
-        for certificate, manager in self.known_servers.values():
-            await manager.shutdown()
+        async with trio.open_nursery() as nursery:
+            for certificate, manager in self.known_servers.values():
+                nursery.start_soon(manager.shutdown)
 
 
 class MockHTTPClient:

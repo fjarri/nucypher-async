@@ -18,7 +18,7 @@ from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
 from .peer_api import PeerError
 from .storage import InMemoryStorage
-from .utils import BackgroundTask
+from .utils import BackgroundTask, wait_for_any
 from .utils.logging import NULL_LOGGER
 from .utils.producer import producer
 from .verification import PublicUrsula, verify_staking_remote
@@ -120,7 +120,7 @@ class Learner:
         async with trio.open_nursery() as nursery:
             while True:
 
-                new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+                new_verified_nodes_event = self.fleet_sensor.new_verified_nodes_event
 
                 for address in list(addresses):
                     node_entry = self.fleet_sensor.verified_node_entries.get(address, None)
@@ -146,7 +146,7 @@ class Learner:
                 # If not, force run verification/learning of random nodes
                 while not new_verified_nodes_event.is_set():
 
-                    new_verified_nodes_event = self.fleet_sensor._new_verified_nodes
+                    new_verified_nodes_event = self.fleet_sensor.new_verified_nodes_event
 
                     # TODO: we can run several instances here, learning rounds are supposed to be reentrable
                     await self.verification_round()
@@ -317,13 +317,8 @@ class Learner:
         # Unfiltered metadata goes into FleetState for compatibility
         if self._my_node:
             self.fleet_state.add_metadatas(metadatas)
-
-        new_contacts_added = self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
-
-        if new_contacts_added:
-            return self.fleet_sensor.next_verification_in()
-        else:
-            return None
+        self._logger.debug("Passive learning from {} {}", sender_host, [m.payload.port for m in metadatas])
+        self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
     async def load_staking_providers_and_report(self):
         try:
@@ -336,7 +331,9 @@ class Learner:
 
         self.fleet_sensor.report_staking_providers(providers)
 
-    async def seed_round(self):
+    async def seed_round(self, must_succeed=False):
+        self._logger.debug("Starting a seed round")
+
         if not self._seed_contacts:
             return
 
@@ -345,9 +342,12 @@ class Learner:
             if not self.fleet_sensor.is_empty():
                 return
 
-        raise RuntimeError("Failed to learn from the seed nodes")
+        if must_succeed:
+            raise RuntimeError("Failed to learn from the seed nodes")
 
     async def verification_round(self, new_contacts_num=10, old_contacts_num=10):
+        self._logger.debug("Starting a verification round")
+
         new_contacts = self.fleet_sensor.get_contacts_to_verify(new_contacts_num)
         old_contacts = self.fleet_sensor.get_contacts_to_reverify(old_contacts_num)
 
@@ -362,13 +362,52 @@ class Learner:
             for contact in old_contacts:
                 nursery.start_soon(self._verify_contact_and_report, contact)
 
-        return self.fleet_sensor.next_verification_in()
-
     async def learning_round(self, nodes_num=1):
+        self._logger.debug("Starting a learning round")
+
         nodes = self.fleet_sensor.get_nodes_to_learn_from(nodes_num)
 
         async with trio.open_nursery() as nursery:
             for node in nodes:
                 nursery.start_soon(self._learn_from_node_and_report, node)
 
-        return self.fleet_sensor.next_verification_in(), self.fleet_sensor.next_learning_in()
+    async def verification_task(self, stop_event):
+        while True:
+            await self.verification_round()
+
+            while True:
+                next_event_in = self.fleet_sensor.next_verification_in()
+                self._logger.debug("Next verification in: {}", next_event_in)
+
+                timed_out = await wait_for_any(
+                    [stop_event, self.fleet_sensor.reschedule_verification_event],
+                    next_event_in)
+
+                if stop_event.is_set():
+                    return
+
+                if timed_out:
+                    break
+
+    async def learning_task(self, stop_event):
+        while True:
+            if self.fleet_sensor.is_empty():
+                await self.seed_round(must_succeed=False)
+            else:
+                await self.learning_round()
+
+            next_event_in = self.fleet_sensor.next_learning_in()
+            self._logger.debug("Next learning in: {}", next_event_in)
+
+            await wait_for_any([stop_event], next_event_in)
+            if stop_event.is_set():
+                return
+
+    async def staker_query_task(self, stop_event):
+        while True:
+            self._logger.debug("Starting a staker query round")
+            await self.load_staking_providers_and_report()
+
+            await wait_for_any([stop_event], datetime.timedelta(days=1).total_seconds)
+            if stop_event.is_set():
+                return

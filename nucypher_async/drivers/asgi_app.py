@@ -62,7 +62,7 @@ def make_lifespan(on_startup, on_shutdown):
         async with trio.open_nursery() as nursery:
             await on_startup(nursery)
             yield
-            await on_shutdown()
+            await on_shutdown(nursery)
 
     return lifespan_context
 
@@ -99,8 +99,8 @@ def make_peer_asgi_app(api: PeerAPI):
     async def on_startup(nursery):
         await api.start(nursery)
 
-    async def on_shutdown():
-        await api.stop()
+    async def on_shutdown(nursery):
+        await api.stop(nursery)
 
     routes = [
         Route("/ping", ping),
@@ -161,8 +161,8 @@ def make_porter_app(porter_server):
     async def on_startup(nursery):
         await porter_server.start(nursery)
 
-    async def on_shutdown():
-        await porter_server.stop()
+    async def on_shutdown(nursery):
+        await porter_server.stop(nursery)
 
     routes = [
         Route("/get_ursulas", get_ursulas),

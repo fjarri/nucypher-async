@@ -66,9 +66,11 @@ async def test_verified_nodes_iter(nursery, autojump_clock, ursula_servers, mock
 
     addresses = [server._node.staking_provider_address for server in ursula_servers[:3]]
     nodes = []
-    async with learner.verified_nodes_iter(addresses) as aiter:
-        async for node in aiter:
-            nodes.append(node)
+
+    with trio.fail_after(10):
+        async with learner.verified_nodes_iter(addresses) as aiter:
+            async for node in aiter:
+                nodes.append(node)
 
     assert len(nodes) == 3
 
@@ -89,15 +91,16 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
     # Fund Alice
     mock_payment_client.mock_set_balance(alice.payment_address, AmountMATIC.ether(1))
 
-    policy = await alice.grant(
-        learner=alice_learner,
-        payment_client=mock_payment_client,
-        bob=bob.public_info(),
-        label=b'some label',
-        threshold=2,
-        shares=3,
-        # TODO: using preselected Ursulas since blockchain is not implemeneted yet
-        handpicked_addresses=[server._node.staking_provider_address for server in ursula_servers[:3]])
+    with trio.fail_after(10):
+        policy = await alice.grant(
+            learner=alice_learner,
+            payment_client=mock_payment_client,
+            bob=bob.public_info(),
+            label=b'some label',
+            threshold=2,
+            shares=3,
+            # TODO: using preselected Ursulas since blockchain is not implemeneted yet
+            handpicked_addresses=[server._node.staking_provider_address for server in ursula_servers[:3]])
 
     message = b'a secret message'
     message_kit = encrypt(policy.encrypting_key, message)
@@ -107,6 +110,9 @@ async def test_granting(nursery, autojump_clock, ursula_servers, mock_network, m
         peer_client=peer_client,
         identity_client=mock_identity_client,
         seed_contacts=[ursula_servers[0].secure_contact().contact])
-    message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map,
-        remote_alice=alice.public_info())
+
+    with trio.fail_after(10):
+        message_back = await bob.retrieve_and_decrypt(bob_learner, message_kit, policy.encrypted_treasure_map,
+            remote_alice=alice.public_info())
+
     assert message_back == message

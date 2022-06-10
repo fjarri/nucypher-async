@@ -48,6 +48,7 @@ class InvalidMessage(PeerError):
         cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
 
 
+# TODO: how is that a PeerError?
 class InactivePolicy(PeerError):
 
     @staticmethod

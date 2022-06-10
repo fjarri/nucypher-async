@@ -37,6 +37,10 @@ class PorterServer(ASGIServer):
             clock=config.clock,
             storage=config.storage)
 
+        self._verification_task = BackgroundTask(worker=self.learner.verification_task, logger=self._logger)
+        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
+        self._staker_query_task = BackgroundTask(worker=self._staker_query, logger=self._logger)
+
         self._started_at = self._clock.utcnow()
 
         self.started = False
@@ -56,54 +60,21 @@ class PorterServer(ASGIServer):
     async def start(self, nursery):
         assert not self.started
 
-        await self.learner.seed_round()
-
-        # TODO: can we move initialization to __init__()?
-        self._verification_task = BackgroundTask(nursery, self._verification_worker)
-        self._learning_task = BackgroundTask(nursery, self._learning_worker)
-        self._staker_query_task = BackgroundTask(nursery, self._staker_query)
+        await self.learner.seed_round(must_succeed=True)
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
-        self._verification_task.start()
-        self._learning_task.start()
-        self._staker_query_task.start()
+        self._verification_task.start(nursery)
+        self._learning_task.start(nursery)
+        self._staker_query_task.start(nursery)
 
         self.started = True
-
-    async def _verification_worker(self, this_task):
-        try:
-            self._logger.debug("Starting a verification round")
-            next_verification_in = await self.learner.verification_round()
-            self._logger.debug("After the verification round, next verification in: {}", next_verification_in)
-            min_time_between_rounds = datetime.timedelta(seconds=5) # TODO: remove hardcoding
-            this_task.restart_in(max(next_verification_in, min_time_between_rounds))
-        except Exception as e:
-            self._logger.error("Uncaught exception in the verification task:", exc_info=sys.exc_info())
-
-    async def _learning_worker(self, this_task):
-        try:
-            self._logger.debug("Starting a learning round")
-            next_verification_in, next_learning_in = await self.learner.learning_round()
-            self._logger.debug("After the learning round, next verification in: {}", next_verification_in)
-            self._logger.debug("After the learning round, next learning in: {}", next_learning_in)
-            this_task.restart_in(next_learning_in)
-            self._verification_task.reset(next_verification_in)
-        except Exception as e:
-            self._logger.error("Uncaught exception in the learning task:", exc_info=sys.exc_info())
-
-    async def _staker_query(self, this_task):
-        try:
-            self._logger.debug("Starting a staker query round")
-            await self.learner.load_staking_providers_and_report()
-            this_task.restart_in(datetime.timedelta(days=1))
-        except Exception as e:
-            self._logger.error("Uncaught exception in the staker query task:", exc_info=sys.exc_info())
 
     def stop(self):
         assert self.started
 
         self._verification_task.stop()
         self._learning_task.stop()
+        self._staker_query_task.stop()
 
         self.started = False
 

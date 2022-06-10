@@ -84,6 +84,9 @@ class UrsulaServer(PeerServer, PeerAPI):
 
         self._started_at = self._clock.utcnow()
 
+        self._verification_task = BackgroundTask(worker=self.learner.verification_task, logger=self._logger)
+        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
+
         self.started = False
 
     def secure_contact(self):
@@ -101,45 +104,21 @@ class UrsulaServer(PeerServer, PeerAPI):
     async def start(self, nursery):
         assert not self.started
 
-        await self.learner.seed_round()
-
-        # TODO: can we move initialization to __init__()?
-        self._verification_task = BackgroundTask(nursery, self._verification_worker)
-        self._learning_task = BackgroundTask(nursery, self._learning_worker)
+        self._logger.debug("Starting tasks")
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
-        self._verification_task.start()
-        self._learning_task.start()
+        await self.learner.seed_round(must_succeed=True)
+        self._verification_task.start(nursery)
+        self._learning_task.start(nursery)
+
+        self._logger.debug("Finished starting tasks")
 
         self.started = True
 
-    async def _verification_worker(self, this_task):
-        try:
-            self._logger.debug("Starting a verification round")
-            next_verification_in = await self.learner.verification_round()
-            self._logger.debug("After the verification round, next verification in: {}", next_verification_in)
-            min_time_between_rounds = datetime.timedelta(seconds=5) # TODO: remove hardcoding
-            this_task.restart_in(max(next_verification_in, min_time_between_rounds))
-        except Exception as e:
-            self._logger.error("Uncaught exception in the verification task:", exc_info=sys.exc_info())
-
-    async def _learning_worker(self, this_task):
-        try:
-            self._logger.debug("Starting a learning round")
-            next_verification_in, next_learning_in = await self.learner.learning_round()
-            self._logger.debug("After the learning round, next verification in: {}", next_verification_in)
-            self._logger.debug("After the learning round, next learning in: {}", next_learning_in)
-            this_task.restart_in(next_learning_in)
-            self._verification_task.reset(next_verification_in)
-        except Exception as e:
-            self._logger.error("Uncaught exception in the learning task:", exc_info=sys.exc_info())
-
-    async def stop(self):
+    async def stop(self, nursery):
         assert self.started
-
-        self._verification_task.stop()
-        self._learning_task.stop()
-
+        await self._learning_task.stop()
+        await self._verification_task.stop()
         self.started = False
 
     async def endpoint_ping(self, remote_host: str) -> bytes:
@@ -165,11 +144,7 @@ class UrsulaServer(PeerServer, PeerAPI):
 
         new_metadatas = metadata_request.announce_nodes
 
-        next_verification_in = self.learner.passive_learning(remote_host, new_metadatas)
-        if next_verification_in is not None:
-            self._logger.debug("After the pasive learning, new verification round in {}", next_verification_in)
-            # TODO: don't reset if there's less than a certain timeout before awakening
-            self._verification_task.reset(next_verification_in)
+        self.learner.passive_learning(remote_host, new_metadatas)
 
         return await self.endpoint_node_metadata_get()
 

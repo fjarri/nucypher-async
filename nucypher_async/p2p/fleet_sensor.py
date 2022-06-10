@@ -102,11 +102,18 @@ class VerifiedNodesDB:
     def is_empty(self):
         return not bool(self._nodes)
 
-    def next_verification_in(self, now, exclude):
+    def next_verification_at(self, exclude):
         for entry in self._verify_at:
             if self._nodes[entry.address].node.secure_contact.contact not in exclude:
-                return entry.verify_at - now if entry.verify_at > now else datetime.timedelta()
+                return entry.verify_at
         return None
+
+    def next_verification_in(self, now, exclude):
+        time_point = self.next_verification_at(exclude)
+        if time_point:
+            return time_point - now if time_point > now else datetime.timedelta()
+        else:
+            return None
 
     def get_contacts_to_verify(self, now, contacts_num, exclude):
         contacts = []
@@ -135,18 +142,11 @@ class ContactsDB:
         return random.sample(contacts, min(contacts_num, len(contacts)))
 
     def add_contact(self, contact, address=None):
-
-        new_contact = contact not in self._contacts_to_addresses
-        new_contact_for_address = False
-
         if address is not None:
-            new_contact_for_address = contact not in self._addresses_to_contacts[address]
             self._contacts_to_addresses[contact].add(address)
             self._addresses_to_contacts[address].add(contact)
         else:
             self._contacts_to_addresses[contact]
-
-        return new_contact, new_contact_for_address
 
     def remove_contact(self, contact):
         if contact in self._contacts_to_addresses:
@@ -170,6 +170,38 @@ class ContactsDB:
         return not bool(self._contacts_to_addresses)
 
 
+def _next_verification_time_may_change(func):
+
+    def wrapped(fleet_sensor, *args, **kwargs):
+
+        contacts_present_before = not fleet_sensor._contacts_db.is_empty()
+        next_verification_before = fleet_sensor._verified_nodes_db.next_verification_at(
+            exclude=fleet_sensor._locked_contacts.keys())
+
+        result = func(fleet_sensor, *args, **kwargs)
+
+        contacts_present_after = not fleet_sensor._contacts_db.is_empty()
+        next_verification_after = fleet_sensor._verified_nodes_db.next_verification_at(
+            exclude=fleet_sensor._locked_contacts.keys())
+
+        reschedule = (
+            (contacts_present_after and not contacts_present_before)
+            or (next_verification_before is None and next_verification_after is not None)
+            or (
+                next_verification_before is not None
+                and next_verification_after is not None
+                and next_verification_after < next_verification_before)
+            )
+
+        if reschedule:
+            fleet_sensor.reschedule_verification_event.set()
+            fleet_sensor.reschedule_verification_event = trio.Event()
+
+        return result
+
+    return wrapped
+
+
 class FleetSensor:
 
     def __init__(self, clock, my_staking_provider_address, my_contact):
@@ -186,9 +218,8 @@ class FleetSensor:
 
         self._locked_contacts = dict()
 
-        self._new_verified_nodes = trio.Event()
-        self._new_contacts = trio.Event()
-        self._new_contacts_for_address = trio.Event()
+        self.new_verified_nodes_event = trio.Event()
+        self.reschedule_verification_event = trio.Event()
 
     def _calculate_next_verification(self, node, verified_at, previously_verified_at=None):
 
@@ -209,10 +240,12 @@ class FleetSensor:
 
         return verify_at
 
+    @_next_verification_time_may_change
     def report_bad_contact(self, contact):
         self._contacts_db.remove_contact(contact)
         self._verified_nodes_db.remove_by_contact(contact)
 
+    @_next_verification_time_may_change
     def report_verified_node(self, contact, node, staked_amount):
 
         verified_at = self._clock.utcnow()
@@ -248,6 +281,7 @@ class FleetSensor:
                 verify_at = self._calculate_next_verification(node, verified_at)
                 self._add_node(node, staked_amount, verified_at, verify_at)
 
+    @_next_verification_time_may_change
     def report_active_learning_results(self, teacher_node, metadatas):
         for metadata in metadatas:
             payload = metadata.payload
@@ -256,6 +290,7 @@ class FleetSensor:
                 self._verified_nodes_db.remove_node(teacher_node)
         self._add_contacts(metadatas)
 
+    @_next_verification_time_may_change
     def report_passive_learning_results(self, sender_host, metadatas):
 
         # Filter out only the contact(s) with `remote_address`.
@@ -265,6 +300,7 @@ class FleetSensor:
             if metadata.payload.host == sender_host]
         self._add_contacts(sender_metadatas)
 
+    @_next_verification_time_may_change
     def report_staking_providers(self, providers):
         self._staking_providers = providers
         self._staking_providers_updated = self._clock.utcnow()
@@ -274,12 +310,10 @@ class FleetSensor:
 
     def _add_node(self, node, staked_amount, verified_at, verify_at):
         self._verified_nodes_db.add_node(node, staked_amount, verified_at, verify_at)
-        self._new_verified_nodes.set()
-        self._new_verified_nodes = trio.Event()
+        self.new_verified_nodes_event.set()
+        self.new_verified_nodes_event = trio.Event()
 
     def _add_contacts(self, metadatas):
-        new_contacts = False
-        new_contacts_for_address = False
         for metadata in metadatas:
             payload = metadata.payload
             contact = Contact(payload.host, payload.port)
@@ -292,24 +326,11 @@ class FleetSensor:
             if self._verified_nodes_db.has_contact(contact):
                 continue
 
-            new_contact, new_contact_for_address = self._contacts_db.add_contact(contact, address)
-
-            new_contacts = new_contacts or new_contact
-            new_contacts_for_address = new_contacts_for_address or new_contact_for_address
-
-        if new_contacts:
-            self._new_contacts.set()
-            self._new_contacts = trio.Event()
-
-        if new_contacts_for_address:
-            self._new_contacts_for_address.set()
-            self._new_contacts_for_address = trio.Event()
-
-        return new_contacts
+            self._contacts_db.add_contact(contact, address)
 
     def next_learning_in(self) -> datetime.timedelta:
         # TODO: May be adjusted dynamically based on the network state
-        return datetime.timedelta(seconds=90)
+        return datetime.timedelta(seconds=90).total_seconds()
 
     def is_empty(self):
         return self._contacts_db.is_empty() and self._verified_nodes_db.is_empty()
@@ -317,19 +338,19 @@ class FleetSensor:
     def next_verification_in(self) -> datetime.timedelta:
 
         if self._contacts_db.is_empty() and self._verified_nodes_db.is_empty():
-            return datetime.timedelta.max
+            return datetime.timedelta.max.total_seconds()
 
         # If there are contacts to check, do it asap
         if not self._contacts_db.is_empty():
-            return datetime.timedelta()
+            return datetime.timedelta().total_seconds()
 
         now = self._clock.utcnow()
         next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_contacts.keys())
         if next_verification_in is None:
             # Maybe someone will contact us during this time and leave some contacts.
-            return datetime.timedelta(days=1)
+            return datetime.timedelta(days=1).total_seconds()
         else:
-            return next_verification_in
+            return next_verification_in.total_seconds()
 
     @contextmanager
     def try_lock_contact(self, contact):

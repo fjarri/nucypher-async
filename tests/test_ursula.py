@@ -64,6 +64,8 @@ async def test_learning(nursery, autojump_clock, ursula_servers):
             server._node.staking_provider_address: server.learner.metadata_to_announce()
             for server in ursula_servers}
 
+        print([len(nodes) for nodes in known_nodes.values()])
+
         # Each Ursula should know about every other Ursula by now.
         if all(len(nodes) == 10 for nodes in known_nodes.values()):
             break
