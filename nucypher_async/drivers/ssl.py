@@ -111,6 +111,11 @@ class SSLCertificate:
         # Note: this is not called automatically by `httpx`, we have to call it manually
         # if we want to make sure the certificate is self-consistent.
         try:
+            # TODO: this will fail if the public key is not `EllipticCurvePublicKey`.
+            # This can happen when a remote node is using a custom certificate.
+            # (see the docs for `cryptography.x509.Certificate.public_key`
+            # for the list of possible types -
+            # Different keys have different signatures of `verify()`)
             self._certificate.public_key().verify(
                 self._certificate.signature,
                 self._certificate.tbs_certificate_bytes,
