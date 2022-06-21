@@ -76,7 +76,8 @@ class UrsulaServerConfig:
             seed_contacts = [
                 Contact('ibex.nucypher.network', 9151)]
         else:
-            seed_contacts = []
+            seed_contacts = [
+                Contact('oryx.nucypher.network', 9151)]
 
         peer_client = PeerClient()
 
@@ -160,7 +161,8 @@ class PorterServerConfig:
             seed_contacts = [
                 Contact('ibex.nucypher.network', 9151)]
         else:
-            seed_contacts = []
+            seed_contacts = [
+                Contact('oryx.nucypher.network', 9151)]
 
         peer_client = PeerClient()
 
