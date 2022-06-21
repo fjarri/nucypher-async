@@ -65,7 +65,7 @@ class SecureContact:
 
         try:
             certificate.verify()
-        except ssl.InvalidSignature as exc:
+        except SSLCertificate.InvalidSignature as exc:
             raise SecureContactError(f"Invalid certificate signature") from exc
 
         if certificate.declared_host != contact.host:
