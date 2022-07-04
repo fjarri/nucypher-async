@@ -28,15 +28,16 @@ class MockContract:
     def call(self, data_bytes: bytes):
         method, input_bytes = self._dispatch(data_bytes)
         assert isinstance(method, ReadMethod)
-        args = method.inputs.decode(input_bytes)
+        args = method.inputs.decode_into_tuple(input_bytes)
         result = getattr(self, method.name)(*args)
-        output_bytes = method.outputs.encode_single(result)
+        # Note: assuming here that the result is a single value. Should be enough for mocks.
+        output_bytes = method.outputs.encode(result)
         return output_bytes
 
     def transact(self, address, amount, data_bytes):
         method, input_bytes = self._dispatch(data_bytes)
         assert isinstance(method, WriteMethod)
-        args = method.inputs.decode(input_bytes)
+        args = method.inputs.decode_into_tuple(input_bytes)
         getattr(self, method.name)(address, amount, *args)
 
 
