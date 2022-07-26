@@ -338,8 +338,9 @@ class Learner:
             return
 
         for contact in self._seed_contacts:
-            await self._verify_contact_and_report(contact)
-            if not self.fleet_sensor.is_empty():
+            node = await self._verify_contact_and_report(contact)
+            if node:
+                await self._learn_from_node_and_report(node)
                 return
 
         if must_succeed:
