@@ -143,7 +143,7 @@ async def rest_api_call(logger, endpoint_future):
 
 def make_porter_app(porter_server):
 
-    logger = porter_server._logger.get_child('App')
+    logger = porter_server.logger().get_child('App')
 
     async def get_ursulas(request):
         json_request = await request.json() if await request.body() else {}

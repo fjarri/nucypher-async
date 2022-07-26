@@ -94,13 +94,6 @@ class PeerAPI(ABC):
     async def endpoint_status(self) -> str:
         ...
 
-    # TODO: this is a little backwards; the app encompasses the server state,
-    # but the app's logger will be a child of the server's logger.
-    # Is there a more logical way to create a logger?
-    @abstractmethod
-    async def logger(self) -> Logger:
-        ...
-
 
 class PeerServer(ABC):
 
@@ -116,9 +109,6 @@ class PeerServer(ABC):
     def peer_api(self) -> "PeerAPI":
         ...
 
-
-class PeerServerHandle(ABC):
-
     @abstractmethod
-    def shutdown(self):
+    async def logger(self) -> Logger:
         ...

@@ -14,6 +14,7 @@ import trio
 
 from .ssl import SSLCertificate, SSLPrivateKey
 from ..utils import temp_file
+from ..utils.logging import Logger
 
 
 class InMemoryCertificateConfig(Config):
@@ -73,6 +74,10 @@ class ASGIServer(ABC):
 
     @abstractmethod
     def into_asgi_app(self):
+        ...
+
+    @abstractmethod
+    def logger(self) -> Logger:
         ...
 
 

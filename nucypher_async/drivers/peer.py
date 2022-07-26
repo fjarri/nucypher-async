@@ -19,7 +19,7 @@ from .ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
 from .asgi_server import ASGIServer, ASGIServerHandle
 from .asgi_app import make_peer_asgi_app
 from ..utils import temp_file
-from ..peer_api import PeerServer, PeerServerHandle, PeerError, InvalidMessage
+from ..peer_api import PeerServer, PeerError, InvalidMessage
 
 
 class PeerNetworkError(PeerError):
@@ -304,10 +304,5 @@ class PeerServerWrapper(ASGIServer):
     def into_asgi_app(self):
         return make_peer_asgi_app(self.server.peer_api())
 
-
-def make_server_handle(server: PeerServer) -> PeerServerHandle:
-    return ASGIServerHandle(PeerServerWrapper(server))
-
-
-def serve_forever(server: PeerServer):
-    trio.run(make_server_handle(server))
+    def logger(self):
+        return self.server.logger()

@@ -6,17 +6,13 @@ import trio
 import click
 
 from .drivers.asgi_server import ASGIServerHandle
-from .drivers.peer import serve_forever
-from .drivers.identity import IdentityClient, IdentityAccount
-from .drivers.payment import PaymentClient
+from .drivers.peer import PeerServerWrapper
+from .drivers.identity import IdentityAccount
 from .config import UrsulaServerConfig, PorterServerConfig
 from .master_key import EncryptedMasterKey
-from .storage import FileSystemStorage
 from .ursula import Ursula
-from .domain import Domain
 from .ursula_server import UrsulaServer
 from .porter_server import PorterServer
-from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
 
 
 async def make_ursula_server(config_path, nucypher_password, geth_password):
@@ -42,7 +38,7 @@ async def make_ursula_server(config_path, nucypher_password, geth_password):
 
     config = UrsulaServerConfig.from_config_values(
         profile_name=config.get('profile_name', 'ursula-' + config['domain']),
-        domain=Domain.from_string(config['domain']),
+        domain=config['domain'],
         host=config['rest_host'],
         port=config['rest_port'],
         identity_endpoint=config['eth_provider_uri'],
@@ -64,7 +60,7 @@ def make_porter_server(config_path):
 
     config = PorterServerConfig.from_config_values(
         profile_name=config.get('profile_name', 'porter-' + config['domain']),
-        domain=Domain.from_string(config['domain']),
+        domain=config['domain'],
         identity_endpoint=config['eth_provider_uri'],
         ssl_certificate_path=config['ssl_certificate'],
         ssl_private_key_path=config['ssl_private_key'],
@@ -84,7 +80,8 @@ def main():
 @click.argument('geth_password')
 def ursula(config_path, nucypher_password, geth_password):
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
-    serve_forever(server)
+    handle = ASGIServerHandle(PeerServerWrapper(server))
+    trio.run(handle)
 
 
 @main.command()

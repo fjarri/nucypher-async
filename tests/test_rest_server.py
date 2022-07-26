@@ -4,8 +4,9 @@ import os
 import pytest
 import trio
 
+from nucypher_async.drivers.asgi_server import ASGIServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.peer import PeerClient, Contact, make_server_handle
+from nucypher_async.drivers.peer import PeerClient, Contact, PeerServerWrapper
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.ursula import Ursula
@@ -34,7 +35,7 @@ def ursula_server():
 
 
 async def test_client_real_server(nursery, capsys, ursula_server):
-    handle = make_server_handle(ursula_server)
+    handle = ASGIServerHandle(PeerServerWrapper(ursula_server))
     await nursery.start(handle)
 
     client = PeerClient()
