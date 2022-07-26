@@ -71,11 +71,9 @@ class Alice:
 
         if len(nodes) < shares:
             # TODO: implement ranking for granting, don't just pick random nodes
-            async with learner.random_verified_nodes_iter(exclude=handpicked_addresses) as aiter:
+            async with learner.random_verified_nodes_iter(shares - len(nodes), exclude=handpicked_addresses) as aiter:
                 async for node in aiter:
                     nodes.append(node)
-                    if len(nodes) == shares:
-                        break
 
         assigned_kfrags = {
             bytes(node.staking_provider_address): (node.metadata.payload.encrypting_key, kfrags.pop())
