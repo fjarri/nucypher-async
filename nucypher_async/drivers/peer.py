@@ -248,6 +248,11 @@ class Peer:
         payload = metadata.payload
         certificate = cls._get_certificate(payload)
 
+        metadata_contact = Contact(payload.host, payload.port)
+        if metadata_contact != contact:
+            raise PeerVerificationError(
+                f"Contact mismatch: expected {contact}, {metadata_contact} in the metadata")
+
         expected_public_key = private_key.as_ssl_private_key().public_key()
         if certificate.public_key() != expected_public_key:
             raise PeerVerificationError(
