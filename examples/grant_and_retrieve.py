@@ -11,7 +11,7 @@ from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
 from nucypher_async.drivers.asgi_server import ASGIServerHandle
-from nucypher_async.drivers.peer import Contact, PeerClient
+from nucypher_async.drivers.peer import Contact, PeerClient, PeerServerWrapper
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.drivers.time import Clock, SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
@@ -70,7 +70,7 @@ async def run_local_ursula_fleet(context, nursery):
             )
 
         server = await UrsulaServer.async_init(ursula, config)
-        handle = ServerHandle(server)
+        handle = ASGIServerHandle(PeerServerWrapper(server))
         await nursery.start(handle)
         handles.append(handle)
 
@@ -85,6 +85,10 @@ async def alice_grants(context, alice, remote_bob):
         parent_logger=context.logger.get_child("Learner-Alice"),
         seed_contacts=[context.seed_contact],
         clock=context.clock)
+
+    # Fill out the node database so that we had something to work with
+    await learner.seed_round()
+    await learner.verification_round()
 
     policy = await alice.grant(
         learner=learner,
