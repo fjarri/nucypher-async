@@ -4,7 +4,7 @@ import pytest
 import trio
 
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
-from nucypher_async.drivers.peer import Contact, PeerServerWrapper
+from nucypher_async.drivers.peer import Contact, PeerHTTPServer
 from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.config import UrsulaServerConfig
@@ -46,7 +46,7 @@ async def ursula_servers(mock_network, mock_identity_client, mock_payment_client
 
         server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
         servers.append(server)
-        mock_network.add_server(PeerServerWrapper(server))
+        mock_network.add_server(PeerHTTPServer(server))
 
     await mock_network.start_all()
     yield servers

@@ -10,8 +10,8 @@ from nucypher_async.learner import Learner
 from nucypher_async.config import UrsulaServerConfig
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
-from nucypher_async.drivers.asgi_server import ASGIServerHandle
-from nucypher_async.drivers.peer import Contact, PeerClient, PeerServerWrapper
+from nucypher_async.drivers.http_server import HTTPServerHandle
+from nucypher_async.drivers.peer import Contact, PeerClient, PeerHTTPServer
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.drivers.time import Clock, SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
@@ -70,7 +70,7 @@ async def run_local_ursula_fleet(context, nursery):
             )
 
         server = await UrsulaServer.async_init(ursula, config)
-        handle = ASGIServerHandle(PeerServerWrapper(server))
+        handle = HTTPServerHandle(PeerHTTPServer(server))
         await nursery.start(handle)
         handles.append(handle)
 

@@ -15,10 +15,9 @@ from nucypher_core import (
     NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 import trio
 
-from ..base import ASGIServer, PeerServer, PeerError, InvalidMessage
+from ..base import HTTPServer, PeerServer, PeerError, InvalidMessage
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .asgi_server import ASGIServerHandle
 from .asgi_app import make_peer_asgi_app
 
 
@@ -286,7 +285,10 @@ class PeerPublicKey:
         return self._certificate.to_der_bytes()
 
 
-class PeerServerWrapper(ASGIServer):
+class PeerHTTPServer(HTTPServer):
+    """
+    An adapter for from peer server to HTTP server.
+    """
 
     def __init__(self, server: PeerServer):
         self.server = server

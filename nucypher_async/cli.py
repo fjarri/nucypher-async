@@ -5,8 +5,8 @@ from appdirs import AppDirs
 import trio
 import click
 
-from .drivers.asgi_server import ASGIServerHandle
-from .drivers.peer import PeerServerWrapper
+from .drivers.http_server import HTTPServerHandle
+from .drivers.peer import PeerHTTPServer
 from .drivers.identity import IdentityAccount
 from .config import UrsulaServerConfig, PorterServerConfig
 from .master_key import EncryptedMasterKey
@@ -80,7 +80,7 @@ def main():
 @click.argument('geth_password')
 def ursula(config_path, nucypher_password, geth_password):
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
-    handle = ASGIServerHandle(PeerServerWrapper(server))
+    handle = HTTPServerHandle(PeerHTTPServer(server))
     trio.run(handle)
 
 
@@ -88,5 +88,5 @@ def ursula(config_path, nucypher_password, geth_password):
 @click.argument('config_path')
 def porter(config_path):
     server = make_porter_server(config_path)
-    handle = ASGIServerHandle(server)
+    handle = HTTPServerHandle(server)
     trio.run(handle)

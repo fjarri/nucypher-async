@@ -1,5 +1,5 @@
 """
-This module encapsulates a specific server running our ASGI app (currently ``hypercorn``).
+This module encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``).
 """
 
 from functools import partial
@@ -11,7 +11,7 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from ..base import ASGIServer
+from ..base import HTTPServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from ..utils.logging import Logger
@@ -58,7 +58,7 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server: ASGIServer):
+def make_config(server: HTTPServer):
 
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
@@ -72,13 +72,13 @@ def make_config(server: ASGIServer):
     return config
 
 
-class ASGIServerHandle:
+class HTTPServerHandle:
     """
     A handle for a running web server.
     Can be used to shut it down.
     """
 
-    def __init__(self, server: ASGIServer):
+    def __init__(self, server: HTTPServer):
         self.server = server
         self.app = server.into_asgi_app()
         self._shutdown_event = trio.Event()

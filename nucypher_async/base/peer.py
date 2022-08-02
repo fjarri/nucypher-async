@@ -63,7 +63,7 @@ class PeerAPI(ABC):
         ...
 
     @abstractmethod
-    async def stop(self):
+    async def stop(self, nursery):
         ...
 
     @abstractmethod
