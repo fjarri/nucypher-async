@@ -7,6 +7,7 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
+from .base import ASGIServer, PorterAPI
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.ssl import SSLPrivateKey, SSLCertificate
@@ -23,7 +24,7 @@ from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
 
 
-class PorterServer(ASGIServer):
+class PorterServer(ASGIServer, PorterAPI):
 
     def __init__(self, config):
         self._clock = config.clock

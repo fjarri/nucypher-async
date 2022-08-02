@@ -6,8 +6,8 @@ import weakref
 import arrow
 import trio
 
+from ..utils.ssl import SSLCertificate
 from ..drivers.peer import Contact, PeerClient
-from ..drivers.ssl import SSLCertificate
 from .asgi import MockHTTPClient
 
 

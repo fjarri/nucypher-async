@@ -2,7 +2,6 @@
 This module encapsulates a specific server running our ASGI app (currently ``hypercorn``).
 """
 
-from abc import ABC, abstractmethod
 from functools import partial
 import os
 from ssl import SSLContext
@@ -12,8 +11,9 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from .ssl import SSLCertificate, SSLPrivateKey
+from ..base import ASGIServer
 from ..utils import temp_file
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from ..utils.logging import Logger
 
 
@@ -56,29 +56,6 @@ class InMemoryCertificateConfig(Config):
     @property
     def ssl_enabled(self) -> bool:
         return True
-
-
-class ASGIServer(ABC):
-
-    @abstractmethod
-    def host_and_port(self) -> (str, int):
-        ...
-
-    @abstractmethod
-    def ssl_certificate(self) -> SSLCertificate:
-        ...
-
-    @abstractmethod
-    def ssl_private_key(self) -> SSLPrivateKey:
-        ...
-
-    @abstractmethod
-    def into_asgi_app(self):
-        ...
-
-    @abstractmethod
-    def logger(self) -> Logger:
-        ...
 
 
 def make_config(server: ASGIServer):

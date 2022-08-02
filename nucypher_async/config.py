@@ -4,8 +4,9 @@ from pathlib import Path
 import attrs
 from appdirs import AppDirs
 
-from .drivers.ssl import SSLCertificate, SSLPrivateKey
-from .drivers.time import Clock, SystemClock
+from .base import Clock
+from .utils.ssl import SSLCertificate, SSLPrivateKey
+from .drivers.time import SystemClock
 from .drivers.identity import IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.peer import PeerClient, Contact

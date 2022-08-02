@@ -1,13 +1,10 @@
 import arrow
 
-
-# TODO: make abstract
-class Clock:
-    pass
+from ..base import Clock
 
 
 class SystemClock(Clock):
 
     @staticmethod
-    def utcnow():
+    def utcnow() -> arrow.Arrow:
         return arrow.utcnow()

@@ -11,12 +11,12 @@ import trio
 
 from nucypher_core import FleetStateChecksum, MetadataRequest
 
+from .base import PeerError
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Contact, PeerClient
 from .drivers.time import SystemClock
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
-from .peer_api import PeerError
 from .storage import InMemoryStorage
 from .utils import BackgroundTask, wait_for_any
 from .utils.logging import NULL_LOGGER

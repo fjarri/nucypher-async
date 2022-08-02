@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 import json
 
-from .utils.logging import Logger
+from ..utils.logging import Logger
 
 
 class PeerErrorCode(Enum):

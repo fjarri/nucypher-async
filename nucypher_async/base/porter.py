@@ -1,0 +1,24 @@
+from abc import ABC, abstractmethod
+
+
+class PorterAPI(ABC):
+
+    @abstractmethod
+    async def start(self, nursery):
+        ...
+
+    @abstractmethod
+    async def stop(self):
+        ...
+
+    @abstractmethod
+    async def endpoint_get_ursulas(self, request_json: dict) -> dict:
+        ...
+
+    @abstractmethod
+    async def endpoint_retrieve_cfrags(self, request_json: dict) -> dict:
+        ...
+
+    @abstractmethod
+    async def endpoint_status(self) -> str:
+        ...

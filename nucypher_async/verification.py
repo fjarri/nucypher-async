@@ -1,8 +1,8 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata
 
+from .base import PeerError
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Peer, SecureContact
-from .peer_api import PeerError
 from .domain import Domain
 
 

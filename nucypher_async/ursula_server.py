@@ -6,6 +6,7 @@ from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
+from .base import PeerServer, PeerAPI, InactivePolicy
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Contact, SecureContact
 from .learner import Learner
@@ -14,7 +15,6 @@ from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
-from .peer_api import PeerServer, PeerAPI, InactivePolicy
 from .verification import PublicUrsula, verify_staking_local
 
 

@@ -1,33 +1,37 @@
 """
-This module encapsulates the specific package used to create an ASGI app
-out of ``UrsulaServer`` (namely, Quart).
+This module encapsulates the specific ASGI framework
+used to create an ASGI app out of server objects.
 
 This is a thin layer that serves the following purposes:
-- pass raw data from requests made to the app to ``UrsulaServer``;
+- Extract request body and/or arguments and pass those to the server object's endpoint;
 - wrap the returned raw data into a response;
-- catch ``RPCError`` from ``UrsulaServer`` and wrap them in corresponding responses.
-Nothing else should be happening here, the bulk of the server logic
-is located in ``UrsulaServer``.
+- catch exceptions and wrap them in corresponding HTTP responses.
 
-In a sense, this is a "server" counterpart of ``PeerClient``.
+Nothing else should be happening here, the bulk of the server logic is located in server objects.
 """
 
-from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 import http
-import sys
 
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
 
-from ..peer_api import PeerAPI, PeerError, InactivePolicy
+from ..base import PorterAPI, PeerAPI, PeerError, InactivePolicy
 
 
 _HTTP_STATUS = {
     InactivePolicy: http.HTTPStatus.PAYMENT_REQUIRED
 }
+
+
+class HTTPError(Exception):
+
+    def __init__(self, message, status_code):
+        super().__init__(message, status_code)
+        self.message = message
+        self.status_code = status_code
 
 
 async def call_endpoint(endpoint_future):
@@ -55,7 +59,26 @@ async def peer_api_call(logger, endpoint_future):
     return Response(result_bytes, status_code=status_code)
 
 
+async def rest_api_call(logger, endpoint_future):
+    try:
+        result_str = await endpoint_future
+    except HTTPError as exc:
+        return Response(exc.message, status_code=exc.status_code)
+    except Exception as exc:
+        # A catch-all for any unexpected errors
+        logger.error("Uncaught exception:", exc_info=True)
+        return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    if isinstance(result_str, str):
+        return Response(result_str)
+    else:
+        return JSONResponse(result_str)
+
+
 def make_lifespan(on_startup, on_shutdown):
+    """
+    A custom lifespan factory for Starlette that maintains a nursery
+    in which background tasks can be run.
+    """
 
     @asynccontextmanager
     async def lifespan_context(app):
@@ -69,7 +92,7 @@ def make_lifespan(on_startup, on_shutdown):
 
 def make_peer_asgi_app(api: PeerAPI):
     """
-    Creates and returns an ASGI app.
+    Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
 
     logger = api.logger().get_child('App')
@@ -118,30 +141,10 @@ def make_peer_asgi_app(api: PeerAPI):
     return app
 
 
-class HTTPError(Exception):
-
-    def __init__(self, message, status_code):
-        super().__init__(message, status_code)
-        self.message = message
-        self.status_code = status_code
-
-
-async def rest_api_call(logger, endpoint_future):
-    try:
-        result_str = await endpoint_future
-    except HTTPError as exc:
-        return Response(exc.message, status_code=exc.status_code)
-    except Exception as exc:
-        # A catch-all for any unexpected errors
-        logger.error("Uncaught exception:", exc_info=True)
-        return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    if isinstance(result_str, str):
-        return Response(result_str)
-    else:
-        return JSONResponse(result_str)
-
-
-def make_porter_app(porter_server):
+def make_porter_app(porter_server: PorterAPI):
+    """
+    Returns an ASGI app serving as a front-end for a Porter.
+    """
 
     logger = porter_server.logger().get_child('App')
 
