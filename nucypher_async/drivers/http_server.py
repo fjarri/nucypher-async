@@ -11,7 +11,7 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
 
-from ..base import HTTPServer
+from ..base.http_server import BaseHTTPServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from ..utils.logging import Logger
@@ -40,9 +40,11 @@ class InMemoryCertificateConfig(Config):
             raise RuntimeError(
                 "Certificate/keyfile must be passed to the constructor in the serialized form")
 
+        context = super().create_ssl_context()
+
         # Since ssl_enabled() returns True, the context will be created,
         # but with no certificates loaded.
-        context = super().create_ssl_context()
+        assert context is not None, "SSL context was not created"
 
         # Encrypt the temporary file we create with an emphemeral password.
         keyfile_password = os.urandom(32)
@@ -58,7 +60,7 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server: HTTPServer):
+def make_config(server: BaseHTTPServer):
 
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
@@ -78,7 +80,7 @@ class HTTPServerHandle:
     Can be used to shut it down.
     """
 
-    def __init__(self, server: HTTPServer):
+    def __init__(self, server: BaseHTTPServer):
         self.server = server
         self.app = server.into_asgi_app()
         self._shutdown_event = trio.Event()

@@ -1,9 +1,9 @@
 import arrow
 
-from ..base import Clock
+from ..base.time import BaseClock
 
 
-class SystemClock(Clock):
+class SystemClock(BaseClock):
 
     @staticmethod
     def utcnow() -> arrow.Arrow:

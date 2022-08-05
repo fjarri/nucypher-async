@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
+from typing import Tuple
 
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from ..utils.logging import Logger
 
 
-class HTTPServer(ABC):
+class BaseHTTPServer(ABC):
     """
     An interface providing the data necessary to start up an HTTP server.
     """
 
     @abstractmethod
-    def host_and_port(self) -> (str, int):
+    def host_and_port(self) -> Tuple[str, int]:
         # TODO: restring the host to IP addresses?
         ...
 
@@ -24,8 +25,4 @@ class HTTPServer(ABC):
 
     @abstractmethod
     def into_asgi_app(self):
-        ...
-
-    @abstractmethod
-    def logger(self) -> Logger:
         ...

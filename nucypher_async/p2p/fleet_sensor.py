@@ -328,14 +328,14 @@ class FleetSensor:
 
             self._contacts_db.add_contact(contact, address)
 
-    def next_learning_in(self) -> datetime.timedelta:
+    def next_learning_in(self) -> float:
         # TODO: May be adjusted dynamically based on the network state
         return datetime.timedelta(seconds=90).total_seconds()
 
     def is_empty(self):
         return self._contacts_db.is_empty() and self._verified_nodes_db.is_empty()
 
-    def next_verification_in(self) -> datetime.timedelta:
+    def next_verification_in(self) -> float:
 
         if self._contacts_db.is_empty() and self._verified_nodes_db.is_empty():
             return datetime.timedelta.max.total_seconds()

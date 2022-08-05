@@ -1,19 +1,19 @@
 import datetime
 import http
 import sys
+from typing import Tuple
 
 import trio
 from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .base import HTTPServer, PorterAPI
+from .base.http_server import BaseHTTPServer
+from .base.porter import BasePorter
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
-from .drivers.ssl import SSLPrivateKey, SSLCertificate
 from .drivers.asgi_app import make_porter_app, HTTPError
 from .drivers.peer import Contact, SecureContact
-from .drivers.time import Clock
 from .master_key import MasterKey
 from .learner import Learner
 from .status import render_status
@@ -21,9 +21,10 @@ from .storage import InMemoryStorage
 from .ursula import Ursula
 from .utils import BackgroundTask
 from .utils.logging import NULL_LOGGER
+from .utils.ssl import SSLPrivateKey, SSLCertificate
 
 
-class PorterServer(HTTPServer, PorterAPI):
+class PorterServer(BaseHTTPServer, BasePorter):
 
     def __init__(self, config):
         self._clock = config.clock
@@ -45,7 +46,7 @@ class PorterServer(HTTPServer, PorterAPI):
 
         self.started = False
 
-    def host_and_port(self) -> (str, int):
+    def host_and_port(self) -> Tuple[str, int]:
         return self._config.host, self._config.port
 
     def ssl_certificate(self) -> SSLCertificate:

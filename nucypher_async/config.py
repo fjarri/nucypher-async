@@ -4,14 +4,14 @@ from pathlib import Path
 import attrs
 from appdirs import AppDirs
 
-from .base import Clock
+from .base.time import BaseClock
 from .utils.ssl import SSLCertificate, SSLPrivateKey
 from .drivers.time import SystemClock
 from .drivers.identity import IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.peer import PeerClient, Contact
 from .domain import Domain
-from .storage import Storage, InMemoryStorage, FileSystemStorage
+from .storage import BaseStorage, InMemoryStorage, FileSystemStorage
 from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
 
 
@@ -67,9 +67,9 @@ class UrsulaServerConfig:
     payment_client: PaymentClient
     peer_client: PeerClient
     parent_logger: Logger
-    storage: Storage
+    storage: BaseStorage
     seed_contacts: List[Contact]
-    clock: Clock
+    clock: BaseClock
 
     @classmethod
     def from_config_values(
@@ -121,9 +121,9 @@ class PorterServerConfig:
     identity_client: IdentityClient
     peer_client: PeerClient
     parent_logger: Logger
-    storage: Storage
+    storage: BaseStorage
     seed_contacts: List[Contact]
-    clock: Clock
+    clock: BaseClock
 
     @classmethod
     def from_config_values(

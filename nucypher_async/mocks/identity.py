@@ -84,8 +84,8 @@ class MockIdentityClient(IdentityClient):
         TODO: split into functions corresponding to the actual ABI.
         """
         # Clear out specific address and amount types at this boundary
-        staking_provider_address = Address(bytes(staking_provider_address))
-        operator_address = Address(bytes(operator_address))
-        amount_t = Amount.wei(amount_t.as_wei())
+        staking_provider_address_ = Address(bytes(staking_provider_address))
+        operator_address_ = Address(bytes(operator_address))
+        amount_t_ = Amount.wei(amount_t.as_wei())
 
-        self._mock_pre_application.mock_set_up(staking_provider_address, operator_address, amount_t)
+        self._mock_pre_application.mock_set_up(staking_provider_address_, operator_address_, amount_t_)

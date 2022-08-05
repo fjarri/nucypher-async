@@ -6,7 +6,7 @@ import weakref
 import httpx
 import trio
 
-from ..base import HTTPServer
+from ..base.http_server import BaseHTTPServer
 from ..utils.ssl import SSLCertificate
 
 
@@ -43,7 +43,7 @@ class MockNetwork:
         self.known_servers = {}
         self.nursery = nursery
 
-    def add_server(self, server: HTTPServer):
+    def add_server(self, server: BaseHTTPServer):
         app = server.into_asgi_app()
         manager = LifespanManager(app)
         certificate = server.ssl_certificate()

@@ -16,19 +16,15 @@ class Ursula:
             master_key: Optional[MasterKey] = None,
             identity_account: Optional[IdentityAccount] = None):
 
-        if not master_key:
-            master_key = MasterKey.random()
-        self.__master_key = master_key
-
-        if not identity_account:
-            identity_account = IdentityAccount.random()
+        self.__master_key = master_key or MasterKey.random()
+        identity_account_ = identity_account or IdentityAccount.random()
 
         self.signer = self.__master_key.make_signer()
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        self.operator_address = identity_account.address
-        self.operator_signature = identity_account.sign_message(bytes(self.signer.verifying_key()))
+        self.operator_address = identity_account_.address
+        self.operator_signature = identity_account_.sign_message(bytes(self.signer.verifying_key()))
 
     def peer_private_key(self):
         return self.__master_key.make_peer_private_key()

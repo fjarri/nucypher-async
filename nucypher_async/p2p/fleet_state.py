@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Dict
 
 from nucypher_core import NodeMetadata, FleetStateChecksum
 
@@ -14,8 +14,8 @@ class FleetState:
     def __init__(self, clock, my_metadata: NodeMetadata):
         self._clock = clock
         self._my_metadata = my_metadata
-        self._metadatas = {}
-        self._contacts = {}
+        self._metadatas: Dict[bytes, NodeMetadata] = {}
+        self._contacts: Dict[Contact, bytes] = {}
         self._checksum = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
 

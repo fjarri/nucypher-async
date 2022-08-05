@@ -11,7 +11,7 @@ import trio
 
 from nucypher_core import FleetStateChecksum, MetadataRequest
 
-from .base import PeerError
+from .base.peer import PeerError
 from .drivers.identity import IdentityAddress
 from .drivers.peer import Contact, PeerClient
 from .drivers.time import SystemClock
@@ -21,7 +21,7 @@ from .storage import InMemoryStorage
 from .utils import BackgroundTask, wait_for_any
 from .utils.logging import NULL_LOGGER
 from .utils.producer import producer
-from .verification import PublicUrsula, verify_staking_remote
+from .verification import PublicUrsula, verify_staking_remote, NodeVerificationError
 
 import random
 from bisect import bisect_right
@@ -218,15 +218,15 @@ class Learner:
         self._logger.debug("Verifying a contact {}", contact)
 
         secure_contact = await self._peer_client.handshake(contact)
-        peer = await self._peer_client.public_information(secure_contact, self._clock)
+        peer_info = await self._peer_client.public_information(secure_contact, self._clock)
 
         async with self._identity_client.session() as session:
             # TODO: abstraction leak
-            staking_provider_address = IdentityAddress(peer.metadata.payload.staking_provider_address)
+            staking_provider_address = IdentityAddress(peer_info.metadata.payload.staking_provider_address)
             operator_address = await verify_staking_remote(session, staking_provider_address)
             staked = await session.get_staked_amount(staking_provider_address)
 
-        node = PublicUrsula.checked_remote(peer, operator_address, self.domain)
+        node = PublicUrsula.checked_remote(peer_info, operator_address, self.domain)
 
         return node, staked
 

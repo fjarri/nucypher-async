@@ -18,11 +18,15 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
 
-from ..base import PorterAPI, PeerAPI, PeerError, InactivePolicy
+from ..base.peer import BasePeer, ServerSidePeerError, InactivePolicy
+from ..base.porter import BasePorter
 
 
+# HTTP status codes don't need to be unique or exhaustive, it's just an additional way
+# to convey information to the user.
+# The error type can be recovered from the status code in the JSON message.
 _HTTP_STATUS = {
-    InactivePolicy: http.HTTPStatus.PAYMENT_REQUIRED
+    InactivePolicy: http.HTTPStatus.PAYMENT_REQUIRED,
 }
 
 
@@ -34,29 +38,23 @@ class HTTPError(Exception):
         self.status_code = status_code
 
 
-async def call_endpoint(endpoint_future):
-    try:
-        result_bytes = await endpoint_future
-    except PeerError as exc:
-        message = exc.to_json()
-        status = http.HTTPStatus.INTERNAL_SERVER_ERROR
-        for tp, code in _HTTP_STATUS:
-            if isinstance(exc, tp):
-                status = code
-                break
-        return message, status
-
-    return result_bytes, http.HTTPStatus.OK
-
-
 async def peer_api_call(logger, endpoint_future):
     try:
-        result_bytes, status_code = await call_endpoint(endpoint_future)
+        result_bytes = await endpoint_future
+    except ServerSidePeerError as exc:
+        message = exc.to_json()
+        status_code = http.HTTPStatus.INTERNAL_SERVER_ERROR
+        for tp, code in _HTTP_STATUS:
+            if isinstance(exc, tp):
+                status_code = code
+                break
+        return JSONResponse(message, status_code=status_code)
     except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
         return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return Response(result_bytes, status_code=status_code)
+
+    return Response(result_bytes)
 
 
 async def rest_api_call(logger, endpoint_future):
@@ -90,40 +88,40 @@ def make_lifespan(on_startup, on_shutdown):
     return lifespan_context
 
 
-def make_peer_asgi_app(api: PeerAPI):
+def make_peer_asgi_app(peer: BasePeer):
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
 
-    logger = api.logger().get_child('App')
+    logger = peer.logger().get_child('App')
 
     async def ping(request):
-        return await peer_api_call(logger, api.endpoint_ping(request.client.host))
+        return await peer_api_call(logger, peer.endpoint_ping(request.client.host))
 
     async def node_metadata_get(request):
-        return await peer_api_call(logger, api.endpoint_node_metadata_get())
+        return await peer_api_call(logger, peer.endpoint_node_metadata_get())
 
     async def node_metadata_post(request):
         remote_host = request.client.host
         request_bytes = await request.body()
-        return await peer_api_call(logger, api.endpoint_node_metadata_post(remote_host, request_bytes))
+        return await peer_api_call(logger, peer.endpoint_node_metadata_post(remote_host, request_bytes))
 
     async def public_information(request):
-        return await peer_api_call(logger, api.endpoint_public_information())
+        return await peer_api_call(logger, peer.endpoint_public_information())
 
     async def reencrypt(request):
         request_bytes = await request.body()
-        return await peer_api_call(logger, api.endpoint_reencrypt(request_bytes))
+        return await peer_api_call(logger, peer.endpoint_reencrypt(request_bytes))
 
     async def status(request):
         # This is technically not a peer API, so we need special handling
-        return await rest_api_call(logger, api.endpoint_status())
+        return await rest_api_call(logger, peer.endpoint_status())
 
     async def on_startup(nursery):
-        await api.start(nursery)
+        await peer.start(nursery)
 
     async def on_shutdown(nursery):
-        await api.stop(nursery)
+        await peer.stop(nursery)
 
     routes = [
         Route("/ping", ping),
@@ -141,31 +139,31 @@ def make_peer_asgi_app(api: PeerAPI):
     return app
 
 
-def make_porter_app(porter_server: PorterAPI):
+def make_porter_app(porter: BasePorter):
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """
 
-    logger = porter_server.logger().get_child('App')
+    logger = porter.logger().get_child('App')
 
     async def get_ursulas(request):
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
-        return await rest_api_call(logger, porter_server.endpoint_get_ursulas(json_request))
+        return await rest_api_call(logger, porter.endpoint_get_ursulas(json_request))
 
     async def retrieve_cfrags(request):
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
-        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(json_request))
+        return await rest_api_call(logger, porter.endpoint_retrieve_cfrags(json_request))
 
     async def status(request):
-        return await rest_api_call(logger, porter_server.endpoint_status())
+        return await rest_api_call(logger, porter.endpoint_status())
 
     async def on_startup(nursery):
-        await porter_server.start(nursery)
+        await porter.start(nursery)
 
     async def on_shutdown(nursery):
-        await porter_server.stop(nursery)
+        await porter.stop(nursery)
 
     routes = [
         Route("/get_ursulas", get_ursulas),

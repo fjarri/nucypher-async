@@ -3,9 +3,13 @@ from abc import ABC, abstractmethod
 import arrow
 
 
-class Clock(ABC):
+class BaseClock(ABC):
+    """
+    An abstract class for getting the current time.
+    A behavior different from just returning the system time may be needed for tests.
+    """
 
-    @staticmethod
+    # not a staticmethod since some implementations may need to maintain an internal state
     @abstractmethod
-    def utcnow() -> arrow.Arrow:
+    def utcnow(self) -> arrow.Arrow:
         pass

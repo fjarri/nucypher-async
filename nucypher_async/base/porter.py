@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
 
+from ..utils.logging import Logger
 
-class PorterAPI(ABC):
+
+class BasePorter(ABC):
+    """
+    A base class for a stateful Porter -
+    a service exposing node sampling/lookup via REST.
+    """
 
     @abstractmethod
     async def start(self, nursery):
@@ -21,4 +27,8 @@ class PorterAPI(ABC):
 
     @abstractmethod
     async def endpoint_status(self) -> str:
+        ...
+
+    @abstractmethod
+    def logger(self) -> Logger:
         ...

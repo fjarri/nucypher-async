@@ -1,14 +1,15 @@
 import datetime
 import sys
+from typing import Optional
 
 import trio
 from nucypher_core import (
     NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
     MetadataResponse, ReencryptionRequest, ReencryptionResponse)
 
-from .base import PeerServer, PeerAPI, InactivePolicy
+from .base.peer import BasePeer, InactivePolicy
 from .drivers.identity import IdentityAddress
-from .drivers.peer import Contact, SecureContact
+from .drivers.peer import BasePeerServer, Contact, SecureContact
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
@@ -18,7 +19,7 @@ from .utils import BackgroundTask
 from .verification import PublicUrsula, verify_staking_local
 
 
-class UrsulaServer(PeerServer, PeerAPI):
+class UrsulaServer(BasePeerServer, BasePeer):
 
     @classmethod
     async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig):
@@ -44,10 +45,11 @@ class UrsulaServer(PeerServer, PeerAPI):
         self._storage = config.storage
 
         metadata = self._storage.get_my_metadata()
+        maybe_node: Optional[PublicUrsula] = None
         if metadata is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
-                node = PublicUrsula.checked_local(
+                maybe_node = PublicUrsula.checked_local(
                     metadata=metadata,
                     clock=self._clock,
                     ursula=self.ursula,
@@ -56,25 +58,24 @@ class UrsulaServer(PeerServer, PeerAPI):
                     domain=config.domain)
             except Exception as e:
                 self._logger.warn("Obsolete/invalid metadata found ({}), updating", str(e), exc_info=True)
-                metadata = None
 
-        if metadata is None:
+        if maybe_node is None:
             self._logger.debug("Generating new metadata")
-            node = PublicUrsula.generate(
+            self._node = PublicUrsula.generate(
                 clock=self._clock,
                 ursula=self.ursula,
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain)
-            self._storage.set_my_metadata(node.metadata)
-
-        self._node = node
+            self._storage.set_my_metadata(self._node.metadata)
+        else:
+            self._node = maybe_node
 
         self.learner = Learner(
             peer_client=config.peer_client,
             identity_client=config.identity_client,
             storage=config.storage,
-            this_node=node,
+            this_node=self._node,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
             domain=config.domain,
@@ -98,7 +99,7 @@ class UrsulaServer(PeerServer, PeerAPI):
     def logger(self):
         return self._logger
 
-    def peer_api(self):
+    def peer(self):
         return self
 
     async def start(self, nursery):
@@ -121,26 +122,22 @@ class UrsulaServer(PeerServer, PeerAPI):
         await self._verification_task.stop()
         self.started = False
 
-    async def endpoint_ping(self, remote_host: str) -> bytes:
-        return remote_host.encode()
+    async def endpoint_ping(self, remote_host: str) -> str:
+        return remote_host
 
-    async def endpoint_node_metadata_get(self):
+    async def node_metadata_get(self):
         response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                    announce_nodes=self.learner.metadata_to_announce())
         response = MetadataResponse(self.ursula.signer, response_payload)
-        return bytes(response)
+        return response
 
-    async def endpoint_node_metadata_post(self, remote_host, request_bytes):
-        try:
-            metadata_request = MetadataRequest.from_bytes(request_bytes)
-        except ValueError as exc:
-            raise MessageFormatError.for_message(MetadataRequest, exc) from exc
+    async def node_metadata_post(self, remote_host, metadata_request):
 
         if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                                                        announce_nodes=[])
-            return bytes(MetadataResponse(self.ursula.signer, response_payload))
+            return MetadataResponse(self.ursula.signer, response_payload)
 
         new_metadatas = metadata_request.announce_nodes
 
@@ -148,14 +145,10 @@ class UrsulaServer(PeerServer, PeerAPI):
 
         return await self.endpoint_node_metadata_get()
 
-    async def endpoint_public_information(self):
-        return bytes(self._node.metadata)
+    async def public_information(self):
+        return self._node.metadata
 
-    async def endpoint_reencrypt(self, request_bytes):
-        try:
-            reencryption_request = ReencryptionRequest.from_bytes(request_bytes)
-        except ValueError as exc:
-            raise MessageFormatError.for_message(ReencryptionRequest, exc) from exc
+    async def reencrypt(self, reencryption_request):
 
         hrac = reencryption_request.hrac
 
@@ -178,7 +171,7 @@ class UrsulaServer(PeerServer, PeerAPI):
             capsules=reencryption_request.capsules,
             vcfrags=vcfrags)
 
-        return bytes(response)
+        return response
 
     async def endpoint_status(self):
         return render_status(self._logger, self._clock, self, is_active_peer=True)

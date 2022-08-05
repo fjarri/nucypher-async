@@ -1,16 +1,17 @@
 from contextlib import contextmanager
 from pathlib import Path
 import tempfile
+from typing import Iterator
 
 import trio
 
 
 @contextmanager
-def temp_file(contents: bytes) -> Path:
+def temp_file(contents: bytes) -> Iterator[Path]:
     with tempfile.NamedTemporaryFile(mode="wb") as f:
         f.write(contents)
         f.flush()
-        yield f.name
+        yield Path(f.name)
 
 
 async def wait_for_any(events, timeout):

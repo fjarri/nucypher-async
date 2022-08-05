@@ -1,10 +1,10 @@
 import arrow
 import trio
 
-from ..base import Clock
+from ..base.time import BaseClock
 
 
-class MockClock(Clock):
+class MockClock(BaseClock):
 
     def __init__(self):
         self._start = arrow.utcnow().timestamp() - trio.current_time()
