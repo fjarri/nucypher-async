@@ -2,7 +2,7 @@ from typing import List
 from pathlib import Path
 
 import attrs
-from appdirs import AppDirs
+from platformdirs import PlatformDirs
 
 from .base.time import BaseClock
 from .utils.ssl import SSLCertificate, SSLPrivateKey
@@ -36,7 +36,7 @@ class Directories:
 
 
 def app_dirs(profile_name):
-    dirs = AppDirs(appname='nucypher-async')
+    dirs = PlatformDirs(appname='nucypher-async')
     log_dir = Path(dirs.user_log_dir).resolve() / profile_name
     data_dir = Path(dirs.user_data_dir).resolve() / profile_name
     return Directories(log_dir=log_dir, data_dir=data_dir)

@@ -1,7 +1,6 @@
 import json
 import sys
 
-from appdirs import AppDirs
 import trio
 import click
 

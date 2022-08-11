@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 from pathlib import Path
 
-from appdirs import AppDirs
 from nucypher_core import NodeMetadata
 
 
