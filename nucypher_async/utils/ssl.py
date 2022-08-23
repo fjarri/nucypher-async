@@ -60,10 +60,11 @@ class SSLPublicKey:
         return bytes(self) == bytes(other)
 
 
-class SSLCertificate:
+class InvalidCertificate(Exception):
+    pass
 
-    class InvalidSignature(Exception):
-        pass
+
+class SSLCertificate:
 
     @classmethod
     def self_signed(cls, start_date: arrow.Arrow, private_key: SSLPrivateKey, host: str, days_valid: int = 365) -> "SSLCertificate":
@@ -120,25 +121,15 @@ class SSLCertificate:
     def public_key(self):
         return SSLPublicKey(self._certificate.public_key())
 
-    def verify(self):
-        # Note: this is not called automatically by `httpx`, we have to call it manually
-        # if we want to make sure the certificate is self-consistent.
-        try:
-            # TODO: this will fail if the public key is not `EllipticCurvePublicKey`.
-            # This can happen when a remote node is using a custom certificate.
-            # (see the docs for `cryptography.x509.Certificate.public_key`
-            # for the list of possible types -
-            # Different keys have different signatures of `verify()`)
-            self._certificate.public_key().verify(
-                self._certificate.signature,
-                self._certificate.tbs_certificate_bytes,
-                ec.ECDSA(self._certificate.signature_hash_algorithm))
-        except exceptions.InvalidSignature as e:
-            raise self.InvalidSignature(str(e)) from e
-
     @property
     def declared_host(self) -> str:
-        return self._certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        host = self._certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        if not isinstance(host, str):
+            # The `Name` object can technically contain bytes.
+            # `cryptography` won't let you create such a certificate,
+            # but some other tool might.
+            raise InvalidCertificate(f"Subject hostname is not a string: {repr(host)}")
+        return host
 
     @property
     def not_valid_before(self) -> arrow.Arrow:

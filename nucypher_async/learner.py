@@ -13,7 +13,7 @@ from nucypher_core import FleetStateChecksum, MetadataRequest
 
 from .base.peer import PeerError
 from .drivers.identity import IdentityAddress
-from .drivers.peer import Contact, PeerClient
+from .drivers.peer import Contact, PeerClient, PeerVerificationError, PeerInfo
 from .drivers.time import SystemClock
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
@@ -21,7 +21,7 @@ from .storage import InMemoryStorage
 from .utils import BackgroundTask, wait_for_any
 from .utils.logging import NULL_LOGGER
 from .utils.producer import producer
-from .verification import PublicUrsula, verify_staking_remote, NodeVerificationError
+from .verification import PublicUrsula, verify_staking_remote
 
 import random
 from bisect import bisect_right
@@ -217,16 +217,19 @@ class Learner:
     async def _verify_contact(self, contact: Contact):
         self._logger.debug("Verifying a contact {}", contact)
 
+        # TODO: merge all of it into `public_information()`?
         secure_contact = await self._peer_client.handshake(contact)
-        peer_info = await self._peer_client.public_information(secure_contact, self._clock)
+        metadata = await self._peer_client.public_information(secure_contact)
+        peer_info = PeerInfo(metadata)
 
         async with self._identity_client.session() as session:
-            # TODO: abstraction leak
-            staking_provider_address = IdentityAddress(peer_info.metadata.payload.staking_provider_address)
+            staking_provider_address = peer_info.staking_provider_address
             operator_address = await verify_staking_remote(session, staking_provider_address)
             staked = await session.get_staked_amount(staking_provider_address)
 
-        node = PublicUrsula.checked_remote(peer_info, operator_address, self.domain)
+        # TODO: separate stateless checks (can be done once) and transient checks
+        # (expiry, staking status etc), and only perform the former if the metadata changed.
+        node = PublicUrsula.checked_remote(self._clock, peer_info, secure_contact, operator_address, self.domain)
 
         return node, staked
 
@@ -244,7 +247,8 @@ class Learner:
         try:
             payload = metadata_response.verify(node.verifying_key)
         except Exception as e: # TODO: can we narrow it down?
-            raise NodeVerificationError("Failed to verify MetadataResponse") from e
+            # TODO: should it be a separate error class?
+            raise PeerVerificationError("Failed to verify MetadataResponse") from e
 
         return payload.announce_nodes
 
@@ -287,12 +291,12 @@ class Learner:
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
-            except (PeerError, trio.TooSlowError) as e:
-                if isinstance(e, trio.TooSlowError):
+            except (PeerError, trio.TooSlowError) as exc:
+                if isinstance(exc, trio.TooSlowError):
                     message = "timed out"
                 else:
-                    message = str(e)
-                self._logger.debug("Error when trying to verify {}: {}", contact, message)
+                    message = str(exc)
+                self._logger.debug("Error when trying to verify {}: {}", contact, message, exc_info=True)
                 self.fleet_sensor.report_bad_contact(contact)
                 if self._my_node:
                     self.fleet_state.remove_contact(contact)

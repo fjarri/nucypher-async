@@ -62,7 +62,7 @@ class MockNetwork:
 
 class MockHTTPClient:
 
-    def __init__(self, mock_network, host, certificate):
+    def __init__(self, mock_network: MockNetwork, host: str, certificate: SSLCertificate):
         self._mock_network = mock_network
         self._host = host
         self._certificate = certificate

@@ -84,7 +84,7 @@ class MasterKey:
 
     def make_peer_private_key(self):
         sk = self.__skf.make_key(b'NuCypher/tls')
-        return PeerPrivateKey(sk.to_secret_bytes())
+        return PeerPrivateKey.from_seed(sk.to_secret_bytes())
 
     def make_signer(self):
         return Signer(self.__skf.make_key(b'NuCypher/signing'))

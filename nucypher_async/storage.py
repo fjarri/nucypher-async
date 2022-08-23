@@ -2,30 +2,30 @@ from abc import ABC, abstractmethod
 
 from pathlib import Path
 
-from nucypher_core import NodeMetadata
+from .drivers.peer import PeerInfo
 
 
 class BaseStorage(ABC):
 
     @abstractmethod
-    def get_my_metadata(self) -> NodeMetadata:
+    def get_my_peer_info(self) -> PeerInfo:
         ...
 
     @abstractmethod
-    def set_my_metadata(self, metadata: NodeMetadata):
+    def set_my_peer_info(self, peer_info: PeerInfo):
         ...
 
 
 class InMemoryStorage(BaseStorage):
 
     def __init__(self):
-        self._my_metadata = None
+        self._my_peer_info = None
 
-    def get_my_metadata(self):
-        return self._my_metadata
+    def get_my_peer_info(self):
+        return self._my_peer_info
 
-    def set_my_metadata(self, metadata):
-        self._my_metadata = metadata
+    def set_my_peer_info(self, peer_info):
+        self._my_peer_info = peer_info
 
 
 class FileSystemStorage(BaseStorage):
@@ -34,21 +34,20 @@ class FileSystemStorage(BaseStorage):
         self._storage_dir = Path(storage_dir)
         self._storage_dir.mkdir(parents=True, exist_ok=True)
 
-    def _my_metadata_path(self):
+    def _my_peer_info_path(self):
         return self._storage_dir / 'operator.metadata'
 
-    def get_my_metadata(self):
-        metadata_path = self._my_metadata_path()
-        if not metadata_path.is_file():
+    def get_my_peer_info(self):
+        peer_info_path = self._my_peer_info_path()
+        if not peer_info_path.is_file():
             return None
 
-        with open(metadata_path, 'rb') as f:
-            metadata = f.read()
+        with open(peer_info_path, 'rb') as f:
+            peer_info = f.read()
 
-        return NodeMetadata.from_bytes(metadata)
+        return NodeMetadata.from_bytes(peer_info)
 
-    def set_my_metadata(self, metadata):
-        metadata_path = self._my_metadata_path()
-        with open(metadata_path, 'wb') as f:
-            f.write(bytes(metadata))
-
+    def set_my_peer_info(self, peer_info):
+        peer_info_path = self._my_peer_info_path()
+        with open(peer_info_path, 'wb') as f:
+            f.write(bytes(peer_info))

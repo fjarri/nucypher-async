@@ -230,7 +230,7 @@ class FleetSensor:
             verify_at = verified_at.shift(hours=1)
 
         # If there's public key expiry incoming, verify then
-        expires_at = node.secure_contact.not_valid_after
+        expires_at = node.secure_contact.public_key.not_valid_after
         verify_at = min(expires_at.shift(seconds=1), verify_at)
 
         # TODO: other limits for increasing the verification interval are possible.

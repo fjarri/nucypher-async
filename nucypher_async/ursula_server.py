@@ -44,14 +44,14 @@ class UrsulaServer(BasePeerServer, BasePeer):
         self._logger = config.parent_logger.get_child('UrsulaServer')
         self._storage = config.storage
 
-        metadata = self._storage.get_my_metadata()
+        peer_info = self._storage.get_my_peer_info()
         maybe_node: Optional[PublicUrsula] = None
-        if metadata is not None:
+        if peer_info is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
                 maybe_node = PublicUrsula.checked_local(
-                    metadata=metadata,
                     clock=self._clock,
+                    peer_info=peer_info,
                     ursula=self.ursula,
                     staking_provider_address=staking_provider_address,
                     contact=config.contact,
@@ -67,7 +67,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain)
-            self._storage.set_my_metadata(self._node.metadata)
+            self._storage.set_my_peer_info(self._node)
         else:
             self._node = maybe_node
 
@@ -146,6 +146,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
         return await self.endpoint_node_metadata_get()
 
     async def public_information(self):
+        # TODO: can we just return PeerInfo?
         return self._node.metadata
 
     async def reencrypt(self, reencryption_request):
