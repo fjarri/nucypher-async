@@ -2,7 +2,13 @@ from typing import List, Optional
 
 from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
-    SecretKey, Signer, PublicKey, VerifiedKeyFrag, VerifiedCapsuleFrag, reencrypt)
+    SecretKey,
+    Signer,
+    PublicKey,
+    VerifiedKeyFrag,
+    VerifiedCapsuleFrag,
+    reencrypt,
+)
 
 from .drivers.identity import IdentityAccount
 from .drivers.peer import PeerPrivateKey
@@ -10,11 +16,11 @@ from .master_key import MasterKey
 
 
 class Ursula:
-
     def __init__(
-            self,
-            master_key: Optional[MasterKey] = None,
-            identity_account: Optional[IdentityAccount] = None):
+        self,
+        master_key: Optional[MasterKey] = None,
+        identity_account: Optional[IdentityAccount] = None,
+    ):
 
         self.__master_key = master_key or MasterKey.random()
         identity_account_ = identity_account or IdentityAccount.random()
@@ -29,7 +35,12 @@ class Ursula:
     def peer_private_key(self):
         return self.__master_key.make_peer_private_key()
 
-    def decrypt_kfrag(self, encrypted_kfrag: EncryptedKeyFrag, hrac: HRAC, publisher_verifying_key: PublicKey) -> VerifiedKeyFrag:
+    def decrypt_kfrag(
+        self,
+        encrypted_kfrag: EncryptedKeyFrag,
+        hrac: HRAC,
+        publisher_verifying_key: PublicKey,
+    ) -> VerifiedKeyFrag:
         return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_verifying_key)
 
     def reencrypt(self, verified_kfrag: VerifiedKeyFrag, capsules) -> List[VerifiedCapsuleFrag]:

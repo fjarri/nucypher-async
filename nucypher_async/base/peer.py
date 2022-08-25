@@ -8,7 +8,13 @@ from enum import Enum, unique
 import json
 from typing import TypeVar, Type, Dict, Callable, Any
 
-from nucypher_core import MetadataRequest, MetadataResponse, NodeMetadata, ReencryptionRequest, ReencryptionResponse
+from nucypher_core import (
+    MetadataRequest,
+    MetadataResponse,
+    NodeMetadata,
+    ReencryptionRequest,
+    ReencryptionResponse,
+)
 
 from ..utils.logging import Logger
 
@@ -79,14 +85,12 @@ def decode_peer_error(message: str) -> PeerError:
 
 
 class GenericPeerError(ServerSidePeerError):
-
     @staticmethod
     def error_code():
         return PeerErrorCode.GENERIC_ERROR
 
 
 class InvalidMessage(ServerSidePeerError):
-
     @staticmethod
     def error_code():
         return PeerErrorCode.INVALID_MESSAGE
@@ -97,7 +101,6 @@ class InvalidMessage(ServerSidePeerError):
 
 
 class InactivePolicy(ServerSidePeerError):
-
     @staticmethod
     def error_code():
         return PeerErrorCode.INACTIVE_POLICY
@@ -107,15 +110,16 @@ class InactivePolicy(ServerSidePeerError):
 # take from this dict (because `ServerSidePeerError` is abstract), even though
 # it infers the same return value by itself.
 _PEER_ERROR_CODE_TO_CLASS: Dict[PeerErrorCode, Callable[[str], ServerSidePeerError]] = {
-cls.error_code(): cls for cls in [
-    GenericPeerError,
-    InvalidMessage,
-    InactivePolicy,
-]}
+    cls.error_code(): cls
+    for cls in [
+        GenericPeerError,
+        InvalidMessage,
+        InactivePolicy,
+    ]
+}
 
 
 class BasePeer(ABC):
-
     @abstractmethod
     async def start(self, nursery):
         ...
@@ -136,7 +140,9 @@ class BasePeer(ABC):
         return bytes(await self.node_metadata_get())
 
     @abstractmethod
-    async def node_metadata_post(self, remote_host: str, request: MetadataRequest) -> MetadataResponse:
+    async def node_metadata_post(
+        self, remote_host: str, request: MetadataRequest
+    ) -> MetadataResponse:
         ...
 
     async def endpoint_node_metadata_post(self, remote_host: str, request_bytes: bytes) -> bytes:

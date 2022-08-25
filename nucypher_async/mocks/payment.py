@@ -17,7 +17,6 @@ class Policy(NamedTuple):
 
 
 class SubscriptionManager(MockContract):
-
     def __init__(self, abi):
         super().__init__(abi)
         self._balances = {}
@@ -35,9 +34,16 @@ class SubscriptionManager(MockContract):
     def getPolicyCost(self, shares: int, start: int, end: int) -> int:
         return (self._policy_rate * shares * (end - start)).as_wei()
 
-    def createPolicy(self,
-            sender_address: Address,
-            amount: Amount, policy_id: bytes, address: Address, shares: int, start: int, end: int):
+    def createPolicy(
+        self,
+        sender_address: Address,
+        amount: Amount,
+        policy_id: bytes,
+        address: Address,
+        shares: int,
+        start: int,
+        end: int,
+    ):
         # TODO: check that the amount is correct
         # TODO: check that timestamps are consistent
         # TODO: implement the distinction owner/sponsor from the contract
@@ -49,12 +55,13 @@ class SubscriptionManager(MockContract):
 
 
 class MockPaymentClient(PaymentClient):
-
     def __init__(self):
         mock_backend = MockBackend(AmountMATIC)
         super().__init__(mock_backend, Domain.MAINNET)
         self._mock_backend = mock_backend
-        mock_backend.mock_register_contract(self._manager.address, SubscriptionManager(self._manager.abi))
+        mock_backend.mock_register_contract(
+            self._manager.address, SubscriptionManager(self._manager.abi)
+        )
 
     def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC):
         self._mock_backend.set_balance(address, amount)

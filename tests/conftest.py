@@ -6,12 +6,10 @@ from nucypher_async.ursula import Ursula
 from nucypher_async.mocks import MockNetwork
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def logger():
     # TODO: we may add a CLI option to reduce the verbosity of test logging
-    return logging.Logger(
-        level=logging.DEBUG,
-        handlers=[logging.ConsoleHandler(stderr_at=None)])
+    return logging.Logger(level=logging.DEBUG, handlers=[logging.ConsoleHandler(stderr_at=None)])
 
 
 @pytest.fixture

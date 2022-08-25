@@ -29,12 +29,12 @@ class CodeInfo:
 
     @classmethod
     def collect(cls):
-        version = pkg_resources.get_distribution('nucypher-async').version
+        version = pkg_resources.get_distribution("nucypher-async").version
         revision = git_revision()
 
         if revision:
             tag = git_tag()
-            release = tag and 'v' + tag == version
+            release = tag and "v" + tag == version
             diff = git_diff()
         else:
             release = True
@@ -45,7 +45,7 @@ class CodeInfo:
 
 def git_revision():
     try:
-        out = _run_in_project_dir(['git', 'rev-parse', 'HEAD'])
+        out = _run_in_project_dir(["git", "rev-parse", "HEAD"])
     except OSError:
         return None
     revision = out.strip().decode()
@@ -54,7 +54,7 @@ def git_revision():
 
 def git_tag():
     try:
-        out = _run_in_project_dir(['git', 'tag', '--points-at', 'HEAD'])
+        out = _run_in_project_dir(["git", "tag", "--points-at", "HEAD"])
     except OSError:
         return None
     tag = out.strip().decode()
@@ -63,16 +63,16 @@ def git_tag():
 
 def git_diff():
     try:
-        out = _run_in_project_dir(['git', 'diff', '--numstat'])
+        out = _run_in_project_dir(["git", "diff", "--numstat"])
         diff_str = out.strip().decode()
     except OSError:
         diff_str = None
 
     if diff_str:
         diff = []
-        file_strs = diff_str.split('\n')
+        file_strs = diff_str.split("\n")
         for file_str in file_strs:
-            added, removed, path = file_str.split('\t')
+            added, removed, path = file_str.split("\t")
             diff.append(FileDiff(path=path, added=int(added), removed=int(removed)))
         return diff
     else:

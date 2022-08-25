@@ -36,7 +36,6 @@ async def wait_for_any(events, timeout):
 
 
 class BackgroundTask:
-
     def __init__(self, worker, logger):
         self._worker = worker
         self._logger = logger

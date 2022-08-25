@@ -32,7 +32,6 @@ class StakingProviderEntry(NamedTuple):
 
 
 class BroadcastedValue:
-
     def __init__(self):
         self._value = None
         self._event = trio.Event()
@@ -47,21 +46,25 @@ class BroadcastedValue:
 
 
 class VerifiedNodesDB:
-
     def __init__(self):
         self._nodes: Dict[IdentityAddress, NodeEntry] = {}
         self._verify_at = SortedKeyList(key=lambda entry: entry.verify_at)
 
-    def add_node(self, node: PublicUrsula, staked_amount: AmountT, verified_at: arrow.Arrow, verify_at: arrow.Arrow):
+    def add_node(
+        self,
+        node: PublicUrsula,
+        staked_amount: AmountT,
+        verified_at: arrow.Arrow,
+        verify_at: arrow.Arrow,
+    ):
         assert node.staking_provider_address not in self._nodes
         assert not any(entry.node.contact == node.contact for entry in self._nodes.values())
         self._nodes[node.staking_provider_address] = NodeEntry(
-            node=node,
-            verified_at=verified_at,
-            staked_amount=staked_amount)
-        self._verify_at.add(VerifyAtEntry(
-            address=node.staking_provider_address,
-            verify_at=verify_at))
+            node=node, verified_at=verified_at, staked_amount=staked_amount
+        )
+        self._verify_at.add(
+            VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
+        )
 
     def _del_verify_at(self, node: PeerInfo):
         # TODO: we really need a SortedDict type
@@ -73,15 +76,18 @@ class VerifiedNodesDB:
     def get_verified_at(self, node: PublicUrsula) -> arrow.Arrow:
         return self._nodes[node.staking_provider_address].verified_at
 
-    def update_verify_at(self, node: PublicUrsula, verified_at: arrow.Arrow, verify_at: arrow.Arrow):
+    def update_verify_at(
+        self, node: PublicUrsula, verified_at: arrow.Arrow, verify_at: arrow.Arrow
+    ):
         assert node.staking_provider_address in self._nodes
 
         node_entry = self._nodes[node.staking_provider_address]._replace(verified_at=verified_at)
         self._nodes[node.staking_provider_address] = node_entry
 
         self._del_verify_at(node)
-        self._verify_at.add(VerifyAtEntry(
-            address=node.staking_provider_address, verify_at=verify_at))
+        self._verify_at.add(
+            VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
+        )
 
     def remove_node(self, node: PeerInfo):
         del self._nodes[node.staking_provider_address]
@@ -109,14 +115,18 @@ class VerifiedNodesDB:
                 return entry.verify_at
         return None
 
-    def next_verification_in(self, now: arrow.Arrow, exclude: AbstractSet[Contact]) -> Optional[datetime.timedelta]:
+    def next_verification_in(
+        self, now: arrow.Arrow, exclude: AbstractSet[Contact]
+    ) -> Optional[datetime.timedelta]:
         time_point = self.next_verification_at(exclude)
         if time_point:
             return time_point - now if time_point > now else datetime.timedelta()
         else:
             return None
 
-    def get_contacts_to_verify(self, now: arrow.Arrow, contacts_num: int, exclude: AbstractSet[Contact]) -> List[Contact]:
+    def get_contacts_to_verify(
+        self, now: arrow.Arrow, contacts_num: int, exclude: AbstractSet[Contact]
+    ) -> List[Contact]:
         contacts: List[Contact] = []
         for entry in self._verify_at:
             if entry.verify_at > now:
@@ -130,19 +140,20 @@ class VerifiedNodesDB:
 
 
 class ContactsDB:
-
     def __init__(self):
         self._contacts_to_addresses: Dict[Contact, Set[IdentityAddress]] = defaultdict(set)
         self._addresses_to_contacts: Dict[IdentityAddress, Set[Contact]] = defaultdict(set)
 
-    def get_contacts_to_verify(self, contacts_num: int, exclude: AbstractSet[Contact]) -> List[Contact]:
+    def get_contacts_to_verify(
+        self, contacts_num: int, exclude: AbstractSet[Contact]
+    ) -> List[Contact]:
         contacts = list(self._contacts_to_addresses.keys() - exclude)
 
         # TODO: choose the contact that was supplied by the majority of nodes
         # This will help neutralize contact spam from malicious nodes.
         return random.sample(contacts, min(contacts_num, len(contacts)))
 
-    def add_contact(self, contact: Contact, address: Optional[IdentityAddress]=None):
+    def add_contact(self, contact: Contact, address: Optional[IdentityAddress] = None):
         if address is not None:
             self._contacts_to_addresses[contact].add(address)
             self._addresses_to_contacts[address].add(contact)
@@ -172,18 +183,19 @@ class ContactsDB:
 
 
 def _next_verification_time_may_change(func):
-
     def wrapped(fleet_sensor: "FleetSensor", *args, **kwargs):
 
         contacts_present_before = not fleet_sensor._contacts_db.is_empty()
         next_verification_before = fleet_sensor._verified_nodes_db.next_verification_at(
-            exclude=fleet_sensor._locked_contacts.keys())
+            exclude=fleet_sensor._locked_contacts.keys()
+        )
 
         result = func(fleet_sensor, *args, **kwargs)
 
         contacts_present_after = not fleet_sensor._contacts_db.is_empty()
         next_verification_after = fleet_sensor._verified_nodes_db.next_verification_at(
-            exclude=fleet_sensor._locked_contacts.keys())
+            exclude=fleet_sensor._locked_contacts.keys()
+        )
 
         reschedule = (
             (contacts_present_after and not contacts_present_before)
@@ -191,8 +203,9 @@ def _next_verification_time_may_change(func):
             or (
                 next_verification_before is not None
                 and next_verification_after is not None
-                and next_verification_after < next_verification_before)
+                and next_verification_after < next_verification_before
             )
+        )
 
         if reschedule:
             fleet_sensor.reschedule_verification_event.set()
@@ -204,8 +217,12 @@ def _next_verification_time_may_change(func):
 
 
 class FleetSensor:
-
-    def __init__(self, clock: BaseClock, my_staking_provider_address: Optional[IdentityAddress], my_contact: Optional[Contact]):
+    def __init__(
+        self,
+        clock: BaseClock,
+        my_staking_provider_address: Optional[IdentityAddress],
+        my_contact: Optional[Contact],
+    ):
 
         self._clock = clock
 
@@ -222,12 +239,18 @@ class FleetSensor:
         self.new_verified_nodes_event = trio.Event()
         self.reschedule_verification_event = trio.Event()
 
-    def _calculate_next_verification(self, node: PublicUrsula, verified_at: arrow.Arrow,
-            previously_verified_at: Optional[arrow.Arrow]=None):
+    def _calculate_next_verification(
+        self,
+        node: PublicUrsula,
+        verified_at: arrow.Arrow,
+        previously_verified_at: Optional[arrow.Arrow] = None,
+    ):
 
         if previously_verified_at:
             assert verified_at > previously_verified_at
-            verify_at = verified_at + (verified_at - previously_verified_at) * 1.5 # TODO: remove hardcoding
+            verify_at = (
+                verified_at + (verified_at - previously_verified_at) * 1.5
+            )  # TODO: remove hardcoding
         else:
             verify_at = verified_at.shift(hours=1)
 
@@ -276,7 +299,9 @@ class FleetSensor:
 
             if bytes(node.metadata) == bytes(old_node.metadata):
                 previously_verified_at = self._verified_nodes_db.get_verified_at(node)
-                verify_at = self._calculate_next_verification(node, verified_at, previously_verified_at)
+                verify_at = self._calculate_next_verification(
+                    node, verified_at, previously_verified_at
+                )
                 self._verified_nodes_db.update_verify_at(node, verified_at, verify_at)
             else:
                 self._verified_nodes_db.remove_node(old_node)
@@ -296,8 +321,8 @@ class FleetSensor:
         # Filter out only the contact(s) with `remote_address`.
         # We're not going to trust all this metadata anyway.
         sender_metadatas = [
-            metadata for metadata in metadatas
-            if metadata.contact.host == sender_host]
+            metadata for metadata in metadatas if metadata.contact.host == sender_host
+        ]
         self._add_contacts(sender_metadatas)
 
     @_next_verification_time_may_change
@@ -308,8 +333,13 @@ class FleetSensor:
     def verified_metadata(self) -> List[PublicUrsula]:
         return self._verified_nodes_db.all_nodes()
 
-    def _add_node(self, node: PublicUrsula, staked_amount: AmountT,
-            verified_at: arrow.Arrow, verify_at: arrow.Arrow):
+    def _add_node(
+        self,
+        node: PublicUrsula,
+        staked_amount: AmountT,
+        verified_at: arrow.Arrow,
+        verify_at: arrow.Arrow,
+    ):
         self._verified_nodes_db.add_node(node, staked_amount, verified_at, verify_at)
         self.new_verified_nodes_event.set()
         self.new_verified_nodes_event = trio.Event()
@@ -345,7 +375,9 @@ class FleetSensor:
             return datetime.timedelta().total_seconds()
 
         now = self._clock.utcnow()
-        next_verification_in = self._verified_nodes_db.next_verification_in(now, exclude=self._locked_contacts.keys())
+        next_verification_in = self._verified_nodes_db.next_verification_in(
+            now, exclude=self._locked_contacts.keys()
+        )
         if next_verification_in is None:
             # Maybe someone will contact us during this time and leave some contacts.
             return datetime.timedelta(days=1).total_seconds()
@@ -366,16 +398,22 @@ class FleetSensor:
             del self._locked_contacts[contact]
 
     def get_contacts_to_verify(self, contacts_num: int) -> List[Contact]:
-        return self._contacts_db.get_contacts_to_verify(contacts_num, exclude=self._locked_contacts.keys())
+        return self._contacts_db.get_contacts_to_verify(
+            contacts_num, exclude=self._locked_contacts.keys()
+        )
 
     def get_contacts_to_reverify(self, contacts_num: int) -> List[Contact]:
         now = self._clock.utcnow()
-        return self._verified_nodes_db.get_contacts_to_verify(now, contacts_num, exclude=self._locked_contacts.keys())
+        return self._verified_nodes_db.get_contacts_to_verify(
+            now, contacts_num, exclude=self._locked_contacts.keys()
+        )
 
     def get_nodes_to_learn_from(self, nodes_num: int) -> List[PublicUrsula]:
         entries = [
-            entry for entry in self._verified_nodes_db._nodes.values()
-            if entry.node.contact not in self._locked_contacts]
+            entry
+            for entry in self._verified_nodes_db._nodes.values()
+            if entry.node.contact not in self._locked_contacts
+        ]
         sampled = random.sample(entries, min(nodes_num, len(entries)))
         return [entry.node for entry in sampled]
 
@@ -383,24 +421,33 @@ class FleetSensor:
         now = self._clock.utcnow()
         entries = []
         for address, entry in self._verified_nodes_db._nodes.items():
-            if address in self._staking_providers and self._staking_providers_updated > entry.verified_at:
+            if (
+                address in self._staking_providers
+                and self._staking_providers_updated > entry.verified_at
+            ):
                 staked_amount = self._staking_providers[address]
             else:
                 staked_amount = entry.staked_amount
 
-            entries.append(StakingProviderEntry(
-                address=address,
-                contact=entry.node.contact,
-                weight=int(staked_amount.as_ether())))
+            entries.append(
+                StakingProviderEntry(
+                    address=address,
+                    contact=entry.node.contact,
+                    weight=int(staked_amount.as_ether()),
+                )
+            )
 
         for address, contacts in self._contacts_db._addresses_to_contacts.items():
             if address in self._staking_providers:
                 staked_amount = self._staking_providers[address]
                 for contact in contacts:
-                    entries.append(StakingProviderEntry(
-                        address=address,
-                        contact=contact,
-                        weight=int(staked_amount.as_ether() / len(contacts))))
+                    entries.append(
+                        StakingProviderEntry(
+                            address=address,
+                            contact=contact,
+                            weight=int(staked_amount.as_ether() / len(contacts)),
+                        )
+                    )
 
         return entries
 
@@ -414,6 +461,7 @@ class FleetSensor:
 
     def print_status(self):
         import io
+
         file = io.StringIO()
         print("Verified nodes:", file=file)
         for address, entry in self._verified_nodes_db._nodes.items():

@@ -31,7 +31,10 @@ class FleetState:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address
-            if address not in self._metadatas or metadata.timestamp > self._metadatas[address].timestamp:
+            if (
+                address not in self._metadatas
+                or metadata.timestamp > self._metadatas[address].timestamp
+            ):
                 self._add_metadata(metadata)
                 updated = True
 
@@ -48,7 +51,7 @@ class FleetState:
     def checksum(self):
         if not self._checksum:
             self._checksum = FleetStateChecksum(
-                self._my_metadata,
-                [m.metadata for m in self._metadatas.values()])
+                self._my_metadata, [m.metadata for m in self._metadatas.values()]
+            )
             self.timestamp_epoch = int(self._clock.utcnow().timestamp())
         return self._checksum

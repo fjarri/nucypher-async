@@ -16,10 +16,9 @@ import trio
 
 
 class SSLPrivateKey:
-
     @classmethod
     def from_seed(cls, seed: bytes):
-        private_bn = int.from_bytes(seed, 'big')
+        private_bn = int.from_bytes(seed, "big")
         private_key = ec.derive_private_key(private_value=private_bn, curve=ec.SECP384R1())
         return cls(private_key)
 
@@ -40,21 +39,22 @@ class SSLPrivateKey:
         return self._private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.BestAvailableEncryption(password))
+            encryption_algorithm=serialization.BestAvailableEncryption(password),
+        )
 
 
 class SSLPublicKey:
-
     def __init__(self, public_key: ec.EllipticCurvePublicKey):
         self._public_key = public_key
 
     def __bytes__(self):
         return self._public_key.public_bytes(
             encoding=serialization.Encoding.X962,
-            format=serialization.PublicFormat.CompressedPoint)
+            format=serialization.PublicFormat.CompressedPoint,
+        )
 
     def __str__(self):
-        return '0x' + bytes(self).hex()
+        return "0x" + bytes(self).hex()
 
     def __eq__(self, other):
         return bytes(self) == bytes(other)
@@ -65,9 +65,14 @@ class InvalidCertificate(Exception):
 
 
 class SSLCertificate:
-
     @classmethod
-    def self_signed(cls, start_date: arrow.Arrow, private_key: SSLPrivateKey, host: str, days_valid: int = 365) -> "SSLCertificate":
+    def self_signed(
+        cls,
+        start_date: arrow.Arrow,
+        private_key: SSLPrivateKey,
+        host: str,
+        days_valid: int = 365,
+    ) -> "SSLCertificate":
         # TODO: assert that the start date is in UTC?
 
         public_key = private_key.public_key()
@@ -111,11 +116,11 @@ class SSLCertificate:
         return self._certificate.public_bytes(serialization.Encoding.DER)
 
     @classmethod
-    def from_pem_bytes(cls, data) -> 'SSLCertificate':
+    def from_pem_bytes(cls, data) -> "SSLCertificate":
         return cls(x509.load_pem_x509_certificate(data))
 
     @classmethod
-    def from_der_bytes(cls, data) -> 'SSLCertificate':
+    def from_der_bytes(cls, data) -> "SSLCertificate":
         return cls(x509.load_der_x509_certificate(data))
 
     def public_key(self):

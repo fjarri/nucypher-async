@@ -2,11 +2,13 @@ from contextlib import asynccontextmanager
 from collections import defaultdict
 
 from pons import Amount, Address, Signer, ReadMethod, WriteMethod
-from pons._contract import BoundReadCall, BoundWriteCall # TODO: expose as the public API in pons
+from pons._contract import (
+    BoundReadCall,
+    BoundWriteCall,
+)  # TODO: expose as the public API in pons
 
 
 class MockContract:
-
     def __init__(self, abi):
         self._abi = abi
 
@@ -41,8 +43,7 @@ class MockContract:
         getattr(self, method.name)(address, amount, *args)
 
 
-class MockBackend():
-
+class MockBackend:
     def __init__(self, native_currency_cls):
         self._native_currency_cls = native_currency_cls
         self._balances = defaultdict(lambda: native_currency_cls(0))

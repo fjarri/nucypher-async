@@ -11,7 +11,6 @@ from ..utils.ssl import SSLCertificate
 
 
 class LifespanManager:
-
     def __init__(self, app):
         self.app = app
         self._send_channel, self._receive_channel = trio.open_memory_channel(0)
@@ -38,7 +37,6 @@ class LifespanManager:
 
 
 class MockNetwork:
-
     def __init__(self, nursery):
         self.known_servers = {}
         self.nursery = nursery
@@ -61,7 +59,6 @@ class MockNetwork:
 
 
 class MockHTTPClient:
-
     def __init__(self, mock_network: MockNetwork, host: str, certificate: SSLCertificate):
         self._mock_network = mock_network
         self._host = host
@@ -75,7 +72,9 @@ class MockHTTPClient:
 
     async def _request(self, method, url, *args, **kwargs):
         url_parts = urlparse(url)
-        certificate, manager = self._mock_network.known_servers[(url_parts.hostname, url_parts.port)]
+        certificate, manager = self._mock_network.known_servers[
+            (url_parts.hostname, url_parts.port)
+        ]
         assert self._certificate == certificate
         transport = httpx.ASGITransport(app=manager.app, client=(self._host, 9999))
         async with httpx.AsyncClient(transport=transport) as client:

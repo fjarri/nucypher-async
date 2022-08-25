@@ -38,7 +38,6 @@ class ActiveLearner:
 
 
 class WeightedReservoir:
-
     def __init__(self, elements, get_weight):
         weights = [get_weight(elem) for elem in elements]
         self.totals = list(accumulate(weights))
@@ -76,14 +75,23 @@ class Learner:
     LEARNING_TIMEOUT = 10
     STAKING_PROVIDERS_TIMEOUT = 30
 
-    def __init__(self, domain, identity_client, peer_client=None, this_node: Optional[PublicUrsula]=None,
-            seed_contacts=None, parent_logger=NULL_LOGGER, storage=None, clock=None):
+    def __init__(
+        self,
+        domain,
+        identity_client,
+        peer_client=None,
+        this_node: Optional[PublicUrsula] = None,
+        seed_contacts=None,
+        parent_logger=NULL_LOGGER,
+        storage=None,
+        clock=None,
+    ):
 
         if peer_client is None:
             peer_client = PeerClient()
 
         self._clock = clock or SystemClock()
-        self._logger = parent_logger.get_child('Learner')
+        self._logger = parent_logger.get_child("Learner")
 
         if storage is None:
             storage = InMemoryStorage()
@@ -113,7 +121,10 @@ class Learner:
     def _add_verified_nodes(self, nodes: Iterable[PeerInfo], stakes: Iterable[AmountT]):
         # TODO: move to tests
         for node, stake in zip(nodes, stakes):
-            if not self._active or node.staking_provider_address != self._active.node.staking_provider_address:
+            if (
+                not self._active
+                or node.staking_provider_address != self._active.node.staking_provider_address
+            ):
                 self.fleet_sensor.report_verified_node(node.secure_contact.contact, node, stake)
                 if self._active:
                     self._active.fleet_state.add_metadatas([node])
@@ -137,7 +148,9 @@ class Learner:
                     if node_entry is None:
                         continue
 
-                    if verified_within and node_entry.verified_at < now - datetime.timedelta(seconds=verified_within):
+                    if verified_within and node_entry.verified_at < now - datetime.timedelta(
+                        seconds=verified_within
+                    ):
                         nursery.start_soon(self._verify_node_and_report, node_entry.node)
                         continue
 
@@ -163,7 +176,9 @@ class Learner:
                     await self.learning_round()
 
     @producer
-    async def random_verified_nodes_iter(self, yield_, amount, overhead=0, exclude=None, verified_within=None):
+    async def random_verified_nodes_iter(
+        self, yield_, amount, overhead=0, exclude=None, verified_within=None
+    ):
 
         if self.fleet_sensor.is_empty():
             await self.seed_round()
@@ -180,7 +195,9 @@ class Learner:
             if verified_within is None:
                 return True
 
-            return now - node_entries[address].verified_at < datetime.timedelta(seconds=verified_within)
+            return now - node_entries[address].verified_at < datetime.timedelta(
+                seconds=verified_within
+            )
 
         returned = 0
         drawn = 0
@@ -239,31 +256,42 @@ class Learner:
 
         # TODO: separate stateless checks (can be done once) and transient checks
         # (expiry, staking status etc), and only perform the former if the metadata changed.
-        node = PublicUrsula.checked_remote(self._clock, peer_info, secure_contact, operator_address, self.domain)
+        node = PublicUrsula.checked_remote(
+            self._clock, peer_info, secure_contact, operator_address, self.domain
+        )
 
         return node, staked
 
     async def _learn_from_node(self, node: PublicUrsula) -> List[PeerInfo]:
         self._logger.debug(
             "Learning from {} ({})",
-            node.secure_contact.contact, node.staking_provider_address)
+            node.secure_contact.contact,
+            node.staking_provider_address,
+        )
 
         if self._active:
-            request = MetadataRequest(self._active.fleet_state.checksum, [self._active.node.metadata])
-            metadata_response = await self._peer_client.node_metadata_post(node.secure_contact, request)
+            request = MetadataRequest(
+                self._active.fleet_state.checksum, [self._active.node.metadata]
+            )
+            metadata_response = await self._peer_client.node_metadata_post(
+                node.secure_contact, request
+            )
         else:
             metadata_response = await self._peer_client.node_metadata_get(node.secure_contact)
 
         try:
             payload = metadata_response.verify(node.verifying_key)
-        except Exception as e: # TODO: can we narrow it down?
+        except Exception as e:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise PeerVerificationError("Failed to verify MetadataResponse") from e
 
         return [PeerInfo(metadata) for metadata in payload.announce_nodes]
 
     async def _learn_from_node_and_report(self, node: PublicUrsula):
-        with self.fleet_sensor.try_lock_contact(node.secure_contact.contact) as (contact, result):
+        with self.fleet_sensor.try_lock_contact(node.secure_contact.contact) as (
+            contact,
+            result,
+        ):
             if contact is None:
                 return await result.wait()
 
@@ -277,14 +305,19 @@ class Learner:
                     message = str(e)
                 self._logger.debug(
                     "Error when trying to learn from {} ({}): {}",
-                    node.secure_contact.contact, node.staking_provider_address.checksum, message)
+                    node.secure_contact.contact,
+                    node.staking_provider_address.checksum,
+                    message,
+                )
                 self.fleet_sensor.report_bad_contact(node.secure_contact.contact)
                 if self._active:
                     self._active.fleet_state.remove_contact(node.secure_contact.contact)
             else:
                 self._logger.debug(
                     "Learned from {} ({})",
-                    node.secure_contact.contact, node.staking_provider_address.checksum)
+                    node.secure_contact.contact,
+                    node.staking_provider_address.checksum,
+                )
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
                 if self._active:
                     self._active.fleet_state.add_metadatas(metadatas)
@@ -306,7 +339,12 @@ class Learner:
                     message = "timed out"
                 else:
                     message = str(exc)
-                self._logger.debug("Error when trying to verify {}: {}", contact, message, exc_info=True)
+                self._logger.debug(
+                    "Error when trying to verify {}: {}",
+                    contact,
+                    message,
+                    exc_info=True,
+                )
                 self.fleet_sensor.report_bad_contact(contact)
                 if self._active:
                     self._active.fleet_state.remove_contact(contact)
@@ -396,7 +434,8 @@ class Learner:
 
                 timed_out = await wait_for_any(
                     [stop_event, self.fleet_sensor.reschedule_verification_event],
-                    next_event_in)
+                    next_event_in,
+                )
 
                 if stop_event.is_set():
                     return

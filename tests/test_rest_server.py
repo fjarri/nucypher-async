@@ -21,7 +21,7 @@ from nucypher_async.utils.logging import NULL_LOGGER
 def ursula_server():
     config = UrsulaServerConfig(
         domain=Domain.MAINNET,
-        contact=Contact('127.0.0.1', 9151),
+        contact=Contact("127.0.0.1", 9151),
         identity_client=MockIdentityClient(),
         payment_client=MockPaymentClient(),
         peer_client=PeerClient(),
@@ -29,9 +29,13 @@ def ursula_server():
         storage=InMemoryStorage(),
         seed_contacts=[],
         clock=SystemClock(),
-        )
+    )
 
-    return UrsulaServer(ursula=Ursula(), config=config, staking_provider_address=IdentityAddress(os.urandom(20)))
+    return UrsulaServer(
+        ursula=Ursula(),
+        config=config,
+        staking_provider_address=IdentityAddress(os.urandom(20)),
+    )
 
 
 async def test_client_real_server(nursery, capsys, ursula_server):
@@ -40,7 +44,7 @@ async def test_client_real_server(nursery, capsys, ursula_server):
 
     client = PeerClient()
     response = await client.ping(ursula_server.secure_contact())
-    assert response == '127.0.0.1'
+    assert response == "127.0.0.1"
 
     handle.shutdown()
     capsys.readouterr()

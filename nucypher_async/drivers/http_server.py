@@ -38,7 +38,8 @@ class InMemoryCertificateConfig(Config):
         # sanity check
         if self.certfile or self.keyfile:
             raise RuntimeError(
-                "Certificate/keyfile must be passed to the constructor in the serialized form")
+                "Certificate/keyfile must be passed to the constructor in the serialized form"
+            )
 
         context = super().create_ssl_context()
 
@@ -51,7 +52,9 @@ class InMemoryCertificateConfig(Config):
 
         with temp_file(self.__ssl_certificate.to_pem_bytes()) as certfile:
             with temp_file(self.__ssl_private_key.to_pem_bytes(keyfile_password)) as keyfile:
-                context.load_cert_chain(certfile=certfile, keyfile=keyfile, password=keyfile_password)
+                context.load_cert_chain(
+                    certfile=certfile, keyfile=keyfile, password=keyfile_password
+                )
 
         return context
 
@@ -64,7 +67,8 @@ def make_config(server: BaseHTTPServer):
 
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
-        ssl_private_key=server.ssl_private_key())
+        ssl_private_key=server.ssl_private_key(),
+    )
 
     host, port = server.host_and_port()
 
@@ -93,7 +97,12 @@ class HTTPServerHandle:
         Supports start-up reporting when invoked via `nursery.start()`.
         """
         config = make_config(self.server)
-        await serve(self.app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status)
+        await serve(
+            self.app,
+            config,
+            shutdown_trigger=self._shutdown_event.wait,
+            task_status=task_status,
+        )
 
     def shutdown(self):
         self._shutdown_event.set()

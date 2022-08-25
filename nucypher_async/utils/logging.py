@@ -26,11 +26,11 @@ class Level(IntEnum):
 
 
 _LEVEL_NAMES = {
-    Level.DEBUG: 'debug',
-    Level.INFO: 'info',
-    Level.WARNING: 'warning',
-    Level.ERROR: 'error',
-    Level.CRITICAL: 'critical',
+    Level.DEBUG: "debug",
+    Level.INFO: "info",
+    Level.WARNING: "warning",
+    Level.ERROR: "error",
+    Level.CRITICAL: "critical",
 }
 
 
@@ -65,18 +65,18 @@ class LogRecord(NamedTuple):
             task_id = id(task_id) % 8999 + 1000
 
         return LogRecord(
-            timestamp=time.time(), # Note: using the local time here, not UTC
+            timestamp=time.time(),  # Note: using the local time here, not UTC
             logger_name=logger_name,
             level=level,
             message=message,
             args=args,
             exc_info=sys.exc_info() if exc_info else None,
-            task_id=task_id)
+            task_id=task_id,
+        )
 
 
 class Logger:
-
-    def __init__(self, name: str = 'root', level: Level = Level.DEBUG, handlers=None, parent=None):
+    def __init__(self, name: str = "root", level: Level = Level.DEBUG, handlers=None, parent=None):
         self.name = name
         self.level = level
         self.handlers = handlers or []
@@ -84,10 +84,11 @@ class Logger:
 
     def get_child(self, name, level=None, handlers=None):
         return Logger(
-            name=self.name + '.' + name,
+            name=self.name + "." + name,
             level=level or self.level,
             handlers=handlers,
-            parent=self)
+            parent=self,
+        )
 
     def _emit(self, record):
         if self.parent:
@@ -122,7 +123,6 @@ NULL_LOGGER = Logger()
 
 
 class Formatter:
-
     def __init__(self, format_str):
         self.format_str = format_str
 
@@ -135,21 +135,21 @@ class Formatter:
             asctime=asctime,
             name=record.logger_name,
             levelname=_LEVEL_NAMES[record.level],
-            message=message)
+            message=message,
+        )
 
         if record.exc_info:
             file = io.StringIO()
             traceback.print_exception(*record.exc_info, file=file)
-            full_message += '\n' + file.getvalue()[:-1] # cut out the last linebreak
+            full_message += "\n" + file.getvalue()[:-1]  # cut out the last linebreak
 
         return full_message
 
 
-DEFAULT_FORMATTER = Formatter('{asctime} {task_id}[{levelname}] [{name}] {message}')
+DEFAULT_FORMATTER = Formatter("{asctime} {task_id}[{levelname}] [{name}] {message}")
 
 
 class ConsoleHandler:
-
     def __init__(self, level=Level.DEBUG, formatter=DEFAULT_FORMATTER, stderr_at=Level.WARNING):
         self.level = level
         self.formatter = formatter
@@ -159,13 +159,23 @@ class ConsoleHandler:
         if record.level < self.level:
             return
         message = self.formatter.format(record)
-        file = sys.stderr if (self.stderr_at is not None and record.level >= self.stderr_at) else sys.stdout
+        file = (
+            sys.stderr
+            if (self.stderr_at is not None and record.level >= self.stderr_at)
+            else sys.stdout
+        )
         print(message, file=file)
 
 
 class RotatingFileHandler:
-
-    def __init__(self, log_file, max_bytes=1000000, backup_count=9, formatter=DEFAULT_FORMATTER, level=Level.DEBUG):
+    def __init__(
+        self,
+        log_file,
+        max_bytes=1000000,
+        backup_count=9,
+        formatter=DEFAULT_FORMATTER,
+        level=Level.DEBUG,
+    ):
         self.level = level
         self.formatter = formatter
         self.log_file = Path(log_file).resolve()
@@ -174,10 +184,12 @@ class RotatingFileHandler:
         self.backup_count = backup_count
 
     def _backup_file(self, idx):
-        return self.log_file.with_suffix(self.log_file.suffix + '.' + str(idx))
+        return self.log_file.with_suffix(self.log_file.suffix + "." + str(idx))
 
     def _rotate(self):
-        file_names = [self._backup_file(idx) for idx in reversed(range(1, self.backup_count + 1))] + [self.log_file]
+        file_names = [
+            self._backup_file(idx) for idx in reversed(range(1, self.backup_count + 1))
+        ] + [self.log_file]
 
         for idx, path in enumerate(file_names):
             if path.is_file():
@@ -197,8 +209,11 @@ class RotatingFileHandler:
 
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        if self.log_file.exists() and self.log_file.stat().st_size + len(message_bytes) > self.max_bytes:
+        if (
+            self.log_file.exists()
+            and self.log_file.stat().st_size + len(message_bytes) > self.max_bytes
+        ):
             self._rotate()
 
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, "a") as f:
             print(message, file=f)

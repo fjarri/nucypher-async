@@ -31,7 +31,6 @@ _HTTP_STATUS = {
 
 
 class HTTPError(Exception):
-
     def __init__(self, message, status_code):
         super().__init__(message, status_code)
         self.message = message
@@ -93,7 +92,7 @@ def make_peer_asgi_app(peer: BasePeer):
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
 
-    logger = peer.logger().get_child('App')
+    logger = peer.logger().get_child("App")
 
     async def ping(request):
         return await peer_api_call(logger, peer.endpoint_ping(request.client.host))
@@ -104,7 +103,9 @@ def make_peer_asgi_app(peer: BasePeer):
     async def node_metadata_post(request):
         remote_host = request.client.host
         request_bytes = await request.body()
-        return await peer_api_call(logger, peer.endpoint_node_metadata_post(remote_host, request_bytes))
+        return await peer_api_call(
+            logger, peer.endpoint_node_metadata_post(remote_host, request_bytes)
+        )
 
     async def public_information(request):
         return await peer_api_call(logger, peer.endpoint_public_information())
@@ -132,9 +133,7 @@ def make_peer_asgi_app(peer: BasePeer):
         Route("/status", status),
     ]
 
-    app = Starlette(
-        lifespan=make_lifespan(on_startup, on_shutdown),
-        routes=routes)
+    app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
 
     return app
 
@@ -144,7 +143,7 @@ def make_porter_app(porter: BasePorter):
     Returns an ASGI app serving as a front-end for a Porter.
     """
 
-    logger = porter.logger().get_child('App')
+    logger = porter.logger().get_child("App")
 
     async def get_ursulas(request):
         json_request = await request.json() if await request.body() else {}
@@ -171,8 +170,6 @@ def make_porter_app(porter: BasePorter):
         Route("/status", status),
     ]
 
-    app = Starlette(
-        lifespan=make_lifespan(on_startup, on_shutdown),
-        routes=routes)
+    app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
 
     return app

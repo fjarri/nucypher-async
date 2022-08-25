@@ -18,13 +18,14 @@ from .utils.logging import Logger, ConsoleHandler, RotatingFileHandler
 def seed_contacts_for_domain(domain):
     if domain == Domain.MAINNET:
         return [
-            Contact('closest-seed.nucypher.network', 9151),
-            Contact('seeds.nucypher.network', 9151),
-            Contact('mainnet.nucypher.network', 9151)]
+            Contact("closest-seed.nucypher.network", 9151),
+            Contact("seeds.nucypher.network", 9151),
+            Contact("mainnet.nucypher.network", 9151),
+        ]
     elif domain == Domain.IBEX:
-        return [Contact('ibex.nucypher.network', 9151)]
+        return [Contact("ibex.nucypher.network", 9151)]
     elif domain == Domain.ORYX:
-        return [Contact('oryx.nucypher.network', 9151)]
+        return [Contact("oryx.nucypher.network", 9151)]
     else:
         return []
 
@@ -36,7 +37,7 @@ class Directories:
 
 
 def app_dirs(profile_name):
-    dirs = PlatformDirs(appname='nucypher-async')
+    dirs = PlatformDirs(appname="nucypher-async")
     log_dir = Path(dirs.user_log_dir).resolve() / profile_name
     data_dir = Path(dirs.user_data_dir).resolve() / profile_name
     return Directories(log_dir=log_dir, data_dir=data_dir)
@@ -44,9 +45,9 @@ def app_dirs(profile_name):
 
 def make_logger(profile_name, log_name, log_to_console=True, log_to_file=True):
     dirs = app_dirs(profile_name)
-    log_handlers = (
-        ([ConsoleHandler()] if log_to_console else []) +
-        ([RotatingFileHandler(log_file=dirs.log_dir / (log_name + '.log'))] if log_to_file else []))
+    log_handlers = ([ConsoleHandler()] if log_to_console else []) + (
+        [RotatingFileHandler(log_file=dirs.log_dir / (log_name + ".log"))] if log_to_file else []
+    )
     return Logger(handlers=log_handlers)
 
 
@@ -73,26 +74,31 @@ class UrsulaServerConfig:
 
     @classmethod
     def from_config_values(
-            cls,
-            *,
-            identity_endpoint,
-            payment_endpoint,
-            host,
-            port=9151,
-            domain=Domain.MAINNET,
-            log_to_console=True,
-            log_to_file=True,
-            persistent_storage=True,
-            profile_name="ursula",
-            identity_client_factory=IdentityClient.from_endpoint,
-            payment_client_factory=PaymentClient.from_endpoint,
-            ):
+        cls,
+        *,
+        identity_endpoint,
+        payment_endpoint,
+        host,
+        port=9151,
+        domain=Domain.MAINNET,
+        log_to_console=True,
+        log_to_file=True,
+        persistent_storage=True,
+        profile_name="ursula",
+        identity_client_factory=IdentityClient.from_endpoint,
+        payment_client_factory=PaymentClient.from_endpoint,
+    ):
 
         domain = Domain.from_string(domain)
         contact = Contact(host, port)
         identity_client = identity_client_factory(identity_endpoint, domain)
         payment_client = payment_client_factory(payment_endpoint, domain)
-        logger = make_logger(profile_name, 'ursula', log_to_console=log_to_console, log_to_file=log_to_file)
+        logger = make_logger(
+            profile_name,
+            "ursula",
+            log_to_console=log_to_console,
+            log_to_file=log_to_file,
+        )
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain)
         peer_client = PeerClient()
@@ -106,8 +112,8 @@ class UrsulaServerConfig:
             parent_logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
-            clock=SystemClock()
-            )
+            clock=SystemClock(),
+        )
 
 
 @attrs.frozen
@@ -127,32 +133,37 @@ class PorterServerConfig:
 
     @classmethod
     def from_config_values(
-            cls,
-            *,
-            identity_endpoint,
-            ssl_certificate_path,
-            ssl_private_key_path,
-            profile_name="porter",
-            domain="mainnet",
-            log_to_console=True,
-            log_to_file=True,
-            persistent_storage=True,
-            host="0.0.0.0",
-            port=443,
-            identity_client_factory=IdentityClient.from_endpoint,
-            ):
+        cls,
+        *,
+        identity_endpoint,
+        ssl_certificate_path,
+        ssl_private_key_path,
+        profile_name="porter",
+        domain="mainnet",
+        log_to_console=True,
+        log_to_file=True,
+        persistent_storage=True,
+        host="0.0.0.0",
+        port=443,
+        identity_client_factory=IdentityClient.from_endpoint,
+    ):
 
         domain = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain)
-        logger = make_logger(profile_name, 'porter', log_to_console=log_to_console, log_to_file=log_to_file)
+        logger = make_logger(
+            profile_name,
+            "porter",
+            log_to_console=log_to_console,
+            log_to_file=log_to_file,
+        )
         storage = make_storage(profile_name, persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain)
         peer_client = PeerClient()
 
-        with open(ssl_certificate_path, 'rb') as f:
+        with open(ssl_certificate_path, "rb") as f:
             ssl_certificate = SSLCertificate.from_pem_bytes(f.read())
 
-        with open(ssl_private_key_path, 'rb') as f:
+        with open(ssl_private_key_path, "rb") as f:
             ssl_private_key = SSLPrivateKey.from_pem_bytes(f.read())
 
         return cls(
@@ -166,5 +177,5 @@ class PorterServerConfig:
             parent_logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
-            clock=SystemClock()
-            )
+            clock=SystemClock(),
+        )

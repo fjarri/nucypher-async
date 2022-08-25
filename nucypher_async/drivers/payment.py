@@ -17,8 +17,18 @@ from eth_account import Account
 
 from nucypher_core import HRAC
 from pons import (
-    HTTPProvider, Client, ContractABI, DeployedContract, Signer, AccountSigner,
-    ReadMethod, WriteMethod, Address, Amount, abi)
+    HTTPProvider,
+    Client,
+    ContractABI,
+    DeployedContract,
+    Signer,
+    AccountSigner,
+    ReadMethod,
+    WriteMethod,
+    Address,
+    Amount,
+    abi,
+)
 
 from ..domain import Domain
 
@@ -26,22 +36,33 @@ from ..domain import Domain
 _SUBSCRIPTION_MANAGER_ABI = ContractABI(
     read=[
         ReadMethod(
-            name='isPolicyActive',
+            name="isPolicyActive",
             inputs=dict(_policyID=abi.bytes(16)),
-            outputs=abi.bool),
+            outputs=abi.bool,
+        ),
         ReadMethod(
-            name='getPolicyCost',
-            inputs=dict(_size=abi.uint(16), _startTimestamp=abi.uint(32), _endTimestamp=abi.uint(32)),
-            outputs=abi.uint(256))
-        ],
+            name="getPolicyCost",
+            inputs=dict(
+                _size=abi.uint(16),
+                _startTimestamp=abi.uint(32),
+                _endTimestamp=abi.uint(32),
+            ),
+            outputs=abi.uint(256),
+        ),
+    ],
     write=[
         WriteMethod(
-            name='createPolicy',
+            name="createPolicy",
             inputs=dict(
-                _policyId=abi.bytes(16), _policyOwner=abi.address, _size=abi.uint(256),
-                _startTimestamp=abi.uint(32), _endTimestamp=abi.uint(32)))
-        ]
-    )
+                _policyId=abi.bytes(16),
+                _policyOwner=abi.address,
+                _size=abi.uint(256),
+                _startTimestamp=abi.uint(32),
+                _endTimestamp=abi.uint(32),
+            ),
+        )
+    ],
+)
 
 
 class PaymentAddress(Address):
@@ -52,34 +73,35 @@ class IbexContracts:
     """
     Registry for Polygon-Mumbai.
     """
+
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class OryxContracts:
     """
     Registry for Polygon-Mumbai.
     """
+
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xb9015d7b35ce7c81dde38ef7136baa3b1044f313')
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class MainnetContracts:
     """
     Registry for Polygon-Mainnet.
     """
+
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex('0xB0194073421192F6Cf38d72c791Be8729721A0b3')
+    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xB0194073421192F6Cf38d72c791Be8729721A0b3")
 
 
 class AmountMATIC(Amount):
-
     def __str__(self):
         return f"{self.as_ether()} MATIC"
 
 
 class PaymentAccount:
-
     @classmethod
     def random(cls):
         return cls(Account.create())
@@ -90,7 +112,6 @@ class PaymentAccount:
 
 
 class PaymentAccountSigner(AccountSigner):
-
     def __init__(self, payment_account: PaymentAccount):
         super().__init__(payment_account._account)
 
@@ -100,10 +121,9 @@ class PaymentAccountSigner(AccountSigner):
 
 
 class PaymentClient:
-
     @classmethod
     def from_endpoint(cls, url, domain):
-        assert url.startswith('https://')
+        assert url.startswith("https://")
         provider = HTTPProvider(url)
         client = Client(provider)
         return cls(client, domain)
@@ -121,8 +141,8 @@ class PaymentClient:
             raise ValueError(f"Unknown domain: {domain}")
 
         self._manager = DeployedContract(
-            address=registry.SUBSCRIPTION_MANAGER,
-            abi=_SUBSCRIPTION_MANAGER_ABI)
+            address=registry.SUBSCRIPTION_MANAGER, abi=_SUBSCRIPTION_MANAGER_ABI
+        )
 
     @asynccontextmanager
     async def session(self):
@@ -131,7 +151,6 @@ class PaymentClient:
 
 
 class PaymentClientSession:
-
     def __init__(self, payment_client, backend_session):
         self._payment_client = payment_client
         self._backend_session = backend_session
@@ -142,15 +161,20 @@ class PaymentClientSession:
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
         amount = await self._backend_session.eth_call(
-            self._manager.read.getPolicyCost(shares, policy_start, policy_end))
+            self._manager.read.getPolicyCost(shares, policy_start, policy_end)
+        )
         return AmountMATIC.wei(amount)
 
-    async def create_policy(self, signer: Signer, hrac: HRAC, shares: int, policy_start: int, policy_end: int):
+    async def create_policy(
+        self,
+        signer: Signer,
+        hrac: HRAC,
+        shares: int,
+        policy_start: int,
+        policy_end: int,
+    ):
         amount = await self.get_policy_cost(shares, policy_start, policy_end)
         call = self._manager.write.createPolicy(
-            bytes(hrac),
-            signer.address,
-            shares,
-            policy_start,
-            policy_end)
+            bytes(hrac), signer.address, shares, policy_start, policy_end
+        )
         await self._backend_session.transact(signer, call, amount=amount)

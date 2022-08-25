@@ -30,10 +30,10 @@ def derive_key_material_from_password(password: bytes, salt: bytes) -> bytes:
         derived_key = Scrypt(
             salt=salt,
             length=32,
-            n=2 ** _scrypt_cost,
+            n=2**_scrypt_cost,
             r=8,
             p=1,
-            backend=default_backend()
+            backend=default_backend(),
         ).derive(password)
     except InternalError as e:
         required_memory = 128 * 2**_scrypt_cost * 8 // (10**6)
@@ -57,8 +57,8 @@ def derive_wrapping_key_from_key_material(key_material: bytes, salt: bytes) -> b
         algorithm=hashes.BLAKE2b(64),
         length=SecretBox.KEY_SIZE,
         salt=salt,
-        info=b'NuCypher-KeyWrap',
-        backend=default_backend()
+        info=b"NuCypher-KeyWrap",
+        backend=default_backend(),
     ).derive(key_material)
     return wrapping_key
 

@@ -20,7 +20,7 @@ from nucypher_async.pre import Alice, Bob, RemoteAlice, RemoteBob, encrypt
 from nucypher_async.utils.logging import Logger, ConsoleHandler, Level
 
 
-LOCALHOST = '127.0.0.1'
+LOCALHOST = "127.0.0.1"
 PORT_BASE = 9151
 
 RINKEBY_ENDPOINT = "<rinkeby endpoint address here>"
@@ -55,7 +55,10 @@ async def run_local_ursula_fleet(context, nursery):
         # Initialize the newly created staking provider and operator
         staking_provider_account = IdentityAccount.random()
         context.identity_client.mock_set_up(
-            staking_provider_account.address, ursula.operator_address, AmountT.ether(40000))
+            staking_provider_account.address,
+            ursula.operator_address,
+            AmountT.ether(40000),
+        )
 
         config = UrsulaServerConfig(
             domain=context.domain,
@@ -67,7 +70,7 @@ async def run_local_ursula_fleet(context, nursery):
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
             clock=context.clock,
-            )
+        )
 
         server = await UrsulaServer.async_init(ursula, config)
         handle = HTTPServerHandle(PeerHTTPServer(server))
@@ -84,7 +87,8 @@ async def alice_grants(context, alice, remote_bob):
         domain=context.domain,
         parent_logger=context.logger.get_child("Learner-Alice"),
         seed_contacts=[context.seed_contact],
-        clock=context.clock)
+        clock=context.clock,
+    )
 
     # Fill out the node database so that we had something to work with
     await learner.seed_round()
@@ -94,9 +98,10 @@ async def alice_grants(context, alice, remote_bob):
         learner=learner,
         payment_client=context.payment_client,
         bob=remote_bob,
-        label=b'label-' + os.urandom(8).hex().encode(),
+        label=b"label-" + os.urandom(8).hex().encode(),
         threshold=2,
-        shares=3)
+        shares=3,
+    )
 
     return alice.public_info(), policy
 
@@ -106,15 +111,17 @@ async def bob_decrypts(context, bob, remote_alice, policy, message_kit):
     learner = Learner(
         identity_client=context.identity_client,
         domain=context.domain,
-        parent_logger=context.logger.get_child('Learner-Bob'),
+        parent_logger=context.logger.get_child("Learner-Bob"),
         seed_contacts=[context.seed_contact],
-        clock=context.clock)
+        clock=context.clock,
+    )
 
     decrypted = await bob.retrieve_and_decrypt(
         learner=learner,
         message_kit=message_kit,
         encrypted_treasure_map=policy.encrypted_treasure_map,
-        remote_alice=remote_alice)
+        remote_alice=remote_alice,
+    )
 
     return decrypted
 
@@ -127,20 +134,23 @@ async def main(mocked=True):
         identity_client=None,
         payment_client=None,
         seed_contact=None,
-        clock=None)
+        clock=None,
+    )
 
     if mocked:
         context = context._replace(
             domain=Domain.IBEX,
             identity_client=MockIdentityClient(),
             payment_client=MockPaymentClient(),
-            clock=MockClock())
+            clock=MockClock(),
+        )
     else:
         context = context._replace(
             domain=Domain.IBEX,
             identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.IBEX),
             payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.IBEX),
-            clock=SystemClock())
+            clock=SystemClock(),
+        )
 
     async with trio.open_nursery() as nursery:
         if mocked:
@@ -149,7 +159,7 @@ async def main(mocked=True):
             # Wait for all the nodes to learn about each other
             await trio.sleep(3600)
         else:
-            seed_contact = Contact('ibex.nucypher.network', 9151)
+            seed_contact = Contact("ibex.nucypher.network", 9151)
 
         context = context._replace(seed_contact=seed_contact)
 
@@ -160,7 +170,9 @@ async def main(mocked=True):
             payment_account = PaymentAccount.random()
         else:
             # TODO: don't expose eth_account.Account
-            acc = Account.from_key(b'$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an')
+            acc = Account.from_key(
+                b"$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an"
+            )
             payment_account = PaymentAccount(acc)
 
         alice = Alice(payment_account=payment_account)
@@ -168,7 +180,7 @@ async def main(mocked=True):
         context.logger.info("Alice grants")
         remote_alice, policy = await alice_grants(context, alice, remote_bob)
 
-        message = b'a secret message'
+        message = b"a secret message"
         message_kit = encrypt(policy.encrypting_key, message)
 
         context.logger.info("Bob retrieves")
@@ -186,6 +198,7 @@ async def main(mocked=True):
 def run_main(mocked=True):
     if mocked:
         from trio.testing import MockClock
+
         clock = MockClock(autojump_threshold=0)
     else:
         clock = None
@@ -193,5 +206,5 @@ def run_main(mocked=True):
     trio.run(main, mocked, clock=clock)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_main()

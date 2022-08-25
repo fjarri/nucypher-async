@@ -9,7 +9,6 @@ from .eth import MockBackend, MockContract
 
 
 class SimplePREApplication(MockContract):
-
     def __init__(self, abi):
         super().__init__(abi)
         self._min_stake = Amount.ether(40000)
@@ -29,12 +28,20 @@ class SimplePREApplication(MockContract):
         return self._staking_provider_to_operator[staking_provider_address]
 
     def isAuthorized(self, staking_provider_address: Address) -> bool:
-        return staking_provider_address in self._stakes and self._stakes[staking_provider_address] >= self._min_stake
+        return (
+            staking_provider_address in self._stakes
+            and self._stakes[staking_provider_address] >= self._min_stake
+        )
 
     def isOperatorConfirmed(self, operator_address: Address) -> bool:
         return operator_address in self._confirmed_operators
 
-    def mock_set_up(self, staking_provider_address: Address, operator_address: Address, amount_t: AmountT):
+    def mock_set_up(
+        self,
+        staking_provider_address: Address,
+        operator_address: Address,
+        amount_t: AmountT,
+    ):
 
         # Approve stake
         assert staking_provider_address not in self._approved_staking_providers
@@ -58,7 +65,6 @@ class SimplePREApplication(MockContract):
 
 
 class MockIdentityClient(IdentityClient):
-
     def __init__(self):
         mock_backend = MockBackend(AmountETH)
         super().__init__(mock_backend, Domain.MAINNET)
@@ -66,13 +72,16 @@ class MockIdentityClient(IdentityClient):
         self._mock_backend = mock_backend
 
         self._mock_pre_application = SimplePREApplication(self._pre_application.abi)
-        mock_backend.mock_register_contract(self._pre_application.address, self._mock_pre_application)
+        mock_backend.mock_register_contract(
+            self._pre_application.address, self._mock_pre_application
+        )
 
     def mock_set_up(
-            self,
-            staking_provider_address: IdentityAddress,
-            operator_address: IdentityAddress,
-            amount_t: AmountT):
+        self,
+        staking_provider_address: IdentityAddress,
+        operator_address: IdentityAddress,
+        amount_t: AmountT,
+    ):
         """
         This essentially includes 4 operations:
         - approve T for staking (in the T contract)
@@ -88,4 +97,6 @@ class MockIdentityClient(IdentityClient):
         operator_address_ = Address(bytes(operator_address))
         amount_t_ = Amount.wei(amount_t.as_wei())
 
-        self._mock_pre_application.mock_set_up(staking_provider_address_, operator_address_, amount_t_)
+        self._mock_pre_application.mock_set_up(
+            staking_provider_address_, operator_address_, amount_t_
+        )

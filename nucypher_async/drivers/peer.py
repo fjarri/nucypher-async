@@ -14,8 +14,13 @@ from typing import Tuple, AsyncIterator
 import arrow
 import httpx
 from nucypher_core import (
-    NodeMetadata, MetadataRequest, MetadataResponse, ReencryptionRequest, ReencryptionResponse,
-    NodeMetadataPayload)
+    NodeMetadata,
+    MetadataRequest,
+    MetadataResponse,
+    ReencryptionRequest,
+    ReencryptionResponse,
+    NodeMetadataPayload,
+)
 from nucypher_core.umbral import PublicKey
 import trio
 
@@ -46,7 +51,6 @@ class PeerVerificationError(PeerError):
 
 
 class Contact:
-
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
@@ -62,7 +66,6 @@ class Contact:
 
 
 class PeerPrivateKey:
-
     @classmethod
     def from_seed(cls, seed: bytes) -> "PeerPrivateKey":
         return cls(SSLPrivateKey.from_seed(seed))
@@ -80,10 +83,11 @@ class PeerPrivateKey:
 
 
 class PeerPublicKey:
-
     @classmethod
     def generate(cls, private_key: PeerPrivateKey, clock: BaseClock, contact: Contact):
-        certificate = SSLCertificate.self_signed(clock.utcnow(), private_key._as_ssl_private_key(), contact.host)
+        certificate = SSLCertificate.self_signed(
+            clock.utcnow(), private_key._as_ssl_private_key(), contact.host
+        )
         return cls(certificate)
 
     def __init__(self, certificate: SSLCertificate):
@@ -117,7 +121,6 @@ class PeerPublicKey:
 
 
 class SecureContact:
-
     def __init__(self, contact: Contact, public_key: PeerPublicKey):
         # It is a slight abstraction leak, but since we do use the hostname
         # when creating a public key, it is logical to also check that it is correct,
@@ -125,7 +128,8 @@ class SecureContact:
         if public_key.declared_host != contact.host:
             raise PeerVerificationError(
                 f"Host mismatch: contact has {contact.host}, "
-                f"but certificate has {public_key.declared_host}")
+                f"but certificate has {public_key.declared_host}"
+            )
 
         self.contact = contact
         self.public_key = public_key
@@ -139,22 +143,29 @@ class SecureContact:
 
 
 class PeerInfo:
-
     @classmethod
-    def generate(cls, ursula, clock: BaseClock, staking_provider_address: IdentityAddress, contact: Contact, domain: Domain):
+    def generate(
+        cls,
+        ursula,
+        clock: BaseClock,
+        staking_provider_address: IdentityAddress,
+        contact: Contact,
+        domain: Domain,
+    ):
         public_key = PeerPublicKey.generate(ursula.peer_private_key(), clock, contact)
-        payload = NodeMetadataPayload(staking_provider_address=bytes(staking_provider_address),
-                                      domain=domain.value,
-                                      timestamp_epoch=int(clock.utcnow().timestamp()),
-                                      operator_signature=ursula.operator_signature,
-                                      verifying_key=ursula.signer.verifying_key(),
-                                      encrypting_key=ursula.encrypting_key,
-                                      # Abstraction leak here, ideally NodeMetadata should
-                                      # have a field like `peer_public_key`.
-                                      certificate_der=bytes(public_key),
-                                      host=contact.host,
-                                      port=contact.port,
-                                      )
+        payload = NodeMetadataPayload(
+            staking_provider_address=bytes(staking_provider_address),
+            domain=domain.value,
+            timestamp_epoch=int(clock.utcnow().timestamp()),
+            operator_signature=ursula.operator_signature,
+            verifying_key=ursula.signer.verifying_key(),
+            encrypting_key=ursula.encrypting_key,
+            # Abstraction leak here, ideally NodeMetadata should
+            # have a field like `peer_public_key`.
+            certificate_der=bytes(public_key),
+            host=contact.host,
+            port=contact.port,
+        )
         metadata = NodeMetadata(signer=ursula.signer, payload=payload)
         return cls(metadata)
 
@@ -226,7 +237,6 @@ def unwrap_bytes(response, cls):
 
 
 class PeerClient:
-
     @asynccontextmanager
     async def _http_client(self, public_key: PeerPublicKey) -> AsyncIterator[httpx.AsyncClient]:
         # It would be nice avoid saving the certificate to disk at each request.
@@ -257,32 +267,39 @@ class PeerClient:
 
     async def ping(self, secure_contact: SecureContact) -> str:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + '/ping')
+            response = await client.get(secure_contact._uri + "/ping")
         return response.text
 
     async def node_metadata_get(self, secure_contact: SecureContact) -> MetadataResponse:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + '/node_metadata')
+            response = await client.get(secure_contact._uri + "/node_metadata")
         return unwrap_bytes(response, MetadataResponse)
 
-    async def node_metadata_post(self, secure_contact: SecureContact, metadata_request: MetadataRequest) -> MetadataResponse:
+    async def node_metadata_post(
+        self, secure_contact: SecureContact, metadata_request: MetadataRequest
+    ) -> MetadataResponse:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.post(secure_contact._uri + '/node_metadata', content=bytes(metadata_request))
+            response = await client.post(
+                secure_contact._uri + "/node_metadata", content=bytes(metadata_request)
+            )
         return unwrap_bytes(response, MetadataResponse)
 
     async def public_information(self, secure_contact: SecureContact) -> NodeMetadata:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + '/public_information')
+            response = await client.get(secure_contact._uri + "/public_information")
         return unwrap_bytes(response, NodeMetadata)
 
-    async def reencrypt(self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest) -> ReencryptionResponse:
+    async def reencrypt(
+        self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest
+    ) -> ReencryptionResponse:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.post(secure_contact._uri + '/reencrypt', content=bytes(reencryption_request))
+            response = await client.post(
+                secure_contact._uri + "/reencrypt", content=bytes(reencryption_request)
+            )
         return unwrap_bytes(response, ReencryptionResponse)
 
 
 class BasePeerServer(ABC):
-
     @abstractmethod
     def secure_contact(self) -> SecureContact:
         ...

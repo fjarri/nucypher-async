@@ -22,8 +22,8 @@ def producer(wrapped):
     # or a typical instance method with `self` as the first argument.
     signature = inspect.signature(wrapped)
     decorated_method = (
-        len(signature.parameters) > 0
-        and list(signature.parameters.keys())[0] == 'self')
+        len(signature.parameters) > 0 and list(signature.parameters.keys())[0] == "self"
+    )
 
     @asynccontextmanager
     @wraps(wrapped)

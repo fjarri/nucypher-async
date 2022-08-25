@@ -5,8 +5,14 @@ from typing import Tuple
 
 import trio
 from nucypher_core import (
-    NodeMetadataPayload, NodeMetadata, MetadataRequest, MetadataResponsePayload,
-    MetadataResponse, ReencryptionRequest, ReencryptionResponse)
+    NodeMetadataPayload,
+    NodeMetadata,
+    MetadataRequest,
+    MetadataResponsePayload,
+    MetadataResponse,
+    ReencryptionRequest,
+    ReencryptionResponse,
+)
 
 from .base.http_server import BaseHTTPServer
 from .base.porter import BasePorter
@@ -25,20 +31,22 @@ from .utils.ssl import SSLPrivateKey, SSLCertificate
 
 
 class PorterServer(BaseHTTPServer, BasePorter):
-
     def __init__(self, config):
         self._clock = config.clock
         self._config = config
-        self._logger = config.parent_logger.get_child('PorterServer')
+        self._logger = config.parent_logger.get_child("PorterServer")
         self.learner = Learner(
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
             domain=config.domain,
             clock=config.clock,
-            storage=config.storage)
+            storage=config.storage,
+        )
 
-        self._verification_task = BackgroundTask(worker=self.learner.verification_task, logger=self._logger)
+        self._verification_task = BackgroundTask(
+            worker=self.learner.verification_task, logger=self._logger
+        )
         self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
         self._staker_query_task = BackgroundTask(worker=self._staker_query, logger=self._logger)
 
@@ -83,15 +91,20 @@ class PorterServer(BaseHTTPServer, BasePorter):
         nodes = []
         async with trio.open_nursery() as nursery:
 
-            async with self.learner.verified_nodes_iter(include_ursulas, verified_within=60) as aiter:
+            async with self.learner.verified_nodes_iter(
+                include_ursulas, verified_within=60
+            ) as aiter:
                 async for node in aiter:
                     nodes.append(node)
 
             if len(nodes) < quantity:
                 overhead = max(1, (quantity - len(nodes)) // 5)
                 async with self.learner.random_verified_nodes_iter(
-                        exclude=exclude_ursulas, amount=quantity,
-                        overhead=overhead, verified_within=60) as aiter:
+                    exclude=exclude_ursulas,
+                    amount=quantity,
+                    overhead=overhead,
+                    verified_within=60,
+                ) as aiter:
                     async for node in aiter:
                         nodes.append(node)
 
@@ -99,11 +112,11 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
     async def endpoint_get_ursulas(self, request_json):
         try:
-            quantity = request_json['quantity']
+            quantity = request_json["quantity"]
             if isinstance(quantity, str):
                 quantity = int(quantity)
-            include_ursulas = request_json.get('include_ursulas', [])
-            exclude_ursulas = request_json.get('exclude_ursulas', [])
+            include_ursulas = request_json.get("include_ursulas", [])
+            exclude_ursulas = request_json.get("exclude_ursulas", [])
 
             include_ursulas = [IdentityAddress.from_hex(address) for address in include_ursulas]
             exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
@@ -118,13 +131,18 @@ class PorterServer(BaseHTTPServer, BasePorter):
                 nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
 
         except trio.TooSlowError as e:
-            raise HTTPError("Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT) from e
+            raise HTTPError(
+                "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
+            ) from e
 
-        node_list = [dict(
-            checksum_address=node.staking_provider_address.checksum,
-            uri=node.secure_contact.uri,
-            encrypting_key=bytes(node.encrypting_key).hex()
-        ) for node in nodes]
+        node_list = [
+            dict(
+                checksum_address=node.staking_provider_address.checksum,
+                uri=node.secure_contact.uri,
+                encrypting_key=bytes(node.encrypting_key).hex(),
+            )
+            for node in nodes
+        ]
 
         return dict(result=dict(ursulas=node_list), version="async-0.1.0-dev")
 
