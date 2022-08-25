@@ -192,13 +192,17 @@ class PeerInfo:
     def domain(self) -> Domain:
         return Domain(self._metadata_payload.domain)
 
-    @cached_property
+    @property
     def encrypting_key(self) -> PublicKey:
         return self._metadata_payload.encrypting_key
 
-    @cached_property
+    @property
     def verifying_key(self) -> PublicKey:
         return self._metadata_payload.verifying_key
+
+    @cached_property
+    def timestamp(self) -> arrow.Arrow:
+        return arrow.get(self._metadata_payload.timestamp_epoch)
 
     def __bytes__(self):
         return bytes(self.metadata)

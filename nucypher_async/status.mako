@@ -120,7 +120,7 @@
         %if is_active_peer:
         <tr>
             <td><i>Metadata created:</i></td>
-            <td>${arrow.get(server._node.metadata.payload.timestamp_epoch).humanize(now)}</td>
+            <td>${server._node.timestamp.humanize(now)}</td>
         </tr>
         %endif
         <tr>
@@ -151,7 +151,7 @@
                 <a href="${node.secure_contact.uri}/status">${node.staking_provider_address}</a>
                 </span></td>
                 <td>${humanize.number.intword(int(node_entry.staked_amount.as_ether()))} T</td>
-                <td>${arrow.get(node.metadata.payload.timestamp_epoch).humanize(now)}</td>
+                <td>${node.timestamp.humanize(now)}</td>
                 <td>${node_entry.verified_at.humanize(now)}</td>
                 <td>
                 %if verify_at_entry.verify_at < now:

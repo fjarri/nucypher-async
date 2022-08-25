@@ -76,7 +76,7 @@ class Alice:
                     nodes.append(node)
 
         assigned_kfrags = {
-            bytes(node.staking_provider_address): (node.metadata.payload.encrypting_key, kfrags.pop())
+            bytes(node.staking_provider_address): (node.encrypting_key, kfrags.pop())
             for node in nodes}
 
         treasure_map = TreasureMap(
@@ -145,7 +145,7 @@ class Bob:
             response = await learner._peer_client.reencrypt(node.secure_contact, request)
             verified_cfrags = response.verify(capsules=request.capsules,
                                               alice_verifying_key=alice_verifying_key,
-                                              ursula_verifying_key=node.metadata.payload.verifying_key,
+                                              ursula_verifying_key=node.verifying_key,
                                               policy_encrypting_key=treasure_map.policy_encrypting_key,
                                               bob_encrypting_key=self.encrypting_key,
                                               )

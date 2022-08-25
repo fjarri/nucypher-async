@@ -9,13 +9,14 @@ from nucypher_core import (
 
 from .base.peer import BasePeer, InactivePolicy
 from .drivers.identity import IdentityAddress
-from .drivers.peer import BasePeerServer, Contact, SecureContact
+from .drivers.peer import BasePeerServer, Contact, SecureContact, PeerPrivateKey, PeerInfo
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
+from .utils.logging import Logger
 from .verification import PublicUrsula, verify_staking_local
 
 
@@ -90,16 +91,16 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         self.started = False
 
-    def secure_contact(self):
+    def secure_contact(self) -> SecureContact:
         return self._node.secure_contact
 
-    def peer_private_key(self):
+    def peer_private_key(self) -> PeerPrivateKey:
         return self.ursula.peer_private_key()
 
-    def logger(self):
+    def logger(self) -> Logger:
         return self._logger
 
-    def peer(self):
+    def peer(self) -> BasePeer:
         return self
 
     async def start(self, nursery):
@@ -125,31 +126,32 @@ class UrsulaServer(BasePeerServer, BasePeer):
     async def endpoint_ping(self, remote_host: str) -> str:
         return remote_host
 
-    async def node_metadata_get(self):
-        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
-                                                   announce_nodes=self.learner.metadata_to_announce())
+    async def node_metadata_get(self) -> MetadataResponse:
+        announce_nodes = [m.metadata for m in self.learner.metadata_to_announce()]
+        response_payload = MetadataResponsePayload(timestamp_epoch=self.learner._active.fleet_state.timestamp_epoch,
+                                                   announce_nodes=announce_nodes)
         response = MetadataResponse(self.ursula.signer, response_payload)
         return response
 
-    async def node_metadata_post(self, remote_host, metadata_request):
+    async def node_metadata_post(self, remote_host: str, metadata_request: MetadataRequest) -> MetadataResponse:
 
-        if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
+        if metadata_request.fleet_state_checksum == self.learner._active.fleet_state.checksum:
             # No nodes in the response: same fleet state
-            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
+            response_payload = MetadataResponsePayload(timestamp_epoch=self.learner._active.fleet_state.timestamp_epoch,
                                                        announce_nodes=[])
             return MetadataResponse(self.ursula.signer, response_payload)
 
-        new_metadatas = metadata_request.announce_nodes
+        new_metadatas = [PeerInfo(m) for m in metadata_request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
-        return await self.endpoint_node_metadata_get()
+        return await self.node_metadata_get()
 
-    async def public_information(self):
+    async def public_information(self) -> NodeMetadata:
         # TODO: can we just return PeerInfo?
         return self._node.metadata
 
-    async def reencrypt(self, reencryption_request):
+    async def reencrypt(self, reencryption_request: ReencryptionRequest) -> ReencryptionResponse:
 
         hrac = reencryption_request.hrac
 

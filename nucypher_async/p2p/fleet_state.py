@@ -2,7 +2,9 @@ from typing import Iterable, Dict
 
 from nucypher_core import NodeMetadata, FleetStateChecksum
 
-from ..drivers.peer import Contact
+from ..drivers.identity import IdentityAddress
+from ..drivers.peer import Contact, PeerInfo
+from ..verification import PublicUrsula
 
 
 class FleetState:
@@ -11,28 +13,25 @@ class FleetState:
     (of questionable usefulness, see https://github.com/nucypher/nucypher/issues/2876).
     """
 
-    def __init__(self, clock, my_metadata: NodeMetadata):
+    def __init__(self, clock, this_node: PublicUrsula):
         self._clock = clock
-        self._my_metadata = my_metadata
-        self._metadatas: Dict[bytes, NodeMetadata] = {}
-        self._contacts: Dict[Contact, bytes] = {}
+        self._my_metadata = this_node.metadata
+        self._metadatas: Dict[IdentityAddress, PeerInfo] = {}
+        self._contacts: Dict[Contact, IdentityAddress] = {}
         self._checksum = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
 
-    def _add_metadata(self, metadata):
-        payload = metadata.payload
-        address = payload.staking_provider_address
-        contact = Contact(payload.host, payload.port)
-
+    def _add_metadata(self, metadata: PeerInfo):
+        address = metadata.staking_provider_address
+        contact = metadata.contact
         self._metadatas[address] = metadata
         self._contacts[contact] = address
 
-    def add_metadatas(self, metadatas: Iterable[NodeMetadata]):
+    def add_metadatas(self, metadatas: Iterable[PeerInfo]):
         updated = False
         for metadata in metadatas:
-            payload = metadata.payload
-            address = payload.staking_provider_address
-            if address not in self._metadatas or payload.timestamp_epoch > self._metadatas[address].payload.timestamp_epoch:
+            address = metadata.staking_provider_address
+            if address not in self._metadatas or metadata.timestamp > self._metadatas[address].timestamp:
                 self._add_metadata(metadata)
                 updated = True
 
@@ -48,6 +47,8 @@ class FleetState:
     @property
     def checksum(self):
         if not self._checksum:
-            self._checksum = FleetStateChecksum(self._my_metadata, list(self._metadatas.values()))
+            self._checksum = FleetStateChecksum(
+                self._my_metadata,
+                [m.metadata for m in self._metadatas.values()])
             self.timestamp_epoch = int(self._clock.utcnow().timestamp())
         return self._checksum

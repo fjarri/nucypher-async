@@ -40,6 +40,7 @@ lint = [
     "trio-typing[mypy]>=0.7.0",
     "black",
     "types-setuptools>=63",
+    "types-python-dateutil>=2.8", # otherwise some type derivation for `arrow` types does not work
 ]
 
 [project.scripts]
