@@ -22,7 +22,7 @@ from .drivers.peer import (
     PeerPrivateKey,
     PeerInfo,
 )
-from .learner import Learner
+from .learner import ActiveLearner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
@@ -91,11 +91,11 @@ class UrsulaServer(BasePeerServer, BasePeer):
         else:
             self._node = maybe_node
 
-        self.learner = Learner(
+        self.learner = ActiveLearner(
+            self._node,
             peer_client=config.peer_client,
             identity_client=config.identity_client,
             storage=config.storage,
-            this_node=self._node,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
             domain=config.domain,
@@ -151,7 +151,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [m.metadata for m in self.learner.metadata_to_announce()]
         response_payload = MetadataResponsePayload(
-            timestamp_epoch=self.learner._active.fleet_state.timestamp_epoch,
+            timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
         response = MetadataResponse(self.ursula.signer, response_payload)
@@ -161,10 +161,10 @@ class UrsulaServer(BasePeerServer, BasePeer):
         self, remote_host: str, metadata_request: MetadataRequest
     ) -> MetadataResponse:
 
-        if metadata_request.fleet_state_checksum == self.learner._active.fleet_state.checksum:
+        if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(
-                timestamp_epoch=self.learner._active.fleet_state.timestamp_epoch,
+                timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
             return MetadataResponse(self.ursula.signer, response_payload)

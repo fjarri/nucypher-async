@@ -15,6 +15,7 @@ class FleetState:
 
     def __init__(self, clock, this_node: PublicUrsula):
         self._clock = clock
+        self._my_address = this_node.staking_provider_address
         self._my_metadata = this_node.metadata
         self._metadatas: Dict[IdentityAddress, PeerInfo] = {}
         self._contacts: Dict[Contact, IdentityAddress] = {}
@@ -31,6 +32,9 @@ class FleetState:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address
+            if address == self._my_address:
+                continue
+
             if (
                 address not in self._metadatas
                 or metadata.timestamp > self._metadatas[address].timestamp

@@ -10,31 +10,25 @@ import arrow
 import trio
 from attr import frozen
 
-from nucypher_core import FleetStateChecksum, MetadataRequest
+from nucypher_core import FleetStateChecksum, MetadataRequest, MetadataResponse
 
 from .base.peer import PeerError
-from .drivers.identity import IdentityAddress, AmountT
+from .base.time import BaseClock
+from .drivers.identity import IdentityAddress, AmountT, IdentityClient
 from .drivers.peer import Contact, PeerClient, PeerVerificationError, PeerInfo
 from .drivers.time import SystemClock
+from .domain import Domain
 from .p2p.fleet_sensor import FleetSensor
 from .p2p.fleet_state import FleetState
-from .storage import InMemoryStorage
+from .storage import InMemoryStorage, BaseStorage
 from .utils import BackgroundTask, wait_for_any
-from .utils.logging import NULL_LOGGER
+from .utils.logging import NULL_LOGGER, Logger
 from .utils.producer import producer
 from .verification import PublicUrsula, verify_staking_remote
 
 import random
 from bisect import bisect_right
 from itertools import accumulate
-
-
-# Since these two objects are either both present or both absent in Learner,
-# it is easier to keep them in a single struct to help with type checking.
-@frozen
-class ActiveLearner:
-    node: PublicUrsula
-    fleet_state: FleetState
 
 
 class WeightedReservoir:
@@ -65,7 +59,7 @@ class WeightedReservoir:
         return self._length
 
 
-class Learner:
+class _Learner:
     """
     The client for P2P network of Ursulas, keeping the metadata of known nodes
     and running the background learning task.
@@ -77,14 +71,14 @@ class Learner:
 
     def __init__(
         self,
-        domain,
-        identity_client,
-        peer_client=None,
-        this_node: Optional[PublicUrsula] = None,
-        seed_contacts=None,
-        parent_logger=NULL_LOGGER,
-        storage=None,
-        clock=None,
+        this_node: Optional[PublicUrsula],
+        domain: Domain,
+        identity_client: IdentityClient,
+        peer_client: Optional[PeerClient] = None,
+        seed_contacts: Optional[Iterable[Contact]] = None,
+        parent_logger: Logger = NULL_LOGGER,
+        storage: Optional[BaseStorage] = None,
+        clock: Optional[BaseClock] = None,
     ):
 
         if peer_client is None:
@@ -105,29 +99,21 @@ class Learner:
         if this_node:
             my_address = this_node.staking_provider_address
             my_contact = this_node.contact
-            # Only need to maintain it for compatibility purposes if we are a peer ourselves.
-            fleet_state = FleetState(self._clock, this_node)
-            active = ActiveLearner(this_node, fleet_state)
         else:
             my_address = None
             my_contact = None
-            active = None
-
-        self._active = active
 
         self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact)
         self._seed_contacts = seed_contacts or []
 
-    def _add_verified_nodes(self, nodes: Iterable[PeerInfo], stakes: Iterable[AmountT]):
-        # TODO: move to tests
+    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]):
+        # Overloaded for active Learner
+        pass
+
+    def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]):
         for node, stake in zip(nodes, stakes):
-            if (
-                not self._active
-                or node.staking_provider_address != self._active.node.staking_provider_address
-            ):
-                self.fleet_sensor.report_verified_node(node.secure_contact.contact, node, stake)
-                if self._active:
-                    self._active.fleet_state.add_metadatas([node])
+            self.fleet_sensor.report_verified_node(node.secure_contact.contact, node, stake)
+        self._fleet_state_add_metadatas(nodes)
 
     @producer
     async def verified_nodes_iter(self, yield_, addresses, verified_within=None):
@@ -262,6 +248,10 @@ class Learner:
 
         return node, staked
 
+    async def _exchange_metadata(self, node: PublicUrsula) -> MetadataResponse:
+        # Overloaded for active Learner
+        return await self._peer_client.node_metadata_get(node.secure_contact)
+
     async def _learn_from_node(self, node: PublicUrsula) -> List[PeerInfo]:
         self._logger.debug(
             "Learning from {} ({})",
@@ -269,23 +259,19 @@ class Learner:
             node.staking_provider_address,
         )
 
-        if self._active:
-            request = MetadataRequest(
-                self._active.fleet_state.checksum, [self._active.node.metadata]
-            )
-            metadata_response = await self._peer_client.node_metadata_post(
-                node.secure_contact, request
-            )
-        else:
-            metadata_response = await self._peer_client.node_metadata_get(node.secure_contact)
+        metadata_response = await self._exchange_metadata(node)
 
         try:
             payload = metadata_response.verify(node.verifying_key)
-        except Exception as e:  # TODO: can we narrow it down?
+        except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
-            raise PeerVerificationError("Failed to verify MetadataResponse") from e
+            raise PeerVerificationError("Failed to verify MetadataResponse") from exc
 
         return [PeerInfo(metadata) for metadata in payload.announce_nodes]
+
+    def _fleet_state_remove_contact(self, contact: Contact):
+        # overloaded for active Learner
+        pass
 
     async def _learn_from_node_and_report(self, node: PublicUrsula):
         with self.fleet_sensor.try_lock_contact(node.secure_contact.contact) as (
@@ -310,8 +296,7 @@ class Learner:
                     message,
                 )
                 self.fleet_sensor.report_bad_contact(node.secure_contact.contact)
-                if self._active:
-                    self._active.fleet_state.remove_contact(node.secure_contact.contact)
+                self._fleet_state_remove_contact(node.secure_contact.contact)
             else:
                 self._logger.debug(
                     "Learned from {} ({})",
@@ -319,8 +304,7 @@ class Learner:
                     node.staking_provider_address.checksum,
                 )
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
-                if self._active:
-                    self._active.fleet_state.add_metadatas(metadatas)
+                self._fleet_state_add_metadatas(metadatas)
             finally:
                 result.set(None)
 
@@ -346,13 +330,11 @@ class Learner:
                     exc_info=True,
                 )
                 self.fleet_sensor.report_bad_contact(contact)
-                if self._active:
-                    self._active.fleet_state.remove_contact(contact)
+                self._fleet_state_remove_contact(contact)
             else:
                 self._logger.debug("Verified {}: {}", contact, node)
                 self.fleet_sensor.report_verified_node(contact, node, staked_amount)
-                if self._active:
-                    self._active.fleet_state.add_metadatas([node])
+                self._fleet_state_add_metadatas([node])
             finally:
                 result.set(node)
 
@@ -360,15 +342,18 @@ class Learner:
 
     # External API
 
+    def _this_node_if_active(self) -> Optional[PublicUrsula]:
+        return None
+
     def metadata_to_announce(self) -> List[PublicUrsula]:
-        my_metadata = [self._active.node] if self._active else []
+        this_node = self._this_node_if_active()
+        my_metadata = [this_node] if this_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
     def passive_learning(self, sender_host: str, metadatas: Iterable[PeerInfo]):
 
         # Unfiltered metadata goes into FleetState for compatibility
-        if self._active:
-            self._active.fleet_state.add_metadatas(metadatas)
+        self._fleet_state_add_metadatas(metadatas)
         self._logger.debug("Passive learning from {}", sender_host)
         self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
@@ -465,3 +450,42 @@ class Learner:
             await wait_for_any([stop_event], datetime.timedelta(days=1).total_seconds)
             if stop_event.is_set():
                 return
+
+
+class Learner(_Learner):
+    """
+    A passive (client) Learner.
+    """
+
+    def __init__(self, *args, **kwds):
+        super().__init__(None, *args, **kwds)
+
+
+class ActiveLearner(_Learner):
+    """
+    A Learner acting on behalf of an active peer.
+    """
+
+    # The only reason the Learner/ActiveLearner dichotomy exists is FleetState,
+    # because we need to expose fleet state checksum in a type-safe manner.
+    # FleetSensor does not need this kind of accommodation.
+
+    def __init__(self, this_node: PublicUrsula, *args, **kwds):
+        super().__init__(this_node, *args, **kwds)
+
+        # Only need to maintain it for compatibility purposes if we are a peer ourselves.
+        self._this_node = this_node
+        self.fleet_state = FleetState(self._clock, this_node)
+
+    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]):
+        self.fleet_state.add_metadatas(nodes)
+
+    def _fleet_state_remove_contact(self, contact: Contact):
+        self.fleet_state.remove_contact(contact)
+
+    async def _exchange_metadata(self, node: PublicUrsula) -> MetadataResponse:
+        request = MetadataRequest(self.fleet_state.checksum, [self._this_node.metadata])
+        return await self._peer_client.node_metadata_post(node.secure_contact, request)
+
+    def _this_node_if_active(self) -> Optional[PublicUrsula]:
+        return self._this_node

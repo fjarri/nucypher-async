@@ -273,6 +273,12 @@ class FleetSensor:
     @_next_verification_time_may_change
     def report_verified_node(self, contact: Contact, node: PublicUrsula, staked_amount: AmountT):
 
+        if (
+            self._my_staking_provider_address
+            and node.staking_provider_address == self._my_staking_provider_address
+        ):
+            return
+
         verified_at = self._clock.utcnow()
 
         # Note that we do not use the node's `secure_contact`:
