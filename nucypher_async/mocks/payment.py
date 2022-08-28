@@ -1,14 +1,16 @@
 from contextlib import asynccontextmanager
-from typing import NamedTuple
+from typing import Dict
 
-from pons import Signer, Amount, Address
+from attrs import frozen
+from pons import Signer, Amount, Address, ContractABI
 
 from ..domain import Domain
 from ..drivers.payment import PaymentClient, PaymentAddress, AmountMATIC
 from .eth import MockBackend, MockContract
 
 
-class Policy(NamedTuple):
+@frozen
+class Policy:
     # TODO: match with the names in the contract
     policy_id: bytes
     start: int
@@ -17,13 +19,13 @@ class Policy(NamedTuple):
 
 
 class SubscriptionManager(MockContract):
-    def __init__(self, abi):
+    def __init__(self, abi: ContractABI):
         super().__init__(abi)
-        self._balances = {}
-        self._policies = {}
+        self._balances: Dict[PaymentAddress, AmountMATIC] = {}
+        self._policies: Dict[bytes, Policy] = {}
         self._policy_rate = Amount.gwei(1)
 
-    def isPolicyActive(self, policy_id: bytes):
+    def isPolicyActive(self, policy_id: bytes) -> bool:
         if policy_id not in self._policies:
             return False
 
@@ -43,7 +45,7 @@ class SubscriptionManager(MockContract):
         shares: int,
         start: int,
         end: int,
-    ):
+    ) -> None:
         # TODO: check that the amount is correct
         # TODO: check that timestamps are consistent
         # TODO: implement the distinction owner/sponsor from the contract
@@ -63,5 +65,5 @@ class MockPaymentClient(PaymentClient):
             self._manager.address, SubscriptionManager(self._manager.abi)
         )
 
-    def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC):
+    def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC) -> None:
         self._mock_backend.set_balance(address, amount)

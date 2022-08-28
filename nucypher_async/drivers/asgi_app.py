@@ -12,14 +12,25 @@ Nothing else should be happening here, the bulk of the server logic is located i
 
 from contextlib import asynccontextmanager
 import http
+from typing import Callable, Awaitable, AsyncIterator, AsyncContextManager, cast
 
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
+from hypercorn.typing import (
+    LifespanScope,
+    LifespanShutdownEvent,
+    LifespanStartupEvent,
+    ASGIReceiveEvent,
+    ASGISendEvent,
+)
 
+from ..base.http_server import ASGI3Framework
 from ..base.peer import BasePeer, ServerSidePeerError, InactivePolicy
 from ..base.porter import BasePorter
+from ..utils.logging import Logger
 
 
 # HTTP status codes don't need to be unique or exhaustive, it's just an additional way
@@ -31,19 +42,19 @@ _HTTP_STATUS = {
 
 
 class HTTPError(Exception):
-    def __init__(self, message, status_code):
+    def __init__(self, message: str, status_code: http.HTTPStatus):
         super().__init__(message, status_code)
         self.message = message
         self.status_code = status_code
 
 
-async def peer_api_call(logger, endpoint_future):
+async def peer_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> Response:
     try:
         result_bytes = await endpoint_future
     except ServerSidePeerError as exc:
         message = exc.to_json()
         status_code = http.HTTPStatus.INTERNAL_SERVER_ERROR
-        for tp, code in _HTTP_STATUS:
+        for tp, code in _HTTP_STATUS.items():
             if isinstance(exc, tp):
                 status_code = code
                 break
@@ -56,7 +67,7 @@ async def peer_api_call(logger, endpoint_future):
     return Response(result_bytes)
 
 
-async def rest_api_call(logger, endpoint_future):
+async def rest_api_call(logger: Logger, endpoint_future: Awaitable[str]) -> Response:
     try:
         result_str = await endpoint_future
     except HTTPError as exc:
@@ -71,14 +82,17 @@ async def rest_api_call(logger, endpoint_future):
         return JSONResponse(result_str)
 
 
-def make_lifespan(on_startup, on_shutdown):
+def make_lifespan(
+    on_startup: Callable[[trio.Nursery], Awaitable[None]],
+    on_shutdown: Callable[[trio.Nursery], Awaitable[None]],
+) -> Callable[[Starlette], AsyncContextManager[None]]:
     """
     A custom lifespan factory for Starlette that maintains a nursery
     in which background tasks can be run.
     """
 
     @asynccontextmanager
-    async def lifespan_context(app):
+    async def lifespan_context(app: Starlette) -> AsyncIterator[None]:
         async with trio.open_nursery() as nursery:
             await on_startup(nursery)
             yield
@@ -87,41 +101,42 @@ def make_lifespan(on_startup, on_shutdown):
     return lifespan_context
 
 
-def make_peer_asgi_app(peer: BasePeer):
+def make_peer_asgi_app(peer: BasePeer) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
 
     logger = peer.logger().get_child("App")
 
-    async def ping(request):
-        return await peer_api_call(logger, peer.endpoint_ping(request.client.host))
+    async def ping(request: Request) -> Response:
+        remote_host = request.client.host if request.client else None
+        return await peer_api_call(logger, peer.endpoint_ping(remote_host))
 
-    async def node_metadata_get(request):
+    async def node_metadata_get(request: Request) -> Response:
         return await peer_api_call(logger, peer.endpoint_node_metadata_get())
 
-    async def node_metadata_post(request):
-        remote_host = request.client.host
+    async def node_metadata_post(request: Request) -> Response:
+        remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await peer_api_call(
             logger, peer.endpoint_node_metadata_post(remote_host, request_bytes)
         )
 
-    async def public_information(request):
+    async def public_information(request: Request) -> Response:
         return await peer_api_call(logger, peer.endpoint_public_information())
 
-    async def reencrypt(request):
+    async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
         return await peer_api_call(logger, peer.endpoint_reencrypt(request_bytes))
 
-    async def status(request):
+    async def status(request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
         return await rest_api_call(logger, peer.endpoint_status())
 
-    async def on_startup(nursery):
+    async def on_startup(nursery: trio.Nursery) -> None:
         await peer.start(nursery)
 
-    async def on_shutdown(nursery):
+    async def on_shutdown(nursery: trio.Nursery) -> None:
         await peer.stop(nursery)
 
     routes = [
@@ -135,33 +150,35 @@ def make_peer_asgi_app(peer: BasePeer):
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
 
-    return app
+    # We don't have a typing package shared between Starlette and Hypercorn,
+    # so this will have to do
+    return cast(ASGI3Framework, app)
 
 
-def make_porter_app(porter: BasePorter):
+def make_porter_app(porter: BasePorter) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """
 
     logger = porter.logger().get_child("App")
 
-    async def get_ursulas(request):
+    async def get_ursulas(request: Request) -> Response:
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
         return await rest_api_call(logger, porter.endpoint_get_ursulas(json_request))
 
-    async def retrieve_cfrags(request):
+    async def retrieve_cfrags(request: Request) -> Response:
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
         return await rest_api_call(logger, porter.endpoint_retrieve_cfrags(json_request))
 
-    async def status(request):
+    async def status(request: Request) -> Response:
         return await rest_api_call(logger, porter.endpoint_status())
 
-    async def on_startup(nursery):
+    async def on_startup(nursery: trio.Nursery) -> None:
         await porter.start(nursery)
 
-    async def on_shutdown(nursery):
+    async def on_shutdown(nursery: trio.Nursery) -> None:
         await porter.stop(nursery)
 
     routes = [
@@ -172,4 +189,6 @@ def make_porter_app(porter: BasePorter):
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
 
-    return app
+    # We don't have a typing package shared between Starlette and Hypercorn,
+    # so this will have to do
+    return cast(ASGI3Framework, app)

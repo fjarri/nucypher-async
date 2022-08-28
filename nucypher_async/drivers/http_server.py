@@ -10,6 +10,7 @@ from typing import Optional
 from hypercorn.config import Config
 from hypercorn.trio import serve
 import trio
+from trio_typing import TaskStatus
 
 from ..base.http_server import BaseHTTPServer
 from ..utils import temp_file
@@ -63,7 +64,7 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server: BaseHTTPServer):
+def make_config(server: BaseHTTPServer) -> InMemoryCertificateConfig:
 
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
@@ -89,7 +90,7 @@ class HTTPServerHandle:
         self.app = server.into_asgi_app()
         self._shutdown_event = trio.Event()
 
-    async def __call__(self, *, task_status=trio.TASK_STATUS_IGNORED):
+    async def __call__(self, *, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED) -> None:
         """
         Starts the server in an external event loop.
         Useful for the cases when it needs to run in parallel with other servers or clients.
@@ -104,5 +105,5 @@ class HTTPServerHandle:
             task_status=task_status,
         )
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self._shutdown_event.set()

@@ -6,7 +6,7 @@ to illustrate that it does not necessarily need to work via HTTP.
 from abc import ABC, abstractmethod
 from enum import Enum, unique
 import json
-from typing import TypeVar, Type, Dict, Callable, Any
+from typing import TypeVar, Type, Dict, Callable, Any, Optional
 
 from nucypher_core import (
     MetadataRequest,
@@ -15,8 +15,10 @@ from nucypher_core import (
     ReencryptionRequest,
     ReencryptionResponse,
 )
+import trio
 
 from ..utils.logging import Logger
+from .types import JSON
 
 
 @unique
@@ -46,7 +48,7 @@ class ServerSidePeerError(ABC, PeerError):
         """Mapping of this error class to a unique error code."""
         ...
 
-    def to_json(self) -> dict:
+    def to_json(self) -> Dict[str, JSON]:
         return dict(error=self.args[0], code=self.error_code())
 
 
@@ -86,23 +88,23 @@ def decode_peer_error(message: str) -> PeerError:
 
 class GenericPeerError(ServerSidePeerError):
     @staticmethod
-    def error_code():
+    def error_code() -> PeerErrorCode:
         return PeerErrorCode.GENERIC_ERROR
 
 
 class InvalidMessage(ServerSidePeerError):
     @staticmethod
-    def error_code():
+    def error_code() -> PeerErrorCode:
         return PeerErrorCode.INVALID_MESSAGE
 
     @classmethod
-    def for_message(cls, message_cls, exc):
+    def for_message(cls, message_cls: Type[Any], exc: Exception) -> "InvalidMessage":
         return cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
 
 
 class InactivePolicy(ServerSidePeerError):
     @staticmethod
-    def error_code():
+    def error_code() -> PeerErrorCode:
         return PeerErrorCode.INACTIVE_POLICY
 
 
@@ -121,15 +123,15 @@ _PEER_ERROR_CODE_TO_CLASS: Dict[PeerErrorCode, Callable[[str], ServerSidePeerErr
 
 class BasePeer(ABC):
     @abstractmethod
-    async def start(self, nursery):
+    async def start(self, nursery: trio.Nursery) -> None:
         ...
 
     @abstractmethod
-    async def stop(self, nursery):
+    async def stop(self, nursery: trio.Nursery) -> None:
         ...
 
     @abstractmethod
-    async def endpoint_ping(self, remote_host: str) -> str:
+    async def endpoint_ping(self, remote_host: Optional[str]) -> bytes:
         ...
 
     @abstractmethod
@@ -141,11 +143,13 @@ class BasePeer(ABC):
 
     @abstractmethod
     async def node_metadata_post(
-        self, remote_host: str, request: MetadataRequest
+        self, remote_host: Optional[str], request: MetadataRequest
     ) -> MetadataResponse:
         ...
 
-    async def endpoint_node_metadata_post(self, remote_host: str, request_bytes: bytes) -> bytes:
+    async def endpoint_node_metadata_post(
+        self, remote_host: Optional[str], request_bytes: bytes
+    ) -> bytes:
         try:
             request = MetadataRequest.from_bytes(request_bytes)
         except ValueError as exc:

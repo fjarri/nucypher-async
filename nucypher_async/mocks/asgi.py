@@ -1,35 +1,46 @@
 from contextlib import asynccontextmanager
-from typing import NamedTuple
+from typing import Dict, Tuple, Any, Union
 from urllib.parse import urlparse
 import weakref
 
 import httpx
 import trio
 
-from ..base.http_server import BaseHTTPServer
+from hypercorn.typing import (
+    LifespanScope,
+    LifespanShutdownEvent,
+    LifespanStartupEvent,
+    ASGIReceiveEvent,
+    ASGISendEvent,
+)
+
+from ..base.http_server import BaseHTTPServer, ASGI3Framework
 from ..utils.ssl import SSLCertificate
 
 
 class LifespanManager:
-    def __init__(self, app):
+    def __init__(self, app: ASGI3Framework):
         self.app = app
-        self._send_channel, self._receive_channel = trio.open_memory_channel(0)
+        self._send_channel, self._receive_channel = trio.open_memory_channel[ASGIReceiveEvent](0)
         self._startup_complete = trio.Event()
         self._shutdown_complete = trio.Event()
 
-    async def run(self, nursery):
-        nursery.start_soon(self.app, {"type": "lifespan"}, self.receive, self.send)
-        await self._send_channel.send({"type": "lifespan.startup"})
+    async def run(self, nursery: trio.Nursery) -> None:
+        lifespan: LifespanScope = {"type": "lifespan", "asgi": {"version": "3.0"}}
+        nursery.start_soon(self.app, lifespan, self.receive, self.send)
+        event: LifespanStartupEvent = {"type": "lifespan.startup"}
+        await self._send_channel.send(event)
         await self._startup_complete.wait()
 
-    async def shutdown(self):
-        await self._send_channel.send({"type": "lifespan.shutdown"})
+    async def shutdown(self) -> None:
+        event: LifespanShutdownEvent = {"type": "lifespan.shutdown"}
+        await self._send_channel.send(event)
         await self._shutdown_complete.wait()
 
-    async def receive(self):
+    async def receive(self) -> ASGIReceiveEvent:
         return await self._receive_channel.receive()
 
-    async def send(self, message):
+    async def send(self, message: ASGISendEvent) -> None:
         if message["type"] == "lifespan.startup.complete":
             self._startup_complete.set()
         elif message["type"] == "lifespan.shutdown.complete":
@@ -37,22 +48,22 @@ class LifespanManager:
 
 
 class MockNetwork:
-    def __init__(self, nursery):
-        self.known_servers = {}
+    def __init__(self, nursery: trio.Nursery):
+        self.known_servers: Dict[Tuple[str, int], Tuple[SSLCertificate, LifespanManager]] = {}
         self.nursery = nursery
 
-    def add_server(self, server: BaseHTTPServer):
+    def add_server(self, server: BaseHTTPServer) -> None:
         app = server.into_asgi_app()
         manager = LifespanManager(app)
         certificate = server.ssl_certificate()
         host, port = server.host_and_port()
         self.known_servers[(host, port)] = (certificate, manager)
 
-    async def start_all(self):
+    async def start_all(self) -> None:
         for certificate, manager in self.known_servers.values():
             await manager.run(self.nursery)
 
-    async def stop_all(self):
+    async def stop_all(self) -> None:
         async with trio.open_nursery() as nursery:
             for certificate, manager in self.known_servers.values():
                 nursery.start_soon(manager.shutdown)
@@ -64,14 +75,16 @@ class MockHTTPClient:
         self._host = host
         self._certificate = certificate
 
-    async def get(self, url, *args, **kwargs):
+    async def get(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return await self._request("get", url, *args, **kwargs)
 
-    async def post(self, url, *args, **kwargs):
+    async def post(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return await self._request("post", url, *args, **kwargs)
 
-    async def _request(self, method, url, *args, **kwargs):
+    async def _request(self, method: str, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         url_parts = urlparse(url)
+        assert url_parts.hostname is not None, "Hostname is missing from the url"
+        assert url_parts.port is not None, "Port is missing from the url"
         certificate, manager = self._mock_network.known_servers[
             (url_parts.hostname, url_parts.port)
         ]

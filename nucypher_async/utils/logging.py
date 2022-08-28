@@ -6,14 +6,17 @@ Why not use standard library `logging`: it is stateful, and we want different be
 depening on the environment (testing/usage as a library/running a server).
 """
 
+from abc import ABC, abstractmethod
 from enum import IntEnum
 import io
 import time
 import traceback
-from typing import NamedTuple, List, Any, Tuple, Type, Optional
+from typing import List, Any, Tuple, Type, Optional, Type, Union, Iterable
+from types import TracebackType
 from pathlib import Path
 import sys
 
+from attr import frozen
 import trio
 
 
@@ -41,28 +44,35 @@ ERROR = Level.ERROR
 CRITICAL = Level.CRITICAL
 
 
-class LogRecord(NamedTuple):
+@frozen
+class LogRecord:
     timestamp: float
     logger_name: str
     level: Level
     message: str
-    args: List[Any]
-    exc_info: Tuple[Type, Exception, Any]
+    args: Tuple[Any, ...]
+    exc_info: Union[
+        Tuple[Type[BaseException], BaseException, TracebackType], Tuple[None, None, None]
+    ]
     task_id: Optional[int]
 
     @staticmethod
-    def make(logger_name, level, message, args, exc_info=False):
+    def make(
+        logger_name: str, level: Level, message: str, args: Tuple[Any, ...], exc_info: bool = False
+    ) -> "LogRecord":
         try:
-            task_id = trio.lowlevel.current_task()
+            task = trio.lowlevel.current_task()
         except RuntimeError:
             # Not in trio event loop.
-            task_id = None
+            task = None
 
-        if task_id is not None:
+        if task is not None:
             # Generates a number in range 1000-9998,
             # we won't have that many tasks, so it'll be enough for debugging purposes.
             # (using 8999 since it's a prime, so the range will be more uniformly covered)
-            task_id = id(task_id) % 8999 + 1000
+            task_id = id(task) % 8999 + 1000
+        else:
+            task_id = None
 
         return LogRecord(
             timestamp=time.time(),  # Note: using the local time here, not UTC
@@ -70,19 +80,39 @@ class LogRecord(NamedTuple):
             level=level,
             message=message,
             args=args,
-            exc_info=sys.exc_info() if exc_info else None,
+            exc_info=sys.exc_info() if exc_info else (None, None, None),
             task_id=task_id,
         )
 
 
+class Formatter(ABC):
+    @abstractmethod
+    def format(self, record: LogRecord) -> str:
+        ...
+
+
+class Handler(ABC):
+    @abstractmethod
+    def emit(self, record: LogRecord) -> None:
+        ...
+
+
 class Logger:
-    def __init__(self, name: str = "root", level: Level = Level.DEBUG, handlers=None, parent=None):
+    def __init__(
+        self,
+        name: str = "root",
+        level: Level = Level.DEBUG,
+        handlers: Optional[Iterable[Handler]] = None,
+        parent: Optional["Logger"] = None,
+    ):
         self.name = name
         self.level = level
         self.handlers = handlers or []
-        self.parent = parent or []
+        self.parent = parent
 
-    def get_child(self, name, level=None, handlers=None):
+    def get_child(
+        self, name: str, level: Optional[Level] = None, handlers: Optional[Iterable[Handler]] = None
+    ) -> "Logger":
         return Logger(
             name=self.name + "." + name,
             level=level or self.level,
@@ -90,7 +120,7 @@ class Logger:
             parent=self,
         )
 
-    def _emit(self, record):
+    def _emit(self, record: LogRecord) -> None:
         if self.parent:
             self.parent._emit(record)
 
@@ -100,33 +130,35 @@ class Logger:
         for handler in self.handlers:
             handler.emit(record)
 
-    def log(self, level, message, args, exc_info=False):
+    def _log(
+        self, level: Level, message: str, args: Tuple[Any, ...], exc_info: bool = False
+    ) -> None:
         self._emit(LogRecord.make(self.name, level, message, args, exc_info=exc_info))
 
-    def debug(self, message, *args, **kwds):
-        self.log(Level.DEBUG, message, args, **kwds)
+    def debug(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.DEBUG, message, args, **kwds)
 
-    def info(self, message, *args, **kwds):
-        self.log(Level.INFO, message, args, **kwds)
+    def info(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.INFO, message, args, **kwds)
 
-    def warn(self, message, *args, **kwds):
-        self.log(Level.WARNING, message, args, **kwds)
+    def warn(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.WARNING, message, args, **kwds)
 
-    def error(self, message, *args, **kwds):
-        self.log(Level.ERROR, message, args, **kwds)
+    def error(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.ERROR, message, args, **kwds)
 
-    def critical(self, message, *args, **kwds):
-        self.log(Level.CRITICAL, message, args, **kwds)
+    def critical(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.CRITICAL, message, args, **kwds)
 
 
 NULL_LOGGER = Logger()
 
 
-class Formatter:
-    def __init__(self, format_str):
+class DefaultFormatter(Formatter):
+    def __init__(self, format_str: str):
         self.format_str = format_str
 
-    def format(self, record):
+    def format(self, record: LogRecord) -> str:
         message = record.message.format(*record.args)
         asctime = time.asctime(time.localtime(record.timestamp))
 
@@ -146,16 +178,21 @@ class Formatter:
         return full_message
 
 
-DEFAULT_FORMATTER = Formatter("{asctime} {task_id}[{levelname}] [{name}] {message}")
+DEFAULT_FORMATTER = DefaultFormatter("{asctime} {task_id}[{levelname}] [{name}] {message}")
 
 
-class ConsoleHandler:
-    def __init__(self, level=Level.DEBUG, formatter=DEFAULT_FORMATTER, stderr_at=Level.WARNING):
+class ConsoleHandler(Handler):
+    def __init__(
+        self,
+        level: Level = Level.DEBUG,
+        formatter: Formatter = DEFAULT_FORMATTER,
+        stderr_at: Level = Level.WARNING,
+    ):
         self.level = level
         self.formatter = formatter
         self.stderr_at = stderr_at
 
-    def emit(self, record):
+    def emit(self, record: LogRecord) -> None:
         if record.level < self.level:
             return
         message = self.formatter.format(record)
@@ -167,14 +204,14 @@ class ConsoleHandler:
         print(message, file=file)
 
 
-class RotatingFileHandler:
+class RotatingFileHandler(Handler):
     def __init__(
         self,
-        log_file,
-        max_bytes=1000000,
-        backup_count=9,
-        formatter=DEFAULT_FORMATTER,
-        level=Level.DEBUG,
+        log_file: Union[Path, str],
+        max_bytes: int = 1000000,
+        backup_count: int = 9,
+        formatter: Formatter = DEFAULT_FORMATTER,
+        level: Level = Level.DEBUG,
     ):
         self.level = level
         self.formatter = formatter
@@ -183,10 +220,10 @@ class RotatingFileHandler:
         self.max_bytes = max_bytes
         self.backup_count = backup_count
 
-    def _backup_file(self, idx):
+    def _backup_file(self, idx: int) -> Path:
         return self.log_file.with_suffix(self.log_file.suffix + "." + str(idx))
 
-    def _rotate(self):
+    def _rotate(self) -> None:
         file_names = [
             self._backup_file(idx) for idx in reversed(range(1, self.backup_count + 1))
         ] + [self.log_file]
@@ -201,7 +238,7 @@ class RotatingFileHandler:
             elif path.exists():
                 raise RuntimeError(f"A directory exists at {path}")
 
-    def emit(self, record):
+    def emit(self, record: LogRecord) -> None:
         if record.level < self.level:
             return
         message = self.formatter.format(record)

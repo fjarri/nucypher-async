@@ -322,7 +322,9 @@ class FleetSensor:
         self._add_contacts(metadatas)
 
     @_next_verification_time_may_change
-    def report_passive_learning_results(self, sender_host: str, metadatas: Iterable[PeerInfo]):
+    def report_passive_learning_results(
+        self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]
+    ):
 
         # Filter out only the contact(s) with `remote_address`.
         # We're not going to trust all this metadata anyway.

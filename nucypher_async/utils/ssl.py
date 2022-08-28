@@ -1,6 +1,6 @@
 from ipaddress import ip_address
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any, cast
 import ssl
 
 import arrow
@@ -17,7 +17,7 @@ import trio
 
 class SSLPrivateKey:
     @classmethod
-    def from_seed(cls, seed: bytes):
+    def from_seed(cls, seed: bytes) -> "SSLPrivateKey":
         private_bn = int.from_bytes(seed, "big")
         private_key = ec.derive_private_key(private_value=private_bn, curve=ec.SECP384R1())
         return cls(private_key)
@@ -47,17 +47,17 @@ class SSLPublicKey:
     def __init__(self, public_key: ec.EllipticCurvePublicKey):
         self._public_key = public_key
 
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
         return self._public_key.public_bytes(
             encoding=serialization.Encoding.X962,
             format=serialization.PublicFormat.CompressedPoint,
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "0x" + bytes(self).hex()
 
-    def __eq__(self, other):
-        return bytes(self) == bytes(other)
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, SSLPublicKey) and self._public_key == other._public_key
 
 
 class InvalidCertificate(Exception):
@@ -106,8 +106,8 @@ class SSLCertificate:
     def __init__(self, certificate: x509.Certificate):
         self._certificate = certificate
 
-    def __eq__(self, other):
-        return self._certificate == other._certificate
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, SSLCertificate) and self._certificate == other._certificate
 
     def to_pem_bytes(self) -> bytes:
         return self._certificate.public_bytes(serialization.Encoding.PEM)
@@ -116,15 +116,18 @@ class SSLCertificate:
         return self._certificate.public_bytes(serialization.Encoding.DER)
 
     @classmethod
-    def from_pem_bytes(cls, data) -> "SSLCertificate":
+    def from_pem_bytes(cls, data: bytes) -> "SSLCertificate":
         return cls(x509.load_pem_x509_certificate(data))
 
     @classmethod
-    def from_der_bytes(cls, data) -> "SSLCertificate":
+    def from_der_bytes(cls, data: bytes) -> "SSLCertificate":
         return cls(x509.load_der_x509_certificate(data))
 
-    def public_key(self):
-        return SSLPublicKey(self._certificate.public_key())
+    def public_key(self) -> SSLPublicKey:
+        # It will have this type by construction
+        # (stemming from `SSLPrivateKey` using SECP384R1)
+        backend_public_key = cast(ec.EllipticCurvePublicKey, self._certificate.public_key())
+        return SSLPublicKey(backend_public_key)
 
     @property
     def declared_host(self) -> str:
@@ -154,5 +157,6 @@ async def fetch_certificate(host: str, port: int) -> SSLCertificate:
 
     stream = await trio.open_ssl_over_tcp_stream(host, port, ssl_context=context)
     await stream.do_handshake()
-    certificate_der = stream.getpeercert(True)
+    # Casting because we're explicitly requesting bytes
+    certificate_der = cast(bytes, stream.getpeercert(binary_form=True))
     return SSLCertificate.from_der_bytes(certificate_der)

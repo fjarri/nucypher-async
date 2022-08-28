@@ -12,8 +12,10 @@ TODO:
 from contextlib import asynccontextmanager
 import json
 from pathlib import Path
+from typing import Type, AsyncIterator, cast
 
 from eth_account import Account
+from eth_account.signers.base import BaseAccount
 
 from nucypher_core import HRAC
 from pons import (
@@ -29,6 +31,7 @@ from pons import (
     Amount,
     abi,
 )
+from pons._client import ClientSession
 
 from ..domain import Domain
 
@@ -69,7 +72,11 @@ class PaymentAddress(Address):
     pass
 
 
-class IbexContracts:
+class BaseContracts:
+    SUBSCRIPTION_MANAGER: PaymentAddress
+
+
+class IbexContracts(BaseContracts):
     """
     Registry for Polygon-Mumbai.
     """
@@ -78,7 +85,7 @@ class IbexContracts:
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
-class OryxContracts:
+class OryxContracts(BaseContracts):
     """
     Registry for Polygon-Mumbai.
     """
@@ -87,7 +94,7 @@ class OryxContracts:
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
-class MainnetContracts:
+class MainnetContracts(BaseContracts):
     """
     Registry for Polygon-Mainnet.
     """
@@ -97,16 +104,16 @@ class MainnetContracts:
 
 
 class AmountMATIC(Amount):
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.as_ether()} MATIC"
 
 
 class PaymentAccount:
     @classmethod
-    def random(cls):
+    def random(cls) -> "PaymentAccount":
         return cls(Account.create())
 
-    def __init__(self, account):
+    def __init__(self, account: BaseAccount):
         self._account = account
         self.address = PaymentAddress.from_hex(account.address)
 
@@ -116,21 +123,22 @@ class PaymentAccountSigner(AccountSigner):
         super().__init__(payment_account._account)
 
     @property
-    def address(self):
+    def address(self) -> PaymentAddress:
         return PaymentAddress(bytes(super().address))
 
 
 class PaymentClient:
     @classmethod
-    def from_endpoint(cls, url, domain):
+    def from_endpoint(cls, url: str, domain: Domain) -> "PaymentClient":
         assert url.startswith("https://")
         provider = HTTPProvider(url)
         client = Client(provider)
         return cls(client, domain)
 
-    def __init__(self, backend_client, domain):
+    def __init__(self, backend_client: Client, domain: Domain):
         self._client = backend_client
 
+        registry: Type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
         elif domain == Domain.IBEX:
@@ -145,19 +153,23 @@ class PaymentClient:
         )
 
     @asynccontextmanager
-    async def session(self):
+    async def session(self) -> AsyncIterator["PaymentClientSession"]:
         async with self._client.session() as backend_session:
             yield PaymentClientSession(self, backend_session)
 
 
 class PaymentClientSession:
-    def __init__(self, payment_client, backend_session):
+    def __init__(self, payment_client: PaymentClient, backend_session: ClientSession):
         self._payment_client = payment_client
         self._backend_session = backend_session
         self._manager = self._payment_client._manager
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
-        return await self._backend_session.eth_call(self._manager.read.isPolicyActive(bytes(hrac)))
+        is_active = await self._backend_session.eth_call(
+            self._manager.read.isPolicyActive(bytes(hrac))
+        )
+        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
+        return cast(bool, is_active)
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
         amount = await self._backend_session.eth_call(
@@ -172,7 +184,7 @@ class PaymentClientSession:
         shares: int,
         policy_start: int,
         policy_end: int,
-    ):
+    ) -> None:
         amount = await self.get_policy_cost(shares, policy_start, policy_end)
         call = self._manager.write.createPolicy(
             bytes(hrac), signer.address, shares, policy_start, policy_end

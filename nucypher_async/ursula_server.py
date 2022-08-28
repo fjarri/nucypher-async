@@ -13,7 +13,7 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from .base.peer import BasePeer, InactivePolicy
+from .base.peer import BasePeer, InactivePolicy, GenericPeerError
 from .drivers.identity import IdentityAddress
 from .drivers.peer import (
     BasePeerServer,
@@ -145,8 +145,11 @@ class UrsulaServer(BasePeerServer, BasePeer):
         await self._verification_task.stop()
         self.started = False
 
-    async def endpoint_ping(self, remote_host: str) -> str:
-        return remote_host
+    async def endpoint_ping(self, remote_host: Optional[str]) -> bytes:
+        if remote_host:
+            return remote_host.encode()
+        else:
+            raise GenericPeerError()
 
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [m.metadata for m in self.learner.metadata_to_announce()]
@@ -158,7 +161,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
         return response
 
     async def node_metadata_post(
-        self, remote_host: str, metadata_request: MetadataRequest
+        self, remote_host: Optional[str], metadata_request: MetadataRequest
     ) -> MetadataResponse:
 
         if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
@@ -209,4 +212,10 @@ class UrsulaServer(BasePeerServer, BasePeer):
         return response
 
     async def endpoint_status(self):
-        return render_status(self._logger, self._clock, self, is_active_peer=True)
+        return render_status(
+            logger=self._logger,
+            clock=self._clock,
+            fleet_sensor=self.learner.fleet_sensor,
+            started_at=self._started_at,
+            is_active_peer=True,
+        )

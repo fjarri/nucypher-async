@@ -13,10 +13,11 @@ from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any, Type, AsyncIterator, cast
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from eth_account.signers.base import BaseAccount
 from eth_account._utils.signing import to_standard_signature_bytes
 
 from pons import (
@@ -29,6 +30,7 @@ from pons import (
     ReadMethod,
     abi,
 )
+from pons._client import ClientSession
 
 from ..domain import Domain
 
@@ -73,7 +75,11 @@ class IdentityAddress(Address):
     pass
 
 
-class IbexContracts:
+class BaseContracts:
+    PRE_APPLICATION: IdentityAddress
+
+
+class IbexContracts(BaseContracts):
     """
     Registry for Rinkeby.
     """
@@ -82,7 +88,7 @@ class IbexContracts:
     PRE_APPLICATION = IdentityAddress.from_hex("0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35")
 
 
-class OryxContracts:
+class OryxContracts(BaseContracts):
     """
     Registry for Ropsten.
     """
@@ -91,7 +97,7 @@ class OryxContracts:
     PRE_APPLICATION = IdentityAddress.from_hex("0xb6f98dA65174CE8F50eA0ea4350D96B2d3eFde9a")
 
 
-class MainnetContracts:
+class MainnetContracts(BaseContracts):
     """
     Registry for mainnet.
     """
@@ -102,45 +108,46 @@ class MainnetContracts:
 
 class IdentityAccount:
     @classmethod
-    def from_payload(cls, payload, password):
+    def from_payload(cls, payload: Dict[str, Any], password: bytes) -> "IdentityAccount":
         pk = Account.decrypt(payload, password)
         account = Account.from_key(pk)
         return cls(account)
 
     @classmethod
-    def random(cls):
+    def random(cls) -> "IdentityAccount":
         return cls(Account.create())
 
-    def __init__(self, account):
+    def __init__(self, account: BaseAccount):
         self._account = account
         self.address = IdentityAddress.from_hex(account.address)
 
-    def sign_message(self, message: bytes):
+    def sign_message(self, message: bytes) -> bytes:
         signature = self._account.sign_message(encode_defunct(message))
         return to_standard_signature_bytes(signature.signature)
 
 
 class AmountETH(Amount):
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.as_ether()} ETH"
 
 
 class AmountT(Amount):
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.as_ether()} T"
 
 
 class IdentityClient:
     @classmethod
-    def from_endpoint(cls, url, domain):
+    def from_endpoint(cls, url: str, domain: Domain) -> "IdentityClient":
         assert url.startswith("https://")
         provider = HTTPProvider(url)
         client = Client(provider)
         return cls(client, domain)
 
-    def __init__(self, backend_client, domain):
+    def __init__(self, backend_client: Client, domain: Domain):
         self._client = backend_client
 
+        registry: Type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
         elif domain == Domain.IBEX:
@@ -153,13 +160,13 @@ class IdentityClient:
         self._pre_application = DeployedContract(address=registry.PRE_APPLICATION, abi=_PRE_APP_ABI)
 
     @asynccontextmanager
-    async def session(self):
+    async def session(self) -> AsyncIterator["IdentityClientSession"]:
         async with self._client.session() as backend_session:
             yield IdentityClientSession(self, backend_session)
 
 
 class IdentityClientSession:
-    def __init__(self, identity_client, backend_session):
+    def __init__(self, identity_client: IdentityClient, backend_session: ClientSession):
         self._identity_client = identity_client
         self._backend_session = backend_session
         self._pre_application = identity_client._pre_application
@@ -186,14 +193,24 @@ class IdentityClientSession:
         )
         return IdentityAddress(bytes(address))
 
-    async def is_staking_provider_authorized(self, staking_provider_address: IdentityAddress):
-        return await self._backend_session.eth_call(
-            self._pre_application.read.isAuthorized(staking_provider_address)
+    async def is_staking_provider_authorized(
+        self, staking_provider_address: IdentityAddress
+    ) -> bool:
+        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
+        return cast(
+            bool,
+            await self._backend_session.eth_call(
+                self._pre_application.read.isAuthorized(staking_provider_address)
+            ),
         )
 
-    async def is_operator_confirmed(self, operator_address: IdentityAddress):
-        return await self._backend_session.eth_call(
-            self._pre_application.read.isOperatorConfirmed(operator_address)
+    async def is_operator_confirmed(self, operator_address: IdentityAddress) -> bool:
+        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
+        return cast(
+            bool,
+            await self._backend_session.eth_call(
+                self._pre_application.read.isOperatorConfirmed(operator_address)
+            ),
         )
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:

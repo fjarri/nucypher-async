@@ -150,4 +150,10 @@ class PorterServer(BaseHTTPServer, BasePorter):
         pass
 
     async def endpoint_status(self):
-        return render_status(self._logger, self._clock, self, is_active_peer=False)
+        return render_status(
+            logger=self._logger,
+            clock=self._clock,
+            fleet_sensor=self.learner.fleet_sensor,
+            started_at=self._started_at,
+            is_active_peer=False,
+        )

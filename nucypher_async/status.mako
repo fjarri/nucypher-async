@@ -1,4 +1,4 @@
-<%def name="main(server, code_info, is_active_peer)">
+<%def name="main(fleet_sensor, node, started_at, code_info, is_active_peer)">
 <!DOCTYPE html>
 <html>
 <head>
@@ -74,10 +74,10 @@
 </style>
 </body>
     <%
-        verified_node_entries = server.learner.fleet_sensor._verified_nodes_db._nodes
+        verified_node_entries = fleet_sensor._verified_nodes_db._nodes
         verify_at = {
             entry.address: entry
-            for entry in server.learner.fleet_sensor._verified_nodes_db._verify_at}
+            for entry in fleet_sensor._verified_nodes_db._verify_at}
 
         if code_info.release:
             version_str = code_info.version
@@ -92,7 +92,7 @@
         %if is_active_peer:
         <tr>
             <td></td>
-            <td><span class="this-node monospace">${server._node.staking_provider_address}</span></td>
+            <td><span class="this-node monospace">${node.staking_provider_address}</span></td>
         </tr>
         %endif
         <tr>
@@ -115,17 +115,17 @@
         %endif
         <tr>
             <td><i>Domain:</i></td>
-            <td><span class="monospace">${ server.learner.domain.value }</span></td>
+            <td><span class="monospace">${ node.domain.value }</span></td>
         </tr>
         %if is_active_peer:
         <tr>
             <td><i>Metadata created:</i></td>
-            <td>${server._node.timestamp.humanize(now)}</td>
+            <td>${node.timestamp.humanize(now)}</td>
         </tr>
         %endif
         <tr>
             <td><i>Uptime:</i></td>
-            <td>${humanize.naturaldelta(now - server._started_at)}</td>
+            <td>${humanize.naturaldelta(now - started_at)}</td>
         </tr>
     </table>
 
@@ -167,8 +167,8 @@
     %endif
 
     <%
-        contacts = server.learner.fleet_sensor._contacts_db._addresses_to_contacts
-        staking_providers = server.learner.fleet_sensor._staking_providers
+        contacts = fleet_sensor._contacts_db._addresses_to_contacts
+        staking_providers = fleet_sensor._staking_providers
     %>
 
     <h3>Contacts (${len(contacts)} total)</h3>

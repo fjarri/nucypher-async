@@ -6,11 +6,22 @@ import humanize
 from mako import exceptions as mako_exceptions
 from mako.template import Template
 
+from .base.time import BaseClock
+from .p2p.fleet_sensor import FleetSensor
+from .verification import PublicUrsula
+from .utils.logging import Logger
 from .drivers.asgi_app import HTTPError
 from .version import CodeInfo
 
 
-def render_status(logger, clock, server, is_active_peer):
+def render_status(
+    logger: Logger,
+    clock: BaseClock,
+    fleet_sensor: FleetSensor,
+    node: PublicUrsula,
+    started_at: arrow.Arrow,
+    is_active_peer: bool,
+):
 
     BASE_DIR = Path(__file__).parent
     STATUS_TEMPLATE = Template(filename=str(BASE_DIR / "status.mako")).get_def("main")
@@ -19,7 +30,9 @@ def render_status(logger, clock, server, is_active_peer):
 
     try:
         return STATUS_TEMPLATE.render(
-            server,
+            fleet_sensor,
+            node,
+            started_at,
             code_info,
             is_active_peer,
             arrow=arrow,

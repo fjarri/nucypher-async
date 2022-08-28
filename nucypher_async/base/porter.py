@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import Dict, Any
 
 from ..utils.logging import Logger
+from .types import JSON
+
+import trio
 
 
 class BasePorter(ABC):
@@ -10,19 +14,19 @@ class BasePorter(ABC):
     """
 
     @abstractmethod
-    async def start(self, nursery):
+    async def start(self, nursery: trio.Nursery) -> None:
         ...
 
     @abstractmethod
-    async def stop(self, nursery):
+    async def stop(self, nursery: trio.Nursery) -> None:
         ...
 
     @abstractmethod
-    async def endpoint_get_ursulas(self, request_json: dict) -> dict:
+    async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
         ...
 
     @abstractmethod
-    async def endpoint_retrieve_cfrags(self, request_json: dict) -> dict:
+    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> JSON:
         ...
 
     @abstractmethod

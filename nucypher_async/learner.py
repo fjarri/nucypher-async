@@ -350,11 +350,11 @@ class _Learner:
         my_metadata = [this_node] if this_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
-    def passive_learning(self, sender_host: str, metadatas: Iterable[PeerInfo]):
+    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]):
 
         # Unfiltered metadata goes into FleetState for compatibility
         self._fleet_state_add_metadatas(metadatas)
-        self._logger.debug("Passive learning from {}", sender_host)
+        self._logger.debug("Passive learning from {}", sender_host or "unknown host")
         self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
     async def load_staking_providers_and_report(self):

@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Callable, Dict, Awaitable
+
+from hypercorn.typing import ASGI3Framework as ASGI3Framework
 
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from ..utils.logging import Logger
@@ -24,5 +26,5 @@ class BaseHTTPServer(ABC):
         ...
 
     @abstractmethod
-    def into_asgi_app(self):
+    def into_asgi_app(self) -> ASGI3Framework:
         ...

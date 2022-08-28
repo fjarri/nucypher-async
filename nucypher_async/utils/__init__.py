@@ -1,9 +1,11 @@
 from contextlib import contextmanager
 from pathlib import Path
 import tempfile
-from typing import Iterator
+from typing import Iterator, Iterable, Callable, Awaitable
 
 import trio
+
+from .logging import Logger
 
 
 @contextmanager
@@ -14,10 +16,10 @@ def temp_file(contents: bytes) -> Iterator[Path]:
         yield Path(f.name)
 
 
-async def wait_for_any(events, timeout):
+async def wait_for_any(events: Iterable[trio.Event], timeout: float) -> bool:
     stop = trio.Event()
 
-    async def wait_for_single(event):
+    async def wait_for_single(event: trio.Event) -> None:
         await event.wait()
         stop.set()
 
@@ -36,13 +38,13 @@ async def wait_for_any(events, timeout):
 
 
 class BackgroundTask:
-    def __init__(self, worker, logger):
+    def __init__(self, worker: Callable[[trio.Event], Awaitable[None]], logger: Logger):
         self._worker = worker
         self._logger = logger
         self._stop_event = trio.Event()
         self._stop_finished_event = trio.Event()
 
-    async def _wrapper(self):
+    async def _wrapper(self) -> None:
         try:
             await self._worker(self._stop_event)
         except Exception as exc:
@@ -50,10 +52,10 @@ class BackgroundTask:
         finally:
             self._stop_finished_event.set()
 
-    def start(self, nursery):
+    def start(self, nursery: trio.Nursery) -> None:
         nursery.start_soon(self._wrapper)
 
-    async def stop(self):
+    async def stop(self) -> None:
         self._stop_event.set()
         await self._stop_finished_event.wait()
         self._stop_event = trio.Event()
