@@ -7,7 +7,7 @@ class Domain(Enum):
     ORYX = "oryx"
 
     @classmethod
-    def from_string(cls, domain):
+    def from_string(cls, domain: str) -> "Domain":
         if domain == "mainnet":
             return cls.MAINNET
         elif domain == "ibex":
