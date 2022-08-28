@@ -46,7 +46,7 @@ class MockContract:
 
 
 class MockBackend:
-    def __init__(self):
+    def __init__(self) -> None:
         self._balances: Dict[Address, Amount] = defaultdict(lambda: Amount.wei(0))
         self._contracts: Dict[Address, MockContract] = {}
 

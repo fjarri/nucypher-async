@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from functools import cached_property
 import http
 from ipaddress import IPv4Address, AddressValueError
-from typing import Tuple, AsyncIterator
+from typing import Tuple, AsyncIterator, TypeVar, Protocol, Any, Type
 
 import arrow
 import httpx
@@ -21,11 +21,11 @@ from nucypher_core import (
     ReencryptionResponse,
     NodeMetadataPayload,
 )
-from nucypher_core.umbral import PublicKey
+from nucypher_core.umbral import PublicKey, Signer
 import trio
 
-from ..base.http_server import BaseHTTPServer
-from ..base.peer import PeerError, BasePeer, decode_peer_error
+from ..base.http_server import BaseHTTPServer, ASGI3Framework
+from ..base.peer import PeerError, BasePeer, decode_peer_error, InvalidMessage
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
@@ -55,13 +55,13 @@ class Contact:
         self.host = host
         self.port = port
 
-    def __eq__(self, other):
-        return self.host == other.host and self.port == other.port
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Contact) and self.host == other.host and self.port == other.port
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.__class__, self.host, self.port))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Contact({repr(self.host)}, {repr(self.port)})"
 
 
@@ -76,7 +76,7 @@ class PeerPrivateKey:
     def _as_ssl_private_key(self) -> SSLPrivateKey:
         return self.__private_key
 
-    def matches(self, public_key: "PeerPublicKey"):
+    def matches(self, public_key: "PeerPublicKey") -> bool:
         expected_public_key = self._as_ssl_private_key().public_key()
         certificate = public_key._as_ssl_certificate()
         return certificate.public_key() == expected_public_key
@@ -84,7 +84,9 @@ class PeerPrivateKey:
 
 class PeerPublicKey:
     @classmethod
-    def generate(cls, private_key: PeerPrivateKey, clock: BaseClock, contact: Contact):
+    def generate(
+        cls, private_key: PeerPrivateKey, clock: BaseClock, contact: Contact
+    ) -> "PeerPublicKey":
         certificate = SSLCertificate.self_signed(
             clock.utcnow(), private_key._as_ssl_private_key(), contact.host
         )
@@ -99,20 +101,20 @@ class PeerPublicKey:
         self.declared_host = self._certificate.declared_host
 
     @cached_property
-    def not_valid_before(self):
+    def not_valid_before(self) -> arrow.Arrow:
         return arrow.get(self._certificate.not_valid_before)
 
     @cached_property
-    def not_valid_after(self):
+    def not_valid_after(self) -> arrow.Arrow:
         return arrow.get(self._certificate.not_valid_after)
 
     def _as_ssl_certificate(self) -> SSLCertificate:
         return self._certificate
 
-    def __eq__(self, other):
-        return self._certificate == other._certificate
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, PeerPublicKey) and self._certificate == other._certificate
 
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
         return self._certificate.to_der_bytes()
 
     @classmethod
@@ -134,8 +136,12 @@ class SecureContact:
         self.contact = contact
         self.public_key = public_key
 
-    def __eq__(self, other):
-        return self.contact == other.contact and self.public_key == other.public_key
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, SecureContact)
+            and self.contact == other.contact
+            and self.public_key == other.public_key
+        )
 
     @property
     def _uri(self) -> str:
@@ -146,27 +152,30 @@ class PeerInfo:
     @classmethod
     def generate(
         cls,
-        ursula,
+        peer_private_key: PeerPrivateKey,
+        signer: Signer,
+        encrypting_key: PublicKey,
+        operator_signature: bytes,
         clock: BaseClock,
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
-    ):
-        public_key = PeerPublicKey.generate(ursula.peer_private_key(), clock, contact)
+    ) -> "PeerInfo":
+        public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
         payload = NodeMetadataPayload(
             staking_provider_address=bytes(staking_provider_address),
             domain=domain.value,
             timestamp_epoch=int(clock.utcnow().timestamp()),
-            operator_signature=ursula.operator_signature,
-            verifying_key=ursula.signer.verifying_key(),
-            encrypting_key=ursula.encrypting_key,
+            operator_signature=operator_signature,
+            verifying_key=signer.verifying_key(),
+            encrypting_key=encrypting_key,
             # Abstraction leak here, ideally NodeMetadata should
             # have a field like `peer_public_key`.
             certificate_der=bytes(public_key),
             host=contact.host,
             port=contact.port,
         )
-        metadata = NodeMetadata(signer=ursula.signer, payload=payload)
+        metadata = NodeMetadata(signer=signer, payload=payload)
         return cls(metadata)
 
     def __init__(self, metadata: NodeMetadata):
@@ -179,7 +188,7 @@ class PeerInfo:
         return self.metadata.payload
 
     @cached_property
-    def contact(self):
+    def contact(self) -> Contact:
         payload = self._metadata_payload
         return Contact(payload.host, payload.port)
 
@@ -215,7 +224,8 @@ class PeerInfo:
     def timestamp(self) -> arrow.Arrow:
         return arrow.get(self._metadata_payload.timestamp_epoch)
 
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
+        # TODO: cache it too?
         return bytes(self.metadata)
 
     @classmethod
@@ -223,7 +233,16 @@ class PeerInfo:
         return cls(NodeMetadata.from_bytes(data))
 
 
-def unwrap_bytes(response, cls):
+T = TypeVar("T", covariant=True)
+
+
+class Deserializable(Protocol[T]):
+    @classmethod
+    def from_bytes(cls, data: bytes) -> T:
+        ...
+
+
+def unwrap_bytes(response: httpx.Response, cls: Type[Deserializable[T]]) -> T:
     if response.status_code != http.HTTPStatus.OK:
         peer_exc: PeerError = decode_peer_error(response.text)
         raise peer_exc
@@ -331,5 +350,5 @@ class PeerHTTPServer(BaseHTTPServer):
     def ssl_private_key(self) -> SSLPrivateKey:
         return self.server.peer_private_key()._as_ssl_private_key()
 
-    def into_asgi_app(self):
+    def into_asgi_app(self) -> ASGI3Framework:
         return make_peer_asgi_app(self.server.peer())

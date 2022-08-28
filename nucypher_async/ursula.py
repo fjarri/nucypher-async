@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Iterable
 
 from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
@@ -7,6 +7,7 @@ from nucypher_core.umbral import (
     PublicKey,
     VerifiedKeyFrag,
     VerifiedCapsuleFrag,
+    Capsule,
     reencrypt,
 )
 
@@ -32,7 +33,7 @@ class Ursula:
         self.operator_address = identity_account_.address
         self.operator_signature = identity_account_.sign_message(bytes(self.signer.verifying_key()))
 
-    def peer_private_key(self):
+    def peer_private_key(self) -> PeerPrivateKey:
         return self.__master_key.make_peer_private_key()
 
     def decrypt_kfrag(
@@ -43,9 +44,11 @@ class Ursula:
     ) -> VerifiedKeyFrag:
         return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_verifying_key)
 
-    def reencrypt(self, verified_kfrag: VerifiedKeyFrag, capsules) -> List[VerifiedCapsuleFrag]:
+    def reencrypt(
+        self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
+    ) -> List[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
-    def __str__(self):
+    def __str__(self) -> str:
         operator_short = self.operator_address.checksum[:10]
         return f"Ursula(operator={operator_short})"

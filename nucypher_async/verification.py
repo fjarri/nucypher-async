@@ -12,7 +12,7 @@ async def _verify_staking_shared(
     session: IdentityClientSession,
     staking_provider_address: IdentityAddress,
     operator_address: IdentityAddress,
-):
+) -> None:
     if not await session.is_staking_provider_authorized(staking_provider_address):
         raise PeerVerificationError("Staking provider is not authorized")
 
@@ -20,7 +20,9 @@ async def _verify_staking_shared(
         raise PeerVerificationError("Operator is not confirmed")
 
 
-async def verify_staking_local(session: IdentityClientSession, operator_address: IdentityAddress):
+async def verify_staking_local(
+    session: IdentityClientSession, operator_address: IdentityAddress
+) -> IdentityAddress:
     staking_provider_address = await session.get_staking_provider_address(operator_address)
     await _verify_staking_shared(session, staking_provider_address, operator_address)
     return staking_provider_address
@@ -28,7 +30,7 @@ async def verify_staking_local(session: IdentityClientSession, operator_address:
 
 async def verify_staking_remote(
     session: IdentityClientSession, staking_provider_address: IdentityAddress
-):
+) -> IdentityAddress:
     operator_address = await session.get_operator_address(staking_provider_address)
     await _verify_staking_shared(session, staking_provider_address, operator_address)
     return operator_address
@@ -150,5 +152,5 @@ class PublicUrsula(PeerInfo):
     def __init__(self, metadata: NodeMetadata):
         super().__init__(metadata)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"RemoteUrsula({self.staking_provider_address.checksum})"

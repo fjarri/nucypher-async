@@ -21,7 +21,6 @@ class Policy:
 class SubscriptionManager(MockContract):
     def __init__(self, abi: ContractABI):
         super().__init__(abi)
-        self._balances: Dict[PaymentAddress, AmountMATIC] = {}
         self._policies: Dict[bytes, Policy] = {}
         self._policy_rate = Amount.gwei(1)
 
@@ -57,7 +56,7 @@ class SubscriptionManager(MockContract):
 
 
 class MockPaymentClient(PaymentClient):
-    def __init__(self):
+    def __init__(self) -> None:
         mock_backend = MockBackend()
         super().__init__(cast(Client, mock_backend), Domain.MAINNET)
         self._mock_backend = mock_backend

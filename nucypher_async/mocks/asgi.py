@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import Dict, Tuple, Any, Union
+from typing import Dict, Tuple, Any, Union, cast
 from urllib.parse import urlparse
 import weakref
 
@@ -74,6 +74,10 @@ class MockHTTPClient:
         self._mock_network = mock_network
         self._host = host
         self._certificate = certificate
+
+    def as_httpx_async_client(self) -> httpx.AsyncClient:
+        # We implement all the methods we need for it to act as one
+        return cast(httpx.AsyncClient, self)
 
     async def get(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return await self._request("get", url, *args, **kwargs)

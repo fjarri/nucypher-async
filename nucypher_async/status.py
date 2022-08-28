@@ -21,7 +21,7 @@ def render_status(
     node: PublicUrsula,
     started_at: arrow.Arrow,
     is_active_peer: bool,
-):
+) -> str:
 
     BASE_DIR = Path(__file__).parent
     STATUS_TEMPLATE = Template(filename=str(BASE_DIR / "status.mako")).get_def("main")

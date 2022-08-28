@@ -5,7 +5,7 @@ from ..base.time import BaseClock
 
 
 class MockClock(BaseClock):
-    def __init__(self):
+    def __init__(self) -> None:
         self._start = arrow.utcnow().timestamp() - trio.current_time()
 
     def utcnow(self) -> arrow.Arrow:

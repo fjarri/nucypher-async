@@ -66,7 +66,7 @@ class SimplePREApplication(MockContract):
 
 
 class MockIdentityClient(IdentityClient):
-    def __init__(self):
+    def __init__(self) -> None:
         mock_backend = MockBackend()
         super().__init__(cast(Client, mock_backend), Domain.MAINNET)
 

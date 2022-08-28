@@ -172,7 +172,8 @@ class DefaultFormatter(Formatter):
 
         if record.exc_info:
             file = io.StringIO()
-            traceback.print_exception(*record.exc_info, file=file)
+            exc_type, value, tb = record.exc_info
+            traceback.print_exception(exc_type, value=value, tb=tb, file=file)
             full_message += "\n" + file.getvalue()[:-1]  # cut out the last linebreak
 
         return full_message

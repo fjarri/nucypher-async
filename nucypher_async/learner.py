@@ -273,13 +273,14 @@ class _Learner:
         # overloaded for active Learner
         pass
 
-    async def _learn_from_node_and_report(self, node: PublicUrsula):
-        with self.fleet_sensor.try_lock_contact(node.secure_contact.contact) as (
+    async def _learn_from_node_and_report(self, node: PublicUrsula) -> None:
+        with self.fleet_sensor.try_lock_contact_for_learning(node.secure_contact.contact) as (
             contact,
             result,
         ):
             if contact is None:
-                return await result.wait()
+                await result.wait()
+                return
 
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
@@ -306,10 +307,11 @@ class _Learner:
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
                 self._fleet_state_add_metadatas(metadatas)
             finally:
+                # We just need to signal that the learning ended, no info to return
                 result.set(None)
 
-    async def _verify_contact_and_report(self, contact: Contact):
-        with self.fleet_sensor.try_lock_contact(contact) as (contact_, result):
+    async def _verify_contact_and_report(self, contact: Contact) -> PublicUrsula:
+        with self.fleet_sensor.try_lock_contact_for_verification(contact) as (contact_, result):
             if contact_ is None:
                 self._logger.debug("{} is already being verified", contact)
                 return await result.wait()

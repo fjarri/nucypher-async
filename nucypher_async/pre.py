@@ -1,5 +1,6 @@
-from typing import NamedTuple
+from typing import Optional, Iterable, List
 
+from attrs import frozen
 import arrow
 import trio
 
@@ -17,14 +18,18 @@ from nucypher_core.umbral import (
     SecretKey,
     generate_kfrags,
     PublicKey,
+    Capsule,
+    VerifiedCapsuleFrag,
 )
 
 from .drivers.identity import IdentityAddress
-from .drivers.payment import PaymentAccount, PaymentAccountSigner
+from .drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
+from .learner import Learner
 from .master_key import MasterKey
 
 
-class Policy(NamedTuple):
+@frozen
+class Policy:
     encrypted_treasure_map: EncryptedTreasureMap
     encrypting_key: PublicKey
     start: int
@@ -32,7 +37,7 @@ class Policy(NamedTuple):
 
 
 class Alice:
-    def __init__(self, payment_account=None):
+    def __init__(self, payment_account: Optional[PaymentAccount] = None):
         self.__master_key = MasterKey.random()
         self._signer = self.__master_key.make_signer()
         self.verifying_key = self._signer.verifying_key()
@@ -42,22 +47,22 @@ class Alice:
         self._payment_account = payment_account
 
     @property
-    def payment_address(self):
+    def payment_address(self) -> PaymentAddress:
         return self._payment_account.address
 
-    def public_info(self):
+    def public_info(self) -> "RemoteAlice":
         return RemoteAlice(verifying_key=self.verifying_key)
 
     async def grant(
         self,
-        learner,
-        payment_client,
-        bob,
-        label,
-        threshold,
-        shares,
-        handpicked_addresses=None,
-    ):
+        learner: Learner,
+        payment_client: PaymentClient,
+        bob: "RemoteBob",
+        label: bytes,
+        threshold: int,
+        shares: int,
+        handpicked_addresses: Optional[Iterable[IdentityAddress]] = None,
+    ) -> Policy:
 
         # TODO: sample Ursulas from the blockchain here
 
@@ -83,7 +88,7 @@ class Alice:
             sign_receiving_key=True,
         )
 
-        handpicked_addresses = handpicked_addresses or set()
+        handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
         nodes = []
         async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
             async for node in aiter:
@@ -133,16 +138,16 @@ class Alice:
 
 
 class RemoteAlice:
-    def __init__(self, verifying_key):
+    def __init__(self, verifying_key: PublicKey):
         self.verifying_key = verifying_key
 
 
-def encrypt(encrypting_key, message):
+def encrypt(encrypting_key: PublicKey, message: bytes) -> MessageKit:
     return MessageKit(policy_encrypting_key=encrypting_key, plaintext=message)
 
 
 class Bob:
-    def __init__(self):
+    def __init__(self) -> None:
         self.__master_key = MasterKey.random()
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self._signer = self.__master_key.make_signer()
@@ -150,10 +155,16 @@ class Bob:
         self.encrypting_key = self._decrypting_key.public_key()
         self.verifying_key = self._signer.verifying_key()
 
-    def public_info(self):
+    def public_info(self) -> "RemoteBob":
         return RemoteBob(encrypting_key=self.encrypting_key, verifying_key=self.verifying_key)
 
-    async def retrieve(self, learner, capsule, encrypted_treasure_map, alice_verifying_key):
+    async def retrieve(
+        self,
+        learner: Learner,
+        capsule: Capsule,
+        encrypted_treasure_map: EncryptedTreasureMap,
+        alice_verifying_key: PublicKey,
+    ) -> List[VerifiedCapsuleFrag]:
 
         publisher_verifying_key = alice_verifying_key
         treasure_map = encrypted_treasure_map.decrypt(self._decrypting_key, publisher_verifying_key)
@@ -197,8 +208,12 @@ class Bob:
         return responses
 
     async def retrieve_and_decrypt(
-        self, learner, message_kit, encrypted_treasure_map, remote_alice
-    ):
+        self,
+        learner: Learner,
+        message_kit: MessageKit,
+        encrypted_treasure_map: EncryptedTreasureMap,
+        remote_alice: RemoteAlice,
+    ) -> bytes:
         vcfrags = await self.retrieve(
             learner,
             message_kit.capsule,
@@ -215,6 +230,6 @@ class Bob:
 
 
 class RemoteBob:
-    def __init__(self, encrypting_key, verifying_key):
+    def __init__(self, encrypting_key: PublicKey, verifying_key: PublicKey):
         self.encrypting_key = encrypting_key
         self.verifying_key = verifying_key

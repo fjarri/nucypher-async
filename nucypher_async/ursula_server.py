@@ -82,7 +82,10 @@ class UrsulaServer(BasePeerServer, BasePeer):
             self._logger.debug("Generating new metadata")
             self._node = PublicUrsula.generate(
                 clock=self._clock,
-                ursula=self.ursula,
+                peer_private_key=self.ursula.peer_private_key(),
+                signer=self.ursula.signer,
+                operator_signature=self.ursula.operator_signature,
+                encrypting_key=self.ursula.encrypting_key,
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain,
