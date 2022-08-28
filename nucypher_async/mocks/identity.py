@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from collections import defaultdict
+from typing import Dict, Set, cast
 
-from pons import Address, Amount
+from pons import Address, Amount, ContractABI, Client
 
 from ..domain import Domain
 from ..drivers.identity import IdentityClient, IdentityAddress, AmountT, AmountETH
@@ -9,14 +10,14 @@ from .eth import MockBackend, MockContract
 
 
 class SimplePREApplication(MockContract):
-    def __init__(self, abi):
+    def __init__(self, abi: ContractABI):
         super().__init__(abi)
         self._min_stake = Amount.ether(40000)
-        self._approved_staking_providers = {}
-        self._stakes = {}
-        self._staking_provider_to_operator = {}
-        self._operator_to_staking_provider = {}
-        self._confirmed_operators = set()
+        self._approved_staking_providers: Dict[Address, Amount] = {}
+        self._stakes: Dict[Address, Amount] = {}
+        self._staking_provider_to_operator: Dict[Address, Address] = {}
+        self._operator_to_staking_provider: Dict[Address, Address] = {}
+        self._confirmed_operators: Set[Address] = set()
 
     def authorizedStake(self, staking_provider_address: Address) -> int:
         return self._stakes[staking_provider_address].as_wei()
@@ -40,8 +41,8 @@ class SimplePREApplication(MockContract):
         self,
         staking_provider_address: Address,
         operator_address: Address,
-        amount_t: AmountT,
-    ):
+        amount_t: Amount,
+    ) -> None:
 
         # Approve stake
         assert staking_provider_address not in self._approved_staking_providers
@@ -66,8 +67,8 @@ class SimplePREApplication(MockContract):
 
 class MockIdentityClient(IdentityClient):
     def __init__(self):
-        mock_backend = MockBackend(AmountETH)
-        super().__init__(mock_backend, Domain.MAINNET)
+        mock_backend = MockBackend()
+        super().__init__(cast(Client, mock_backend), Domain.MAINNET)
 
         self._mock_backend = mock_backend
 
@@ -81,7 +82,7 @@ class MockIdentityClient(IdentityClient):
         staking_provider_address: IdentityAddress,
         operator_address: IdentityAddress,
         amount_t: AmountT,
-    ):
+    ) -> None:
         """
         This essentially includes 4 operations:
         - approve T for staking (in the T contract)

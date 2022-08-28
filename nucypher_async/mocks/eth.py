@@ -45,13 +45,9 @@ class MockContract:
         getattr(self, method.name)(address, amount, *args)
 
 
-CustomAmount = TypeVar("CustomAmount", bound=Amount)
-
-
 class MockBackend:
-    def __init__(self, native_currency_cls: Type[CustomAmount]):
-        self._native_currency_cls = native_currency_cls
-        self._balances: Dict[Address, CustomAmount] = defaultdict(lambda: native_currency_cls(0))
+    def __init__(self):
+        self._balances: Dict[Address, Amount] = defaultdict(lambda: Amount.wei(0))
         self._contracts: Dict[Address, MockContract] = {}
 
     def mock_register_contract(self, address: Address, mock_contract: MockContract) -> None:
@@ -66,15 +62,15 @@ class MockBackend:
         return call.decode_output(self._contracts[call.contract_address].call(call.data_bytes))
 
     async def transact(
-        self, signer: Signer, call: BoundWriteCall, amount: Optional[CustomAmount] = None
+        self, signer: Signer, call: BoundWriteCall, amount: Optional[Amount] = None
     ) -> None:
         # TODO: change the caller's balance appropriately
         # TODO: check that the call is payable if amount is not 0
         if amount is None:
-            amount = self._native_currency_cls(0)
+            amount = Amount.wei(0)
         else:
             # Lower the type from specific currency
-            amount = self._native_currency_cls.wei(amount.as_wei())
+            amount = Amount.wei(amount.as_wei())
 
         # Lower the signer address type
         address = Address(bytes(signer.address))
@@ -82,8 +78,8 @@ class MockBackend:
         self._contracts[call.contract_address].transact(address, amount, call.data_bytes)
 
     def set_balance(self, address: Address, amount: Amount) -> None:
-        assert isinstance(amount, self._native_currency_cls)
-        self._balances[address] = amount
+        # Lower the type from specific currency
+        self._balances[address] = Amount.wei(amount.as_wei())
 
-    async def eth_get_balance(self, address: Address) -> CustomAmount:
+    async def eth_get_balance(self, address: Address) -> Amount:
         return self._balances[address]

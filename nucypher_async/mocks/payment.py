@@ -1,8 +1,8 @@
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Dict, cast
 
 from attrs import frozen
-from pons import Signer, Amount, Address, ContractABI
+from pons import Signer, Amount, Address, ContractABI, Client
 
 from ..domain import Domain
 from ..drivers.payment import PaymentClient, PaymentAddress, AmountMATIC
@@ -58,12 +58,12 @@ class SubscriptionManager(MockContract):
 
 class MockPaymentClient(PaymentClient):
     def __init__(self):
-        mock_backend = MockBackend(AmountMATIC)
-        super().__init__(mock_backend, Domain.MAINNET)
+        mock_backend = MockBackend()
+        super().__init__(cast(Client, mock_backend), Domain.MAINNET)
         self._mock_backend = mock_backend
         mock_backend.mock_register_contract(
             self._manager.address, SubscriptionManager(self._manager.abi)
         )
 
     def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC) -> None:
-        self._mock_backend.set_balance(address, amount)
+        self._mock_backend.set_balance(address, Amount.wei(amount.as_wei()))
