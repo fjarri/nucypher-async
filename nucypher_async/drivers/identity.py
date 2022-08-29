@@ -108,7 +108,7 @@ class MainnetContracts(BaseContracts):
 
 class IdentityAccount:
     @classmethod
-    def from_payload(cls, payload: Dict[str, Any], password: bytes) -> "IdentityAccount":
+    def from_payload(cls, payload: str, password: str) -> "IdentityAccount":
         pk = Account.decrypt(payload, password)
         account = Account.from_key(pk)
         return cls(account)

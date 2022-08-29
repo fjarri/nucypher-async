@@ -3,7 +3,18 @@ from functools import wraps, partial
 from contextlib import asynccontextmanager
 from collections import defaultdict
 import random
-from typing import Optional, Iterable, Tuple, List
+from typing import (
+    Optional,
+    Iterable,
+    Tuple,
+    List,
+    Generic,
+    Callable,
+    TypeVar,
+    Sequence,
+    Awaitable,
+    Mapping,
+)
 import random
 
 import arrow
@@ -18,7 +29,7 @@ from .drivers.identity import IdentityAddress, AmountT, IdentityClient
 from .drivers.peer import Contact, PeerClient, PeerVerificationError, PeerInfo
 from .drivers.time import SystemClock
 from .domain import Domain
-from .p2p.fleet_sensor import FleetSensor
+from .p2p.fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry
 from .p2p.fleet_state import FleetState
 from .storage import InMemoryStorage, BaseStorage
 from .utils import BackgroundTask, wait_for_any
@@ -31,14 +42,21 @@ from bisect import bisect_right
 from itertools import accumulate
 
 
-class WeightedReservoir:
-    def __init__(self, elements, get_weight):
+WeightedReservoirT = TypeVar("WeightedReservoirT")
+
+
+class WeightedReservoir(Generic[WeightedReservoirT]):
+    def __init__(
+        self,
+        elements: Sequence[WeightedReservoirT],
+        get_weight: Callable[[WeightedReservoirT], int],
+    ):
         weights = [get_weight(elem) for elem in elements]
         self.totals = list(accumulate(weights))
         self.elements = elements
         self._length = len(elements)
 
-    def draw(self):
+    def draw(self) -> WeightedReservoirT:
         # TODO: can we use floats instead, so that we don't have to round the stakes to integer T?
         position = random.randint(0, self.totals[-1] - 1)
         idx = bisect_right(self.totals, position)
@@ -55,7 +73,7 @@ class WeightedReservoir:
 
         return sample
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._length
 
 
@@ -106,17 +124,22 @@ class _Learner:
         self.fleet_sensor = FleetSensor(self._clock, my_address, my_contact)
         self._seed_contacts = seed_contacts or []
 
-    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]):
+    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]) -> None:
         # Overloaded for active Learner
         pass
 
-    def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]):
+    def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]) -> None:
         for node, stake in zip(nodes, stakes):
             self.fleet_sensor.report_verified_node(node.secure_contact.contact, node, stake)
         self._fleet_state_add_metadatas(nodes)
 
     @producer
-    async def verified_nodes_iter(self, yield_, addresses, verified_within=None):
+    async def verified_nodes_iter(
+        self,
+        yield_: Callable[[PublicUrsula], Awaitable[None]],
+        addresses: Iterable[IdentityAddress],
+        verified_within: Optional[float] = None,
+    ) -> None:
 
         if self.fleet_sensor.is_empty():
             await self.seed_round()
@@ -137,7 +160,7 @@ class _Learner:
                     if verified_within and node_entry.verified_at < now - datetime.timedelta(
                         seconds=verified_within
                     ):
-                        nursery.start_soon(self._verify_node_and_report, node_entry.node)
+                        nursery.start_soon(self._verify_contact_and_report, node_entry.node.contact)
                         continue
 
                     addresses.remove(address)
@@ -163,18 +186,24 @@ class _Learner:
 
     @producer
     async def random_verified_nodes_iter(
-        self, yield_, amount, overhead=0, exclude=None, verified_within=None
-    ):
+        self,
+        yield_: Callable[[PublicUrsula], Awaitable[None]],
+        amount: int,
+        overhead: int = 0,
+        verified_within: Optional[float] = None,
+    ) -> None:
 
         if self.fleet_sensor.is_empty():
             await self.seed_round()
 
         now = self._clock.utcnow()
 
-        providers = self.fleet_sensor.get_available_staking_providers(exclude=exclude)
+        providers = self.fleet_sensor.get_available_staking_providers()
         reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
-        def is_usable(address, node_entries):
+        def is_usable(
+            address: IdentityAddress, node_entries: Mapping[IdentityAddress, NodeEntry]
+        ) -> bool:
             if drawn_entry.address not in node_entries:
                 return False
 
@@ -189,9 +218,9 @@ class _Learner:
         drawn = 0
         failed = 0
 
-        send_channel, receive_channel = trio.open_memory_channel(0)
+        send_channel, receive_channel = trio.open_memory_channel[Optional[PublicUrsula]](0)
 
-        async def verify_and_yield(drawn_entry):
+        async def verify_and_yield(drawn_entry: StakingProviderEntry) -> None:
             node = await self._verify_contact_and_report(drawn_entry.contact)
             await send_channel.send(node)
 
@@ -269,7 +298,7 @@ class _Learner:
 
         return [PeerInfo(metadata) for metadata in payload.announce_nodes]
 
-    def _fleet_state_remove_contact(self, contact: Contact):
+    def _fleet_state_remove_contact(self, contact: Contact) -> None:
         # overloaded for active Learner
         pass
 
@@ -310,7 +339,7 @@ class _Learner:
                 # We just need to signal that the learning ended, no info to return
                 result.set(None)
 
-    async def _verify_contact_and_report(self, contact: Contact) -> PublicUrsula:
+    async def _verify_contact_and_report(self, contact: Contact) -> Optional[PublicUrsula]:
         with self.fleet_sensor.try_lock_contact_for_verification(contact) as (contact_, result):
             if contact_ is None:
                 self._logger.debug("{} is already being verified", contact)
@@ -352,14 +381,14 @@ class _Learner:
         my_metadata = [this_node] if this_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
-    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]):
+    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]) -> None:
 
         # Unfiltered metadata goes into FleetState for compatibility
         self._fleet_state_add_metadatas(metadatas)
         self._logger.debug("Passive learning from {}", sender_host or "unknown host")
         self.fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
-    async def load_staking_providers_and_report(self):
+    async def load_staking_providers_and_report(self) -> None:
         try:
             with trio.fail_after(self.STAKING_PROVIDERS_TIMEOUT):
                 async with self._identity_client.session() as session:
@@ -370,7 +399,7 @@ class _Learner:
 
         self.fleet_sensor.report_staking_providers(providers)
 
-    async def seed_round(self, must_succeed=False):
+    async def seed_round(self, must_succeed: bool = False) -> None:
         self._logger.debug("Starting a seed round")
 
         if not self._seed_contacts:
@@ -385,13 +414,15 @@ class _Learner:
         if must_succeed:
             raise RuntimeError("Failed to learn from the seed nodes")
 
-    async def verification_round(self, new_contacts_num=10, old_contacts_num=10):
+    async def verification_round(
+        self, new_contacts_num: int = 10, old_contacts_num: int = 10
+    ) -> None:
         self._logger.debug("Starting a verification round")
 
         new_contacts = self.fleet_sensor.get_contacts_to_verify(new_contacts_num)
         old_contacts = self.fleet_sensor.get_contacts_to_reverify(old_contacts_num)
 
-        async def verify_and_learn(contact):
+        async def verify_and_learn(contact: Contact) -> None:
             node = await self._verify_contact_and_report(contact)
             if node:
                 await self._learn_from_node_and_report(node)
@@ -402,7 +433,7 @@ class _Learner:
             for contact in old_contacts:
                 nursery.start_soon(self._verify_contact_and_report, contact)
 
-    async def learning_round(self, nodes_num=1):
+    async def learning_round(self, nodes_num: int = 1) -> None:
         self._logger.debug("Starting a learning round")
 
         nodes = self.fleet_sensor.get_nodes_to_learn_from(nodes_num)
@@ -411,7 +442,7 @@ class _Learner:
             for node in nodes:
                 nursery.start_soon(self._learn_from_node_and_report, node)
 
-    async def verification_task(self, stop_event):
+    async def verification_task(self, stop_event: trio.Event) -> None:
         while True:
             await self.verification_round()
 
@@ -430,7 +461,7 @@ class _Learner:
                 if timed_out:
                     break
 
-    async def learning_task(self, stop_event):
+    async def learning_task(self, stop_event: trio.Event) -> None:
         while True:
             if self.fleet_sensor.is_empty():
                 await self.seed_round(must_succeed=False)
@@ -444,12 +475,12 @@ class _Learner:
             if stop_event.is_set():
                 return
 
-    async def staker_query_task(self, stop_event):
+    async def staker_query_task(self, stop_event: trio.Event) -> None:
         while True:
             self._logger.debug("Starting a staker query round")
             await self.load_staking_providers_and_report()
 
-            await wait_for_any([stop_event], datetime.timedelta(days=1).total_seconds)
+            await wait_for_any([stop_event], datetime.timedelta(days=1).total_seconds())
             if stop_event.is_set():
                 return
 
@@ -479,10 +510,10 @@ class ActiveLearner(_Learner):
         self._this_node = this_node
         self.fleet_state = FleetState(self._clock, this_node)
 
-    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]):
+    def _fleet_state_add_metadatas(self, nodes: Iterable[PeerInfo]) -> None:
         self.fleet_state.add_metadatas(nodes)
 
-    def _fleet_state_remove_contact(self, contact: Contact):
+    def _fleet_state_remove_contact(self, contact: Contact) -> None:
         self.fleet_state.remove_contact(contact)
 
     async def _exchange_metadata(self, node: PublicUrsula) -> MetadataResponse:

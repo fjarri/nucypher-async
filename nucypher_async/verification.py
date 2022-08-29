@@ -1,9 +1,17 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata
+from nucypher_core.umbral import Signer, PublicKey
 
 from .base.peer import PeerError
 from .base.time import BaseClock
 from .drivers.identity import IdentityAddress, IdentityClientSession
-from .drivers.peer import PeerInfo, Contact, SecureContact, PeerVerificationError
+from .drivers.peer import (
+    PeerInfo,
+    Contact,
+    SecureContact,
+    PeerVerificationError,
+    PeerPrivateKey,
+    PeerPublicKey,
+)
 from .domain import Domain
 from .ursula import Ursula
 
@@ -37,6 +45,36 @@ async def verify_staking_remote(
 
 
 class PublicUrsula(PeerInfo):
+    @classmethod
+    def generate(
+        cls,
+        peer_private_key: PeerPrivateKey,
+        signer: Signer,
+        encrypting_key: PublicKey,
+        operator_signature: bytes,
+        clock: BaseClock,
+        staking_provider_address: IdentityAddress,
+        contact: Contact,
+        domain: Domain,
+    ) -> "PublicUrsula":
+        # TODO: use Ursula instead of several arguments
+        public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
+        payload = NodeMetadataPayload(
+            staking_provider_address=bytes(staking_provider_address),
+            domain=domain.value,
+            timestamp_epoch=int(clock.utcnow().timestamp()),
+            operator_signature=operator_signature,
+            verifying_key=signer.verifying_key(),
+            encrypting_key=encrypting_key,
+            # Abstraction leak here, ideally NodeMetadata should
+            # have a field like `peer_public_key`.
+            certificate_der=bytes(public_key),
+            host=contact.host,
+            port=contact.port,
+        )
+        metadata = NodeMetadata(signer=signer, payload=payload)
+        return cls(metadata)
+
     @classmethod
     def checked_remote(
         cls,

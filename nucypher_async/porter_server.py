@@ -1,7 +1,7 @@
 import datetime
 import http
 import sys
-from typing import Tuple
+from typing import Tuple, List, Dict, Any, Iterable
 
 import trio
 from nucypher_core import (
@@ -13,25 +13,28 @@ from nucypher_core import (
     ReencryptionRequest,
     ReencryptionResponse,
 )
+from nucypher_core.umbral import VerifiedCapsuleFrag
 
-from .base.http_server import BaseHTTPServer
+from .base.http_server import BaseHTTPServer, ASGI3Framework
 from .base.porter import BasePorter
 from .drivers.identity import IdentityAddress, IdentityClient
 from .drivers.payment import PaymentClient
 from .drivers.asgi_app import make_porter_app, HTTPError
 from .drivers.peer import Contact, SecureContact
+from .config import PorterServerConfig
 from .master_key import MasterKey
 from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
 from .utils import BackgroundTask
-from .utils.logging import NULL_LOGGER
+from .utils.logging import NULL_LOGGER, Logger
 from .utils.ssl import SSLPrivateKey, SSLCertificate
+from .verification import PublicUrsula
 
 
 class PorterServer(BaseHTTPServer, BasePorter):
-    def __init__(self, config):
+    def __init__(self, config: PorterServerConfig):
         self._clock = config.clock
         self._config = config
         self._logger = config.parent_logger.get_child("PorterServer")
@@ -48,7 +51,9 @@ class PorterServer(BaseHTTPServer, BasePorter):
             worker=self.learner.verification_task, logger=self._logger
         )
         self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
-        self._staker_query_task = BackgroundTask(worker=self._staker_query, logger=self._logger)
+        self._staker_query_task = BackgroundTask(
+            worker=self.learner.staker_query_task, logger=self._logger
+        )
 
         self._started_at = self._clock.utcnow()
 
@@ -63,10 +68,13 @@ class PorterServer(BaseHTTPServer, BasePorter):
     def ssl_private_key(self) -> SSLPrivateKey:
         return self._config.ssl_private_key
 
-    def into_asgi_app(self):
+    def into_asgi_app(self) -> ASGI3Framework:
         return make_porter_app(self)
 
-    async def start(self, nursery):
+    def logger(self) -> Logger:
+        return self._logger
+
+    async def start(self, nursery: trio.Nursery) -> None:
         assert not self.started
 
         await self.learner.seed_round(must_succeed=True)
@@ -78,16 +86,21 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
         self.started = True
 
-    def stop(self):
+    async def stop(self, nursery: trio.Nursery) -> None:
         assert self.started
 
-        self._verification_task.stop()
-        self._learning_task.stop()
-        self._staker_query_task.stop()
+        await self._verification_task.stop()
+        await self._learning_task.stop()
+        await self._staker_query_task.stop()
 
         self.started = False
 
-    async def _get_ursulas(self, quantity, include_ursulas, exclude_ursulas):
+    async def _get_ursulas(
+        self,
+        quantity: int,
+        include_ursulas: Iterable[IdentityAddress],
+        exclude_ursulas: Iterable[IdentityAddress],
+    ) -> List[PublicUrsula]:
         nodes = []
         async with trio.open_nursery() as nursery:
 
@@ -100,7 +113,6 @@ class PorterServer(BaseHTTPServer, BasePorter):
             if len(nodes) < quantity:
                 overhead = max(1, (quantity - len(nodes)) // 5)
                 async with self.learner.random_verified_nodes_iter(
-                    exclude=exclude_ursulas,
                     amount=quantity,
                     overhead=overhead,
                     verified_within=60,
@@ -110,7 +122,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
         return nodes
 
-    async def endpoint_get_ursulas(self, request_json):
+    async def endpoint_get_ursulas(self, request_json: Dict[str, Any]) -> Dict[str, Any]:
         try:
             quantity = request_json["quantity"]
             if isinstance(quantity, str):
@@ -126,6 +138,12 @@ class PorterServer(BaseHTTPServer, BasePorter):
         if quantity > len(self.learner.fleet_sensor._staking_providers):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
+        # TODO: add support for excluding Ursulas
+        if exclude_ursulas:
+            raise HTTPError(
+                "Excluding Ursulas is currently not supported", http.HTTPStatus.BAD_REQUEST
+            )
+
         try:
             with trio.fail_after(5):
                 nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
@@ -138,7 +156,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
         node_list = [
             dict(
                 checksum_address=node.staking_provider_address.checksum,
-                uri=node.secure_contact.uri,
+                uri=node.contact.uri,
                 encrypting_key=bytes(node.encrypting_key).hex(),
             )
             for node in nodes
@@ -146,14 +164,16 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
         return dict(result=dict(ursulas=node_list), version="async-0.1.0-dev")
 
-    async def endpoint_retrieve_cfrags(self, request_json):
-        pass
+    async def endpoint_retrieve_cfrags(
+        self, request_json: Dict[str, Any]
+    ) -> List[VerifiedCapsuleFrag]:
+        raise NotImplementedError
 
-    async def endpoint_status(self):
+    async def endpoint_status(self) -> str:
         return render_status(
+            node=None,
             logger=self._logger,
             clock=self._clock,
             fleet_sensor=self.learner.fleet_sensor,
             started_at=self._started_at,
-            is_active_peer=False,
         )

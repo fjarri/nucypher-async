@@ -55,6 +55,9 @@ class Contact:
         self.host = host
         self.port = port
 
+    def uri(self) -> str:
+        return f"https://{self.host}:{self.port}"
+
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Contact) and self.host == other.host and self.port == other.port
 
@@ -149,35 +152,6 @@ class SecureContact:
 
 
 class PeerInfo:
-    @classmethod
-    def generate(
-        cls,
-        peer_private_key: PeerPrivateKey,
-        signer: Signer,
-        encrypting_key: PublicKey,
-        operator_signature: bytes,
-        clock: BaseClock,
-        staking_provider_address: IdentityAddress,
-        contact: Contact,
-        domain: Domain,
-    ) -> "PeerInfo":
-        public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
-        payload = NodeMetadataPayload(
-            staking_provider_address=bytes(staking_provider_address),
-            domain=domain.value,
-            timestamp_epoch=int(clock.utcnow().timestamp()),
-            operator_signature=operator_signature,
-            verifying_key=signer.verifying_key(),
-            encrypting_key=encrypting_key,
-            # Abstraction leak here, ideally NodeMetadata should
-            # have a field like `peer_public_key`.
-            certificate_der=bytes(public_key),
-            host=contact.host,
-            port=contact.port,
-        )
-        metadata = NodeMetadata(signer=signer, payload=payload)
-        return cls(metadata)
-
     def __init__(self, metadata: NodeMetadata):
         self.metadata = metadata
 

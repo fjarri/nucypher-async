@@ -216,7 +216,9 @@ def _next_verification_time_may_change(
     func: Callable[Concatenate["FleetSensor", Param], RetVal]
 ) -> Callable[Concatenate["FleetSensor", Param], RetVal]:
     @wraps(func)
-    def wrapped(fleet_sensor: "FleetSensor", *args: Param.args, **kwargs: Param.kwargs) -> RetVal:
+    def wrapped(
+        fleet_sensor: "FleetSensor", /, *args: Param.args, **kwargs: Param.kwargs
+    ) -> RetVal:
 
         contacts_present_before = not fleet_sensor._contacts_db.is_empty()
         next_verification_before = fleet_sensor._verified_nodes_db.next_verification_at(
@@ -268,7 +270,9 @@ class FleetSensor:
         self._staking_providers_updated: Optional[arrow.Arrow] = None
 
         self._locked_contacts_for_learning: Dict[Contact, BroadcastValue[None]] = {}
-        self._locked_contacts_for_verification: Dict[Contact, BroadcastValue[PublicUrsula]] = {}
+        self._locked_contacts_for_verification: Dict[
+            Contact, BroadcastValue[Optional[PublicUrsula]]
+        ] = {}
 
         self.new_verified_nodes_event = trio.Event()
         self.reschedule_verification_event = trio.Event()
@@ -448,12 +452,12 @@ class FleetSensor:
     @contextmanager
     def try_lock_contact_for_verification(
         self, contact: Contact
-    ) -> Iterator[Tuple[Optional[Contact], BroadcastValue[PublicUrsula]]]:
+    ) -> Iterator[Tuple[Optional[Contact], BroadcastValue[Optional[PublicUrsula]]]]:
         if contact in self._locked_contacts_for_verification:
             yield None, self._locked_contacts_for_verification[contact]
             return
 
-        bval: BroadcastValue[PublicUrsula] = BroadcastValue()
+        bval: BroadcastValue[Optional[PublicUrsula]] = BroadcastValue()
         self._locked_contacts_for_verification[contact] = bval
         try:
             yield contact, bval

@@ -14,7 +14,9 @@ from .ursula_server import UrsulaServer
 from .porter_server import PorterServer
 
 
-async def make_ursula_server(config_path, nucypher_password, geth_password):
+async def make_ursula_server(
+    config_path: str, nucypher_password: str, geth_password: str
+) -> UrsulaServer:
 
     with open(config_path) as f:
         config = json.load(f)
@@ -52,7 +54,7 @@ async def make_ursula_server(config_path, nucypher_password, geth_password):
     return server
 
 
-def make_porter_server(config_path):
+def make_porter_server(config_path: str) -> PorterServer:
 
     with open(config_path) as f:
         config = json.load(f)
@@ -69,7 +71,7 @@ def make_porter_server(config_path):
 
 
 @click.group()
-def main():
+def main() -> None:
     pass
 
 
@@ -77,7 +79,7 @@ def main():
 @click.argument("config_path")
 @click.argument("nucypher_password")
 @click.argument("geth_password")
-def ursula(config_path, nucypher_password, geth_password):
+def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
     handle = HTTPServerHandle(PeerHTTPServer(server))
     trio.run(handle)
@@ -85,7 +87,7 @@ def ursula(config_path, nucypher_password, geth_password):
 
 @main.command()
 @click.argument("config_path")
-def porter(config_path):
+def porter(config_path: str) -> None:
     server = make_porter_server(config_path)
     handle = HTTPServerHandle(server)
     trio.run(handle)

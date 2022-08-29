@@ -34,7 +34,7 @@ from .verification import PublicUrsula, verify_staking_local
 
 class UrsulaServer(BasePeerServer, BasePeer):
     @classmethod
-    async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig):
+    async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig) -> "UrsulaServer":
 
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(session, ursula.operator_address)
@@ -128,7 +128,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
     def peer(self) -> BasePeer:
         return self
 
-    async def start(self, nursery):
+    async def start(self, nursery: trio.Nursery) -> None:
         assert not self.started
 
         self._logger.debug("Starting tasks")
@@ -142,7 +142,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         self.started = True
 
-    async def stop(self, nursery):
+    async def stop(self, nursery: trio.Nursery) -> None:
         assert self.started
         await self._learning_task.stop()
         await self._verification_task.stop()
@@ -214,11 +214,11 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         return response
 
-    async def endpoint_status(self):
+    async def endpoint_status(self) -> str:
         return render_status(
+            node=self._node,
             logger=self._logger,
             clock=self._clock,
             fleet_sensor=self.learner.fleet_sensor,
             started_at=self._started_at,
-            is_active_peer=True,
         )

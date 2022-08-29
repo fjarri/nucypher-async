@@ -1,4 +1,4 @@
-<%def name="main(fleet_sensor, node, started_at, code_info, is_active_peer)">
+<%def name="main(fleet_sensor, node, started_at, code_info)">
 <!DOCTYPE html>
 <html>
 <head>
@@ -89,7 +89,7 @@
 
 
     <table class="this-node-info">
-        %if is_active_peer:
+        %if node:
         <tr>
             <td></td>
             <td><span class="this-node monospace">${node.staking_provider_address}</span></td>
@@ -117,7 +117,7 @@
             <td><i>Domain:</i></td>
             <td><span class="monospace">${ node.domain.value }</span></td>
         </tr>
-        %if is_active_peer:
+        %if node:
         <tr>
             <td><i>Metadata created:</i></td>
             <td>${node.timestamp.humanize(now)}</td>

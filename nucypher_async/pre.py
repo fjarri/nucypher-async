@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, List
+from typing import Optional, Iterable, List, Set
 
 from attrs import frozen
 import arrow
@@ -11,6 +11,7 @@ from nucypher_core import (
     ReencryptionRequest,
     ReencryptionResponse,
     EncryptedTreasureMap,
+    EncryptedKeyFrag,
 )
 from nucypher_core.umbral import (
     SecretKeyFactory,
@@ -26,14 +27,15 @@ from .drivers.identity import IdentityAddress
 from .drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
 from .learner import Learner
 from .master_key import MasterKey
+from .verification import PublicUrsula
 
 
 @frozen
 class Policy:
     encrypted_treasure_map: EncryptedTreasureMap
     encrypting_key: PublicKey
-    start: int
-    end: int
+    start: arrow.Arrow
+    end: arrow.Arrow
 
 
 class Alice:
@@ -97,7 +99,8 @@ class Alice:
         if len(nodes) < shares:
             # TODO: implement ranking for granting, don't just pick random nodes
             async with learner.random_verified_nodes_iter(
-                shares - len(nodes), exclude=handpicked_addresses
+                shares - len(nodes),
+                # exclude=handpicked_addresses # TODO:
             ) as aiter:
                 async for node in aiter:
                     nodes.append(node)
@@ -164,14 +167,16 @@ class Bob:
         capsule: Capsule,
         encrypted_treasure_map: EncryptedTreasureMap,
         alice_verifying_key: PublicKey,
-    ) -> List[VerifiedCapsuleFrag]:
+    ) -> Set[VerifiedCapsuleFrag]:
 
         publisher_verifying_key = alice_verifying_key
         treasure_map = encrypted_treasure_map.decrypt(self._decrypting_key, publisher_verifying_key)
 
-        responses = set()
+        responses: Set[VerifiedCapsuleFrag] = set()
 
-        async def reencrypt(nursery, node, ekfrag):
+        async def reencrypt(
+            nursery: trio.Nursery, node: PublicUrsula, ekfrag: EncryptedKeyFrag
+        ) -> None:
             request = ReencryptionRequest(
                 capsules=[capsule],
                 hrac=treasure_map.hrac,

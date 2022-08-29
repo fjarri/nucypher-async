@@ -1,5 +1,6 @@
 from http import HTTPStatus
 from pathlib import Path
+from typing import Optional
 
 import arrow
 import humanize
@@ -18,9 +19,8 @@ def render_status(
     logger: Logger,
     clock: BaseClock,
     fleet_sensor: FleetSensor,
-    node: PublicUrsula,
     started_at: arrow.Arrow,
-    is_active_peer: bool,
+    node: Optional[PublicUrsula] = None,
 ) -> str:
 
     BASE_DIR = Path(__file__).parent
@@ -34,7 +34,6 @@ def render_status(
             node,
             started_at,
             code_info,
-            is_active_peer,
             arrow=arrow,
             humanize=humanize,
             now=clock.utcnow(),
