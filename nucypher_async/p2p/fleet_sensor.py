@@ -255,14 +255,15 @@ class FleetSensor:
     def __init__(
         self,
         clock: BaseClock,
-        my_staking_provider_address: Optional[IdentityAddress],
-        my_contact: Optional[Contact],
+        this_node: Optional[PublicUrsula],
     ):
 
         self._clock = clock
 
-        self._my_staking_provider_address = my_staking_provider_address
-        self._my_contact = my_contact
+        self._my_staking_provider_address = (
+            this_node.staking_provider_address if this_node else None
+        )
+        self._my_contact = this_node.contact if this_node else None
 
         self._verified_nodes_db = VerifiedNodesDB()
         self._contacts_db = ContactsDB()

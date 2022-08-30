@@ -170,7 +170,7 @@ class DefaultFormatter(Formatter):
             message=message,
         )
 
-        if record.exc_info:
+        if record.exc_info != (None, None, None):
             file = io.StringIO()
             exc_type, value, tb = record.exc_info
             traceback.print_exception(exc_type, value=value, tb=tb, file=file)

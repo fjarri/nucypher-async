@@ -14,10 +14,10 @@ class FleetState:
     (of questionable usefulness, see https://github.com/nucypher/nucypher/issues/2876).
     """
 
-    def __init__(self, clock: BaseClock, this_node: PublicUrsula):
+    def __init__(self, clock: BaseClock, this_node: Optional[PublicUrsula]):
         self._clock = clock
-        self._my_address = this_node.staking_provider_address
-        self._my_metadata = this_node.metadata
+        self._my_address = this_node.staking_provider_address if this_node else None
+        self._my_metadata = this_node.metadata if this_node else None
         self._metadatas: Dict[IdentityAddress, PeerInfo] = {}
         self._contacts: Dict[Contact, IdentityAddress] = {}
         self._checksum: Optional[FleetStateChecksum] = None
@@ -33,7 +33,7 @@ class FleetState:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address
-            if address == self._my_address:
+            if self._my_address and address == self._my_address:
                 continue
 
             if (

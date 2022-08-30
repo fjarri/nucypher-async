@@ -22,7 +22,7 @@ from .drivers.peer import (
     PeerPrivateKey,
     PeerInfo,
 )
-from .learner import ActiveLearner
+from .learner import Learner
 from .status import render_status
 from .storage import InMemoryStorage
 from .ursula import Ursula
@@ -94,8 +94,8 @@ class UrsulaServer(BasePeerServer, BasePeer):
         else:
             self._node = maybe_node
 
-        self.learner = ActiveLearner(
-            self._node,
+        self.learner = Learner(
+            this_node=self._node,
             peer_client=config.peer_client,
             identity_client=config.identity_client,
             storage=config.storage,
