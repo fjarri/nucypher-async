@@ -17,7 +17,6 @@ from .drivers.peer import (
     SecureContact,
     PeerPrivateKey,
     PeerInfo,
-    PeerVerificationError,
 )
 from .learner import Learner
 from .status import render_status
@@ -25,7 +24,7 @@ from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
 from .utils.logging import Logger
-from .verification import PublicUrsula, verify_staking_local
+from .verification import PublicUrsula, verify_staking_local, PeerVerificationError
 
 
 class UrsulaServer(BasePeerServer, BasePeer):

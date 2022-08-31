@@ -7,12 +7,16 @@ from .drivers.peer import (
     PeerInfo,
     Contact,
     SecureContact,
-    PeerVerificationError,
+    PeerError,
     PeerPrivateKey,
     PeerPublicKey,
 )
 from .domain import Domain
 from .ursula import Ursula
+
+
+class PeerVerificationError(PeerError):
+    pass
 
 
 async def _verify_staking_shared(

@@ -32,19 +32,11 @@ from .identity import IdentityAddress
 from ..domain import Domain
 
 
-class InvalidErrorFormat(PeerError):
-    pass
-
-
 class PeerConnectionError(PeerError):
     pass
 
 
 class HandshakeError(PeerError):
-    pass
-
-
-class PeerVerificationError(PeerError):
     pass
 
 
@@ -129,7 +121,7 @@ class SecureContact:
         # when creating a public key, it is logical to also check that it is correct,
         # and this is the best place to do it.
         if public_key.declared_host != contact.host:
-            raise PeerVerificationError(
+            raise HandshakeError(
                 f"Host mismatch: contact has {contact.host}, "
                 f"but certificate has {public_key.declared_host}"
             )
@@ -218,8 +210,7 @@ def unwrap_bytes(
     response: httpx.Response, cls: Type[Deserializable[DeserializableT_co]]
 ) -> DeserializableT_co:
     if response.status_code != http.HTTPStatus.OK:
-        peer_exc: PeerError = decode_peer_error(response.text)
-        raise peer_exc
+        raise decode_peer_error(response.text)
     message_bytes = response.read()
     try:
         message = cls.from_bytes(message_bytes)

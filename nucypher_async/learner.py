@@ -22,7 +22,7 @@ from nucypher_core import MetadataRequest
 from .base.peer import PeerError
 from .base.time import BaseClock
 from .drivers.identity import IdentityAddress, AmountT, IdentityClient
-from .drivers.peer import Contact, PeerClient, PeerVerificationError, PeerInfo
+from .drivers.peer import Contact, PeerClient, PeerInfo
 from .drivers.time import SystemClock
 from .domain import Domain
 from .p2p.fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry
@@ -31,7 +31,7 @@ from .storage import InMemoryStorage, BaseStorage
 from .utils import wait_for_any
 from .utils.logging import NULL_LOGGER, Logger
 from .utils.producer import producer
-from .verification import PublicUrsula, verify_staking_remote
+from .verification import PublicUrsula, verify_staking_remote, PeerVerificationError
 
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
