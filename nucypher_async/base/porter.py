@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+
+import trio
 
 from ..utils.logging import Logger
 from .types import JSON
-
-import trio
 
 
 class BasePorter(ABC):

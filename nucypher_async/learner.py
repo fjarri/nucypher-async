@@ -1,7 +1,6 @@
+from bisect import bisect_right
+from itertools import accumulate
 import datetime
-from functools import wraps, partial
-from contextlib import asynccontextmanager
-from collections import defaultdict
 import random
 from typing import (
     Optional,
@@ -15,13 +14,10 @@ from typing import (
     Awaitable,
     Mapping,
 )
-import random
 
-import arrow
 import trio
-from attr import frozen
 
-from nucypher_core import FleetStateChecksum, MetadataRequest, MetadataResponse
+from nucypher_core import MetadataRequest
 
 from .base.peer import PeerError
 from .base.time import BaseClock
@@ -32,14 +28,10 @@ from .domain import Domain
 from .p2p.fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry
 from .p2p.fleet_state import FleetState
 from .storage import InMemoryStorage, BaseStorage
-from .utils import BackgroundTask, wait_for_any
+from .utils import wait_for_any
 from .utils.logging import NULL_LOGGER, Logger
 from .utils.producer import producer
 from .verification import PublicUrsula, verify_staking_remote
-
-import random
-from bisect import bisect_right
-from itertools import accumulate
 
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
@@ -180,7 +172,8 @@ class Learner:
 
                     new_verified_nodes_event = self.fleet_sensor.new_verified_nodes_event
 
-                    # TODO: we can run several instances here, learning rounds are supposed to be reentrable
+                    # TODO: we can run several instances here,
+                    # learning rounds are supposed to be reentrable
                     await self.verification_round()
                     await self.learning_round()
 
@@ -312,11 +305,11 @@ class Learner:
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
                     metadatas = await self._learn_from_node(node)
-            except (PeerError, trio.TooSlowError) as e:
-                if isinstance(e, trio.TooSlowError):
+            except (PeerError, trio.TooSlowError) as exc:
+                if isinstance(exc, trio.TooSlowError):
                     message = "timed out"
                 else:
-                    message = str(e)
+                    message = str(exc)
                 self._logger.debug(
                     "Error when trying to learn from {} ({}): {}",
                     node.secure_contact.contact,
@@ -387,8 +380,8 @@ class Learner:
             with trio.fail_after(self.STAKING_PROVIDERS_TIMEOUT):
                 async with self._identity_client.session() as session:
                     providers = await session.get_active_staking_providers()
-        except trio.TooSlowError as e:
-            self._logger.debug("Failed to get staking providers list from the blockchain: {}", e)
+        except trio.TooSlowError as exc:
+            self._logger.debug(f"Failed to get staking providers list from the blockchain: {exc}")
             return
 
         self.fleet_sensor.report_staking_providers(providers)

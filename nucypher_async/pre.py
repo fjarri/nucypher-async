@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, List, Set
+from typing import Optional, Iterable, Set
 
 from attrs import frozen
 import arrow
@@ -9,14 +9,10 @@ from nucypher_core import (
     MessageKit,
     HRAC,
     ReencryptionRequest,
-    ReencryptionResponse,
     EncryptedTreasureMap,
     EncryptedKeyFrag,
 )
 from nucypher_core.umbral import (
-    SecretKeyFactory,
-    Signer,
-    SecretKey,
     generate_kfrags,
     PublicKey,
     Capsule,
@@ -92,8 +88,8 @@ class Alice:
 
         handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
         nodes = []
-        async with learner.verified_nodes_iter(handpicked_addresses) as aiter:
-            async for node in aiter:
+        async with learner.verified_nodes_iter(handpicked_addresses) as nodes_iter:
+            async for node in nodes_iter:
                 nodes.append(node)
 
         if len(nodes) < shares:
@@ -101,8 +97,8 @@ class Alice:
             async with learner.random_verified_nodes_iter(
                 shares - len(nodes),
                 # exclude=handpicked_addresses # TODO:
-            ) as aiter:
-                async for node in aiter:
+            ) as node_iter:
+                async for node in node_iter:
                     nodes.append(node)
 
         assigned_kfrags = {
@@ -202,8 +198,8 @@ class Bob:
             for address, ekfrag in treasure_map.destinations.items()
         }
         async with trio.open_nursery() as nursery:
-            async with learner.verified_nodes_iter(destinations) as aiter:
-                async for node in aiter:
+            async with learner.verified_nodes_iter(destinations) as node_iter:
+                async for node in node_iter:
                     nursery.start_soon(
                         reencrypt,
                         nursery,

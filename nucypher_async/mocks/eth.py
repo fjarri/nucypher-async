@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from collections import defaultdict
-from typing import Tuple, Union, TypeVar, Type, Dict, Optional, AsyncIterator, Any, cast
+from typing import Tuple, Union, Dict, Optional, AsyncIterator, Any, cast
 
 from pons import Amount, Address, Signer, ReadMethod, WriteMethod, ContractABI
 from pons._client import ClientSession

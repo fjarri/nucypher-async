@@ -10,9 +10,8 @@ class Domain(Enum):
     def from_string(cls, domain: str) -> "Domain":
         if domain == "mainnet":
             return cls.MAINNET
-        elif domain == "ibex":
+        if domain == "ibex":
             return cls.IBEX
-        elif domain == "oryx":
+        if domain == "oryx":
             return cls.ORYX
-        else:
-            raise ValueError(f"Unknown domain name: {domain}")
+        raise ValueError(f"Unknown domain name: {domain}")

@@ -1,34 +1,18 @@
-import datetime
 import http
-import sys
 from typing import Tuple, List, Dict, Any, Iterable
 
 import trio
-from nucypher_core import (
-    NodeMetadataPayload,
-    NodeMetadata,
-    MetadataRequest,
-    MetadataResponsePayload,
-    MetadataResponse,
-    ReencryptionRequest,
-    ReencryptionResponse,
-)
 from nucypher_core.umbral import VerifiedCapsuleFrag
 
 from .base.http_server import BaseHTTPServer, ASGI3Framework
 from .base.porter import BasePorter
-from .drivers.identity import IdentityAddress, IdentityClient
-from .drivers.payment import PaymentClient
+from .drivers.identity import IdentityAddress
 from .drivers.asgi_app import make_porter_app, HTTPError
-from .drivers.peer import Contact, SecureContact
 from .config import PorterServerConfig
-from .master_key import MasterKey
 from .learner import Learner
 from .status import render_status
-from .storage import InMemoryStorage
-from .ursula import Ursula
 from .utils import BackgroundTask
-from .utils.logging import NULL_LOGGER, Logger
+from .utils.logging import Logger
 from .utils.ssl import SSLPrivateKey, SSLCertificate
 from .verification import PublicUrsula
 
@@ -102,23 +86,22 @@ class PorterServer(BaseHTTPServer, BasePorter):
         exclude_ursulas: Iterable[IdentityAddress],
     ) -> List[PublicUrsula]:
         nodes = []
-        async with trio.open_nursery() as nursery:
 
-            async with self.learner.verified_nodes_iter(
-                include_ursulas, verified_within=60
-            ) as aiter:
-                async for node in aiter:
+        async with self.learner.verified_nodes_iter(
+            include_ursulas, verified_within=60
+        ) as node_iter:
+            async for node in node_iter:
+                nodes.append(node)
+
+        if len(nodes) < quantity:
+            overhead = max(1, (quantity - len(nodes)) // 5)
+            async with self.learner.random_verified_nodes_iter(
+                amount=quantity,
+                overhead=overhead,
+                verified_within=60,
+            ) as node_iter:
+                async for node in node_iter:
                     nodes.append(node)
-
-            if len(nodes) < quantity:
-                overhead = max(1, (quantity - len(nodes)) // 5)
-                async with self.learner.random_verified_nodes_iter(
-                    amount=quantity,
-                    overhead=overhead,
-                    verified_within=60,
-                ) as aiter:
-                    async for node in aiter:
-                        nodes.append(node)
 
         return nodes
 
@@ -132,8 +115,8 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
             include_ursulas = [IdentityAddress.from_hex(address) for address in include_ursulas]
             exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
-        except Exception as e:
-            raise HTTPError(str(e), http.HTTPStatus.BAD_REQUEST)
+        except Exception as exc:
+            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
         if quantity > len(self.learner.fleet_sensor._staking_providers):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
@@ -148,10 +131,10 @@ class PorterServer(BaseHTTPServer, BasePorter):
             with trio.fail_after(5):
                 nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
 
-        except trio.TooSlowError as e:
+        except trio.TooSlowError as exc:
             raise HTTPError(
                 "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
-            ) from e
+            ) from exc
 
         node_list = [
             dict(

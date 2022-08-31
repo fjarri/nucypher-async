@@ -1,6 +1,6 @@
 from typing import Iterable, Dict, Optional
 
-from nucypher_core import NodeMetadata, FleetStateChecksum
+from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress

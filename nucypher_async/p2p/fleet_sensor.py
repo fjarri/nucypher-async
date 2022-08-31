@@ -1,6 +1,7 @@
 from collections import defaultdict
 from contextlib import contextmanager
 import datetime
+import io
 import random
 from functools import wraps
 from typing import (
@@ -147,8 +148,7 @@ class VerifiedNodesDB:
         time_point = self.next_verification_at(exclude)
         if time_point:
             return time_point - now if time_point > now else datetime.timedelta()
-        else:
-            return None
+        return None
 
     def get_contacts_to_verify(
         self, now: arrow.Arrow, contacts_num: int, exclude: AbstractSet[Contact]
@@ -156,11 +156,14 @@ class VerifiedNodesDB:
         contacts: List[Contact] = []
         for entry in self._verify_at:
             if entry.verify_at > now:
-                return contacts
+                break
 
             contact = self._nodes[entry.address].node.contact
             if contact not in exclude:
                 contacts.append(contact)
+
+            if len(contacts) >= contacts_num:
+                break
 
         return contacts
 
@@ -184,7 +187,7 @@ class ContactsDB:
             self._contacts_to_addresses[contact].add(address)
             self._addresses_to_contacts[address].add(contact)
         else:
-            self._contacts_to_addresses[contact]
+            self._contacts_to_addresses[contact].update()  # a no-op just to make the entry appear
 
     def remove_contact(self, contact: Contact) -> None:
         if contact in self._contacts_to_addresses:
@@ -432,8 +435,8 @@ class FleetSensor:
         if next_verification_in is None:
             # Maybe someone will contact us during this time and leave some contacts.
             return datetime.timedelta(days=1).total_seconds()
-        else:
-            return next_verification_in.total_seconds()
+
+        return next_verification_in.total_seconds()
 
     @contextmanager
     def try_lock_contact_for_learning(
@@ -486,7 +489,6 @@ class FleetSensor:
         return [entry.node for entry in sampled]
 
     def get_available_staking_providers(self) -> List[StakingProviderEntry]:
-        now = self._clock.utcnow()
         entries = []
         for address, entry in self._verified_nodes_db._nodes.items():
             if (
@@ -528,8 +530,6 @@ class FleetSensor:
         return set(contacts) - self._locked_contacts_for_verification.keys()
 
     def print_status(self) -> str:
-        import io
-
         file = io.StringIO()
         print("Verified nodes:", file=file)
         for address, node_entry in self._verified_nodes_db._nodes.items():

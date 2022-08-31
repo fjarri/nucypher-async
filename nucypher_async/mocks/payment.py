@@ -1,8 +1,7 @@
-from contextlib import asynccontextmanager
 from typing import Dict, cast
 
 from attrs import frozen
-from pons import Signer, Amount, Address, ContractABI, Client
+from pons import Amount, Address, ContractABI, Client
 
 from ..domain import Domain
 from ..drivers.payment import PaymentClient, PaymentAddress, AmountMATIC

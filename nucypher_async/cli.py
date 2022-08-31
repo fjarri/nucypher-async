@@ -1,5 +1,4 @@
 import json
-import sys
 
 import trio
 import click
@@ -18,24 +17,24 @@ async def make_ursula_server(
     config_path: str, nucypher_password: str, geth_password: str
 ) -> UrsulaServer:
 
-    with open(config_path) as f:
-        config = json.load(f)
+    with open(config_path, encoding="utf-8") as file:
+        config = json.load(file)
 
     signer = config["signer_uri"]
     assert signer.startswith("keystore://")
     signer = signer[len("keystore://") :]
-    with open(signer) as f:
-        keyfile = f.read()
+    with open(signer, encoding="utf-8") as file:
+        keyfile = file.read()
 
     acc = IdentityAccount.from_payload(keyfile, geth_password)
 
-    with open(config["keystore_path"]) as f:
-        keystore = json.load(f)
+    with open(config["keystore_path"], encoding="utf-8") as file:
+        keystore = json.load(file)
 
     encrypted_key = EncryptedMasterKey.from_payload(keystore)
     key = encrypted_key.decrypt(nucypher_password)
 
-    ursula = Ursula(master_key=key, identity_account=acc)
+    local_ursula = Ursula(master_key=key, identity_account=acc)
 
     config = UrsulaServerConfig.from_config_values(
         profile_name=config.get("profile_name", "ursula-" + config["domain"]),
@@ -49,15 +48,15 @@ async def make_ursula_server(
         persistent_storage=True,
     )
 
-    server = await UrsulaServer.async_init(ursula=ursula, config=config)
+    server = await UrsulaServer.async_init(ursula=local_ursula, config=config)
 
     return server
 
 
 def make_porter_server(config_path: str) -> PorterServer:
 
-    with open(config_path) as f:
-        config = json.load(f)
+    with open(config_path, encoding="utf-8") as file:
+        config = json.load(file)
 
     config = PorterServerConfig.from_config_values(
         profile_name=config.get("profile_name", "porter-" + config["domain"]),

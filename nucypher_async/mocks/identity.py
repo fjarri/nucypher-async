@@ -1,11 +1,9 @@
-from contextlib import asynccontextmanager
-from collections import defaultdict
 from typing import Dict, Set, cast
 
 from pons import Address, Amount, ContractABI, Client
 
 from ..domain import Domain
-from ..drivers.identity import IdentityClient, IdentityAddress, AmountT, AmountETH
+from ..drivers.identity import IdentityClient, IdentityAddress, AmountT
 from .eth import MockBackend, MockContract
 
 

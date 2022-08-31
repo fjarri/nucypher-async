@@ -2,7 +2,6 @@
 This module encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``).
 """
 
-from functools import partial
 import os
 from ssl import SSLContext
 from typing import Optional
@@ -15,7 +14,6 @@ from trio_typing import TaskStatus
 from ..base.http_server import BaseHTTPServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from ..utils.logging import Logger
 
 
 class InMemoryCertificateConfig(Config):

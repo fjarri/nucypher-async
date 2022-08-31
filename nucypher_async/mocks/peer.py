@@ -1,11 +1,7 @@
 from contextlib import asynccontextmanager
-from typing import NamedTuple, AsyncIterator
-from urllib.parse import urlparse
-import weakref
+from typing import AsyncIterator
 
-import arrow
 import httpx
-import trio
 
 from ..utils.ssl import SSLCertificate
 from ..drivers.peer import Contact, PeerClient, PeerPublicKey

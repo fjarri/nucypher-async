@@ -2,8 +2,6 @@ from typing import List, Optional, Iterable
 
 from nucypher_core import EncryptedKeyFrag, HRAC
 from nucypher_core.umbral import (
-    SecretKey,
-    Signer,
     PublicKey,
     VerifiedKeyFrag,
     VerifiedCapsuleFrag,

@@ -10,8 +10,6 @@ TODO:
 """
 
 from contextlib import asynccontextmanager
-import json
-from pathlib import Path
 from typing import Type, AsyncIterator, cast
 
 from eth_account import Account

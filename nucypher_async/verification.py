@@ -1,7 +1,6 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata
 from nucypher_core.umbral import Signer, PublicKey
 
-from .base.peer import PeerError
 from .base.time import BaseClock
 from .drivers.identity import IdentityAddress, IdentityClientSession
 from .drivers.peer import (
@@ -101,7 +100,8 @@ class PublicUrsula(PeerInfo):
 
         if now < peer_info.public_key.not_valid_before:
             raise PeerVerificationError(
-                f"Peer public key will only become active at {peer_info.public_key.not_valid_before}"
+                "Peer public key will only become active "
+                f"at {peer_info.public_key.not_valid_before}"
             )
 
         if now > peer_info.public_key.not_valid_after:
@@ -148,7 +148,8 @@ class PublicUrsula(PeerInfo):
 
         if now < peer_info.public_key.not_valid_before:
             raise PeerVerificationError(
-                f"Peer public key will only become active at {peer_info.public_key.not_valid_before}"
+                "Peer public key will only become active "
+                f"at {peer_info.public_key.not_valid_before}"
             )
 
         if now > peer_info.public_key.not_valid_after:
@@ -163,13 +164,15 @@ class PublicUrsula(PeerInfo):
 
         if peer_info.staking_provider_address != staking_provider_address:
             raise PeerVerificationError(
-                f"Staking provider address mismatch: {peer_info.staking_provider_address} in the metadata, "
+                "Staking provider address mismatch: "
+                f"{peer_info.staking_provider_address} in the metadata, "
                 f"{staking_provider_address} recorded in the blockchain"
             )
 
         if peer_info.operator_address != ursula.operator_address:
             raise PeerVerificationError(
-                f"Operator address mismatch: {peer_info.operator_address} derived from the metadata, "
+                "Operator address mismatch: "
+                f"{peer_info.operator_address} derived from the metadata, "
                 f"{ursula.operator_address} supplied on start"
             )
 
@@ -186,9 +189,6 @@ class PublicUrsula(PeerInfo):
             )
 
         return cls(peer_info.metadata)
-
-    def __init__(self, metadata: NodeMetadata):
-        super().__init__(metadata)
 
     def __str__(self) -> str:
         return f"RemoteUrsula({self.staking_provider_address.checksum})"

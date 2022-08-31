@@ -11,7 +11,7 @@ from enum import IntEnum
 import io
 import time
 import traceback
-from typing import List, Any, Tuple, Type, Optional, Type, Union, Iterable
+from typing import Any, Tuple, Optional, Type, Union, Iterable
 from types import TracebackType
 from pathlib import Path
 import sys
@@ -172,8 +172,8 @@ class DefaultFormatter(Formatter):
 
         if record.exc_info != (None, None, None):
             file = io.StringIO()
-            exc_type, value, tb = record.exc_info
-            traceback.print_exception(exc_type, value=value, tb=tb, file=file)
+            exc_type, value, tback = record.exc_info
+            traceback.print_exception(exc_type, value=value, tb=tback, file=file)
             full_message += "\n" + file.getvalue()[:-1]  # cut out the last linebreak
 
         return full_message
@@ -253,5 +253,5 @@ class RotatingFileHandler(Handler):
         ):
             self._rotate()
 
-        with open(self.log_file, "a") as f:
-            print(message, file=f)
+        with open(self.log_file, "a", encoding="utf-8") as file:
+            print(message, file=file)

@@ -10,10 +10,7 @@ TODO:
 """
 
 from contextlib import asynccontextmanager
-import json
-import os
-from pathlib import Path
-from typing import Dict, Any, Type, AsyncIterator, cast
+from typing import Dict, Type, AsyncIterator, cast
 
 from eth_account import Account
 from eth_account.messages import encode_defunct
@@ -109,8 +106,8 @@ class MainnetContracts(BaseContracts):
 class IdentityAccount:
     @classmethod
     def from_payload(cls, payload: str, password: str) -> "IdentityAccount":
-        pk = Account.decrypt(payload, password)
-        account = Account.from_key(pk)
+        private_key = Account.decrypt(payload, password)
+        account = Account.from_key(private_key)
         return cls(account)
 
     @classmethod

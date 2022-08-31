@@ -1,4 +1,4 @@
-from typing import List, Callable, Union, Sequence
+from typing import List, Callable, Union
 from pathlib import Path
 
 from attrs import frozen
@@ -22,12 +22,12 @@ def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
             Contact("seeds.nucypher.network", 9151),
             Contact("mainnet.nucypher.network", 9151),
         ]
-    elif domain == Domain.IBEX:
+    if domain == Domain.IBEX:
         return [Contact("ibex.nucypher.network", 9151)]
-    elif domain == Domain.ORYX:
+    if domain == Domain.ORYX:
         return [Contact("oryx.nucypher.network", 9151)]
-    else:
-        return []
+
+    return []
 
 
 @frozen
@@ -59,8 +59,7 @@ def make_storage(profile_name: str, persistent_storage: bool = True) -> BaseStor
     dirs = app_dirs(profile_name)
     if persistent_storage:
         return FileSystemStorage(dirs.data_dir)
-    else:
-        return InMemoryStorage()
+    return InMemoryStorage()
 
 
 @frozen
@@ -170,11 +169,11 @@ class PorterServerConfig:
         seed_contacts = seed_contacts_for_domain(domain_)
         peer_client = PeerClient()
 
-        with open(ssl_certificate_path, "rb") as f:
-            ssl_certificate = SSLCertificate.from_pem_bytes(f.read())
+        with open(ssl_certificate_path, "rb") as cert_file:
+            ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
 
-        with open(ssl_private_key_path, "rb") as f:
-            ssl_private_key = SSLPrivateKey.from_pem_bytes(f.read())
+        with open(ssl_private_key_path, "rb") as pk_file:
+            ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
 
         return cls(
             domain=domain_,

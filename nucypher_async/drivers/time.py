@@ -4,6 +4,5 @@ from ..base.time import BaseClock
 
 
 class SystemClock(BaseClock):
-    @staticmethod
-    def utcnow() -> arrow.Arrow:
+    def utcnow(self) -> arrow.Arrow:
         return arrow.utcnow()

@@ -1,10 +1,7 @@
-import datetime
-import sys
 from typing import Optional
 
 import trio
 from nucypher_core import (
-    NodeMetadataPayload,
     NodeMetadata,
     MetadataRequest,
     MetadataResponsePayload,
@@ -17,14 +14,13 @@ from .base.peer import BasePeer, InactivePolicy, GenericPeerError
 from .drivers.identity import IdentityAddress
 from .drivers.peer import (
     BasePeerServer,
-    Contact,
     SecureContact,
     PeerPrivateKey,
     PeerInfo,
+    PeerVerificationError,
 )
 from .learner import Learner
 from .status import render_status
-from .storage import InMemoryStorage
 from .ursula import Ursula
 from .config import UrsulaServerConfig
 from .utils import BackgroundTask
@@ -71,10 +67,9 @@ class UrsulaServer(BasePeerServer, BasePeer):
                     contact=config.contact,
                     domain=config.domain,
                 )
-            except Exception as e:
+            except PeerVerificationError as exc:
                 self._logger.warn(
-                    "Obsolete/invalid metadata found ({}), updating",
-                    str(e),
+                    f"Obsolete/invalid metadata found ({exc}), updating",
                     exc_info=True,
                 )
 
@@ -151,8 +146,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
     async def endpoint_ping(self, remote_host: Optional[str]) -> bytes:
         if remote_host:
             return remote_host.encode()
-        else:
-            raise GenericPeerError()
+        raise GenericPeerError()
 
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [m.metadata for m in self.learner.metadata_to_announce()]
@@ -164,10 +158,10 @@ class UrsulaServer(BasePeerServer, BasePeer):
         return response
 
     async def node_metadata_post(
-        self, remote_host: Optional[str], metadata_request: MetadataRequest
+        self, remote_host: Optional[str], request: MetadataRequest
     ) -> MetadataResponse:
 
-        if metadata_request.fleet_state_checksum == self.learner.fleet_state.checksum:
+        if request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
@@ -175,7 +169,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
             )
             return MetadataResponse(self.ursula.signer, response_payload)
 
-        new_metadatas = [PeerInfo(m) for m in metadata_request.announce_nodes]
+        new_metadatas = [PeerInfo(m) for m in request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
@@ -185,9 +179,9 @@ class UrsulaServer(BasePeerServer, BasePeer):
         # TODO: can we just return PeerInfo?
         return self._node.metadata
 
-    async def reencrypt(self, reencryption_request: ReencryptionRequest) -> ReencryptionResponse:
+    async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
 
-        hrac = reencryption_request.hrac
+        hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
         async with self._payment_client.session() as session:
@@ -196,19 +190,17 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         # TODO: catch decryption errors and raise RPC error here
         verified_kfrag = self.ursula.decrypt_kfrag(
-            encrypted_kfrag=reencryption_request.encrypted_kfrag,
+            encrypted_kfrag=request.encrypted_kfrag,
             hrac=hrac,
-            publisher_verifying_key=reencryption_request.publisher_verifying_key,
+            publisher_verifying_key=request.publisher_verifying_key,
         )
 
         # TODO: catch reencryption errors (if any) and raise RPC error here
-        vcfrags = self.ursula.reencrypt(
-            verified_kfrag=verified_kfrag, capsules=reencryption_request.capsules
-        )
+        vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=request.capsules)
 
         response = ReencryptionResponse(
             signer=self.ursula.signer,
-            capsules=reencryption_request.capsules,
+            capsules=request.capsules,
             vcfrags=vcfrags,
         )
 

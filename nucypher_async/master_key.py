@@ -45,8 +45,8 @@ class EncryptedMasterKey:
                 ciphertext=self.encrypted_key,
                 salt=self.wrapper_salt,
             )
-        except SecretBoxAuthenticationError as e:
-            raise RuntimeError("Authentication failed") from e
+        except SecretBoxAuthenticationError as exc:
+            raise RuntimeError("Authentication failed") from exc
 
         return MasterKey(secret)
 
@@ -97,8 +97,8 @@ class MasterKey:
         return EncryptedMasterKey(encrypted_key, password_salt, wrapper_salt)
 
     def make_peer_private_key(self) -> PeerPrivateKey:
-        sk = self.__skf.make_key(b"NuCypher/tls")
-        return PeerPrivateKey.from_seed(sk.to_secret_bytes())
+        secret_key = self.__skf.make_key(b"NuCypher/tls")
+        return PeerPrivateKey.from_seed(secret_key.to_secret_bytes())
 
     def make_signer(self) -> Signer:
         return Signer(self.__skf.make_key(b"NuCypher/signing"))

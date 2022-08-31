@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Callable, Dict, Awaitable
+from typing import Tuple
 
 from hypercorn.typing import ASGI3Framework as ASGI3Framework
 
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from ..utils.logging import Logger
 
 
 class BaseHTTPServer(ABC):
@@ -14,7 +13,7 @@ class BaseHTTPServer(ABC):
 
     @abstractmethod
     def host_and_port(self) -> Tuple[str, int]:
-        # TODO: restring the host to IP addresses?
+        # TODO: restrict the host to IP addresses?
         ...
 
     @abstractmethod

@@ -19,13 +19,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
-from hypercorn.typing import (
-    LifespanScope,
-    LifespanShutdownEvent,
-    LifespanStartupEvent,
-    ASGIReceiveEvent,
-    ASGISendEvent,
-)
 
 from ..base.http_server import ASGI3Framework
 from ..base.peer import BasePeer, ServerSidePeerError, InactivePolicy

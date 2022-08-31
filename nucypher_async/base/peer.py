@@ -6,7 +6,7 @@ to illustrate that it does not necessarily need to work via HTTP.
 from abc import ABC, abstractmethod
 from enum import Enum, unique
 import json
-from typing import TypeVar, Type, Dict, Callable, Any, Optional
+from typing import Type, Dict, Callable, Any, Optional
 
 from nucypher_core import (
     MetadataRequest,

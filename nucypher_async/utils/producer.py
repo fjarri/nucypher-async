@@ -69,7 +69,7 @@ def producer(
             with send_channel:
                 try:
                     await wrapped(*args_with_yield, **kwds)
-                except Exception as e:
+                except Exception:
                     # If we just let it raise here, this exception may be ignored.
                     # Instead, we're saving the traceback to raise it after the nursery is closed.
                     exc_info = sys.exc_info()

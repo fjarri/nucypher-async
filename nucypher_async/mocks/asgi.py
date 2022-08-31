@@ -1,7 +1,5 @@
-from contextlib import asynccontextmanager
-from typing import Dict, Tuple, Any, Union, cast
+from typing import Dict, Tuple, Any, cast
 from urllib.parse import urlparse
-import weakref
 
 import httpx
 import trio
@@ -60,12 +58,12 @@ class MockNetwork:
         self.known_servers[(host, port)] = (certificate, manager)
 
     async def start_all(self) -> None:
-        for certificate, manager in self.known_servers.values():
+        for _certificate, manager in self.known_servers.values():
             await manager.run(self.nursery)
 
     async def stop_all(self) -> None:
         async with trio.open_nursery() as nursery:
-            for certificate, manager in self.known_servers.values():
+            for _certificate, manager in self.known_servers.values():
                 nursery.start_soon(manager.shutdown)
 
 

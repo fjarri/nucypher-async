@@ -41,12 +41,12 @@ class FileSystemStorage(BaseStorage):
         if not peer_info_path.is_file():
             return None
 
-        with open(peer_info_path, "rb") as f:
-            peer_info = f.read()
+        with open(peer_info_path, "rb") as file:
+            peer_info = file.read()
 
         return PeerInfo(NodeMetadata.from_bytes(peer_info))
 
     def set_my_peer_info(self, peer_info: PeerInfo) -> None:
         peer_info_path = self._my_peer_info_path()
-        with open(peer_info_path, "wb") as f:
-            f.write(bytes(peer_info))
+        with open(peer_info_path, "wb") as file:
+            file.write(bytes(peer_info))

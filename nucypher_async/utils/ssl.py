@@ -1,13 +1,10 @@
 from ipaddress import ip_address
-from pathlib import Path
-from typing import Optional, Tuple, Any, cast
+from typing import Optional, Any, cast
 import ssl
 
 import arrow
 from cryptography import x509
-from cryptography import exceptions
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import ec, padding
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -30,10 +27,10 @@ class SSLPrivateKey:
 
     @classmethod
     def from_pem_bytes(cls, data: bytes, password: Optional[bytes] = None) -> "SSLPrivateKey":
-        pk = load_pem_private_key(data, password=password)
-        if not isinstance(pk, ec.EllipticCurvePrivateKey):
+        private_key = load_pem_private_key(data, password=password)
+        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
             raise ValueError("`SSLPrivateKey` can only be deserialized from an EC private key")
-        return cls(pk)
+        return cls(private_key)
 
     def to_pem_bytes(self, password: bytes) -> bytes:
         return self._private_key.private_bytes(

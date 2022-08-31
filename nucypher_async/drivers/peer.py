@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import cached_property
 import http
-from ipaddress import IPv4Address, AddressValueError
 from typing import Tuple, AsyncIterator, TypeVar, Protocol, Any, Type
 
 import arrow
@@ -21,8 +20,7 @@ from nucypher_core import (
     ReencryptionResponse,
     NodeMetadataPayload,
 )
-from nucypher_core.umbral import PublicKey, Signer
-import trio
+from nucypher_core.umbral import PublicKey
 
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
 from ..base.peer import PeerError, BasePeer, decode_peer_error, InvalidMessage
@@ -38,7 +36,7 @@ class InvalidErrorFormat(PeerError):
     pass
 
 
-class ConnectionError(PeerError):
+class PeerConnectionError(PeerError):
     pass
 
 
@@ -207,16 +205,18 @@ class PeerInfo:
         return cls(NodeMetadata.from_bytes(data))
 
 
-T = TypeVar("T", covariant=True)
+DeserializableT_co = TypeVar("DeserializableT_co", covariant=True)
 
 
-class Deserializable(Protocol[T]):
+class Deserializable(Protocol[DeserializableT_co]):
     @classmethod
-    def from_bytes(cls, data: bytes) -> T:
+    def from_bytes(cls, data: bytes) -> DeserializableT_co:
         ...
 
 
-def unwrap_bytes(response: httpx.Response, cls: Type[Deserializable[T]]) -> T:
+def unwrap_bytes(
+    response: httpx.Response, cls: Type[Deserializable[DeserializableT_co]]
+) -> DeserializableT_co:
     if response.status_code != http.HTTPStatus.OK:
         peer_exc: PeerError = decode_peer_error(response.text)
         raise peer_exc
@@ -243,15 +243,15 @@ class PeerClient:
                 try:
                     yield client
                 except httpx.HTTPError as exc:
-                    raise ConnectionError(str(exc)) from exc
+                    raise PeerConnectionError(str(exc)) from exc
                 except OSError as exc:
-                    raise ConnectionError(str(exc)) from exc
+                    raise PeerConnectionError(str(exc)) from exc
 
     async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
         try:
             return await fetch_certificate(contact.host, contact.port)
         except OSError as exc:
-            raise ConnectionError(str(exc)) from exc
+            raise PeerConnectionError(str(exc)) from exc
 
     async def handshake(self, contact: Contact) -> SecureContact:
         certificate = await self._fetch_certificate(contact)

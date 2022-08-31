@@ -35,15 +35,14 @@ def derive_key_material_from_password(password: bytes, salt: bytes) -> bytes:
             p=1,
             backend=default_backend(),
         ).derive(password)
-    except InternalError as e:
+    except InternalError as exc:
         required_memory = 128 * 2**_scrypt_cost * 8 // (10**6)
-        if e.err_code[0].reason == 65:
+        if exc.err_code[0].reason == 65:
             raise MemoryError(
-                "Scrypt key derivation requires at least {} MB of memory. "
-                "Please free up some memory and try again.".format(required_memory)
-            )
-        else:
-            raise e
+                f"Scrypt key derivation requires at least {required_memory} MB of memory. "
+                "Please free up some memory and try again."
+            ) from exc
+        raise
     else:
         return derived_key
 

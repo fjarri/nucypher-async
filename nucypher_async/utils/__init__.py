@@ -10,10 +10,10 @@ from .logging import Logger
 
 @contextmanager
 def temp_file(contents: bytes) -> Iterator[Path]:
-    with tempfile.NamedTemporaryFile(mode="wb") as f:
-        f.write(contents)
-        f.flush()
-        yield Path(f.name)
+    with tempfile.NamedTemporaryFile(mode="wb") as file:
+        file.write(contents)
+        file.flush()
+        yield Path(file.name)
 
 
 async def wait_for_any(events: Iterable[trio.Event], timeout: float) -> bool:
@@ -47,7 +47,7 @@ class BackgroundTask:
     async def _wrapper(self) -> None:
         try:
             await self._worker(self._stop_event)
-        except Exception as exc:
+        except Exception:
             self._logger.error("Unhandled exception in a BackgroundTask", exc_info=True)
         finally:
             self._stop_finished_event.set()
