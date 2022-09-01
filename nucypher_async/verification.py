@@ -47,6 +47,44 @@ async def verify_staking_remote(
     return operator_address
 
 
+def _verify_peer_shared(
+    clock: BaseClock,
+    peer_info: PeerInfo,
+    expected_contact: Contact,
+    expected_domain: Domain,
+    expected_operator_address: IdentityAddress,
+) -> None:
+
+    if peer_info.contact != expected_contact:
+        raise PeerVerificationError(
+            f"Contact info mismatch: expected {expected_contact}, "
+            f"{peer_info.contact} in the metadata"
+        )
+
+    if peer_info.operator_address != expected_operator_address:
+        raise PeerVerificationError(
+            f"Invalid decentralized identity evidence: derived {peer_info.operator_address}, "
+            f"but the bonded address is {expected_operator_address}"
+        )
+
+    now = clock.utcnow()
+
+    if now < peer_info.public_key.not_valid_before:
+        raise PeerVerificationError(
+            "Peer public key will only become active " f"at {peer_info.public_key.not_valid_before}"
+        )
+
+    if now > peer_info.public_key.not_valid_after:
+        raise PeerVerificationError(
+            f"Peer public key expired at {peer_info.public_key.not_valid_after}"
+        )
+
+    if peer_info.domain != expected_domain:
+        raise PeerVerificationError(
+            f"Domain mismatch: expected {expected_domain}, {peer_info.domain} in the metadata"
+        )
+
+
 class PublicUrsula(PeerInfo):
     @classmethod
     def generate(
@@ -88,40 +126,18 @@ class PublicUrsula(PeerInfo):
         domain: Domain,
     ) -> "PublicUrsula":
 
-        if peer_info.contact != received_from.contact:
-            raise PeerVerificationError(
-                f"Contact info mismatch: expected {received_from.contact}, "
-                f"{peer_info.contact} in the metadata"
-            )
+        _verify_peer_shared(
+            clock=clock,
+            peer_info=peer_info,
+            expected_contact=received_from.contact,
+            expected_domain=domain,
+            expected_operator_address=operator_address,
+        )
 
         if peer_info.public_key != received_from.public_key:
             raise PeerVerificationError(
                 "Peer public key mismatch between the payload "
                 "and the contact it was received from"
-            )
-
-        now = clock.utcnow()
-
-        if now < peer_info.public_key.not_valid_before:
-            raise PeerVerificationError(
-                "Peer public key will only become active "
-                f"at {peer_info.public_key.not_valid_before}"
-            )
-
-        if now > peer_info.public_key.not_valid_after:
-            raise PeerVerificationError(
-                f"Peer public key expired at {peer_info.public_key.not_valid_after}"
-            )
-
-        if peer_info.domain != domain:
-            raise PeerVerificationError(
-                f"Domain mismatch: expected {domain}, {peer_info.domain} in the metadata"
-            )
-
-        if peer_info.operator_address != operator_address:
-            raise PeerVerificationError(
-                f"Invalid decentralized identity evidence: derived {peer_info.operator_address}, "
-                f"but the bonded address is {operator_address}"
             )
 
         return cls(peer_info.metadata)
@@ -137,33 +153,17 @@ class PublicUrsula(PeerInfo):
         domain: Domain,
     ) -> "PublicUrsula":
 
-        if peer_info.contact != contact:
-            raise PeerVerificationError(
-                f"Contact info mismatch: expected {contact}, "
-                f"{peer_info.contact} in the metadata"
-            )
+        _verify_peer_shared(
+            clock=clock,
+            peer_info=peer_info,
+            expected_contact=contact,
+            expected_domain=domain,
+            expected_operator_address=ursula.operator_address,
+        )
 
         if not ursula.peer_private_key().matches(peer_info.public_key):
             raise PeerVerificationError(
                 "The public key in the metadata does not match the given private key"
-            )
-
-        now = clock.utcnow()
-
-        if now < peer_info.public_key.not_valid_before:
-            raise PeerVerificationError(
-                "Peer public key will only become active "
-                f"at {peer_info.public_key.not_valid_before}"
-            )
-
-        if now > peer_info.public_key.not_valid_after:
-            raise PeerVerificationError(
-                f"Peer public key expired at {peer_info.public_key.not_valid_after}"
-            )
-
-        if peer_info.domain != domain:
-            raise PeerVerificationError(
-                f"Domain mismatch: expected {domain}, {peer_info.domain} in the metadata"
             )
 
         if peer_info.staking_provider_address != staking_provider_address:
@@ -171,13 +171,6 @@ class PublicUrsula(PeerInfo):
                 "Staking provider address mismatch: "
                 f"{peer_info.staking_provider_address} in the metadata, "
                 f"{staking_provider_address} recorded in the blockchain"
-            )
-
-        if peer_info.operator_address != ursula.operator_address:
-            raise PeerVerificationError(
-                "Operator address mismatch: "
-                f"{peer_info.operator_address} derived from the metadata, "
-                f"{ursula.operator_address} supplied on start"
             )
 
         if peer_info.verifying_key != ursula.signer.verifying_key():
