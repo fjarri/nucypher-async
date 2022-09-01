@@ -122,7 +122,7 @@ class Learner:
 
     def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]) -> None:
         for node, stake in zip(nodes, stakes):
-            self.fleet_sensor.report_verified_node(node.secure_contact.contact, node, stake)
+            self.fleet_sensor.report_verified_node(node.contact, node, stake)
         self.fleet_state.add_metadatas(nodes)
 
     @producer
@@ -273,7 +273,7 @@ class Learner:
     async def _learn_from_node(self, node: PublicUrsula) -> List[PeerInfo]:
         self._logger.debug(
             "Learning from {} ({})",
-            node.secure_contact.contact,
+            node.contact,
             node.staking_provider_address,
         )
 
@@ -312,7 +312,7 @@ class Learner:
                     message = str(exc)
                 self._logger.debug(
                     "Error when trying to learn from {} ({}): {}",
-                    node.secure_contact.contact,
+                    node.contact,
                     node.staking_provider_address.checksum,
                     message,
                 )
@@ -321,7 +321,7 @@ class Learner:
             else:
                 self._logger.debug(
                     "Learned from {} ({})",
-                    node.secure_contact.contact,
+                    node.contact,
                     node.staking_provider_address.checksum,
                 )
                 self.fleet_sensor.report_active_learning_results(node, metadatas)
