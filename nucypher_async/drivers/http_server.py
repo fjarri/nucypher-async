@@ -87,6 +87,7 @@ class HTTPServerHandle:
         self.server = server
         self.app = server.into_asgi_app()
         self._shutdown_event = trio.Event()
+        self._shutdown_finished = trio.Event()
 
     async def __call__(self, *, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED) -> None:
         """
@@ -102,6 +103,8 @@ class HTTPServerHandle:
             shutdown_trigger=self._shutdown_event.wait,
             task_status=task_status,
         )
+        self._shutdown_finished.set()
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         self._shutdown_event.set()
+        await self._shutdown_finished.wait()

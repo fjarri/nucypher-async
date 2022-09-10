@@ -192,7 +192,7 @@ async def main(mocked=True):
         if mocked:
             context.logger.info("Stopping Ursulas")
             for handle in server_handles:
-                handle.shutdown()
+                await handle.shutdown()
 
 
 def run_main(mocked=True):

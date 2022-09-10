@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-from hypercorn.typing import ASGI3Framework as ASGI3Framework
+from hypercorn.typing import ASGIFramework as ASGI3Framework
 
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
