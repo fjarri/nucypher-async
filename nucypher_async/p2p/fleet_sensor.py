@@ -313,9 +313,7 @@ class FleetSensor:
         self._verified_nodes_db.remove_by_contact(contact)
 
     @_next_verification_time_may_change
-    def report_verified_node(
-        self, contact: Contact, node: PublicUrsula, staked_amount: AmountT
-    ) -> None:
+    def report_verified_node(self, node: PublicUrsula, staked_amount: AmountT) -> None:
 
         if (
             self._my_staking_provider_address
@@ -325,10 +323,7 @@ class FleetSensor:
 
         verified_at = self._clock.utcnow()
 
-        # Note that we do not use the node's `secure_contact`:
-        # `contact` might have an unresolved hostname, but `node` will have a resolved IP.
-        # TODO: IPs should be typed properly.
-        self._contacts_db.remove_contact(contact)
+        self._contacts_db.remove_contact(node.contact)
         self._contacts_db.remove_address(node.staking_provider_address)
 
         entry_by_staker = self._verified_nodes_db._nodes.get(node.staking_provider_address, None)
@@ -336,7 +331,8 @@ class FleetSensor:
         if not entry_by_staker:
             # New verification
 
-            # This IP may have had another staking provider associated with it, unverify the old one
+            # This contact may have had another staking provider associated with it,
+            # unverify the old one
             # (if it is the same node, no harm done, we're doing _add_node() anyway).
             self._verified_nodes_db.remove_by_contact(node.contact)
 

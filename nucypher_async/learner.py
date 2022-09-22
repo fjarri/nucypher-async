@@ -122,7 +122,7 @@ class Learner:
 
     def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]) -> None:
         for node, stake in zip(nodes, stakes):
-            self.fleet_sensor.report_verified_node(node.contact, node, stake)
+            self.fleet_sensor.report_verified_node(node, stake)
         self.fleet_state.add_metadatas(nodes)
 
     @producer
@@ -355,7 +355,10 @@ class Learner:
                 self.fleet_state.remove_contact(contact)
             else:
                 self._logger.debug("Verified {}: {}", contact, node)
-                self.fleet_sensor.report_verified_node(contact, node, staked_amount)
+                # Assuming here that since the node is verified, `node.contact == contact`
+                # (and we won't try to verify `contact` again).
+                # Is there a way to enforce it more explicitly?
+                self.fleet_sensor.report_verified_node(node, staked_amount)
                 self.fleet_state.add_metadatas([node])
             finally:
                 result.set(node)
