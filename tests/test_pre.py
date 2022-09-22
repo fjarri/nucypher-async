@@ -16,49 +16,8 @@ from nucypher_async.storage import InMemoryStorage
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient
 
 
-@pytest.fixture
-async def ursula_servers(
-    mock_network, mock_identity_client, mock_payment_client, ursulas, logger, mock_clock
-):
-    servers = []
-
-    for i in range(10):
-        staking_provider_address = IdentityAddress(os.urandom(20))
-
-        mock_identity_client.mock_set_up(
-            staking_provider_address, ursulas[i].operator_address, AmountT.ether(40000)
-        )
-
-        config = UrsulaServerConfig(
-            domain=Domain.MAINNET,
-            contact=Contact("127.0.0.1", 9150 + i),
-            # TODO: find a way to ensure the client's domains correspond to the domain set above
-            identity_client=mock_identity_client,
-            payment_client=mock_payment_client,
-            peer_client=MockPeerClient(mock_network, "127.0.0.1"),
-            parent_logger=logger.get_child(str(i)),
-            storage=InMemoryStorage(),
-            seed_contacts=[],
-            clock=mock_clock,
-        )
-
-        server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
-        servers.append(server)
-        mock_network.add_server(PeerHTTPServer(server))
-
-    # pre-learn about other Ursulas
-    for i in range(10):
-        nodes = [server._node for server in servers]
-        stakes = [AmountT.ether(40000) for server in servers]
-        servers[i].learner._add_verified_nodes(nodes, stakes)
-
-    await mock_network.start_all()
-    yield servers
-    await mock_network.stop_all()
-
-
 async def test_verified_nodes_iter(
-    nursery, autojump_clock, ursula_servers, mock_network, mock_identity_client, logger
+    nursery, autojump_clock, fully_learned_ursulas, mock_network, mock_identity_client, logger
 ):
 
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
@@ -66,11 +25,11 @@ async def test_verified_nodes_iter(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].secure_contact().contact],
+        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
         parent_logger=logger,
     )
 
-    addresses = [server._node.staking_provider_address for server in ursula_servers[:3]]
+    addresses = [server._node.staking_provider_address for server in fully_learned_ursulas[:3]]
     nodes = []
 
     with trio.fail_after(10):
@@ -84,7 +43,7 @@ async def test_verified_nodes_iter(
 async def test_granting(
     nursery,
     autojump_clock,
-    ursula_servers,
+    fully_learned_ursulas,
     mock_network,
     mock_identity_client,
     mock_payment_client,
@@ -98,7 +57,7 @@ async def test_granting(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].secure_contact().contact],
+        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
     )
 
     # Fund Alice
@@ -114,7 +73,7 @@ async def test_granting(
             shares=3,
             # TODO: using preselected Ursulas since blockchain is not implemeneted yet
             handpicked_addresses=[
-                server._node.staking_provider_address for server in ursula_servers[:3]
+                server._node.staking_provider_address for server in fully_learned_ursulas[:3]
             ],
         )
 
@@ -125,7 +84,7 @@ async def test_granting(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[ursula_servers[0].secure_contact().contact],
+        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
     )
 
     with trio.fail_after(10):

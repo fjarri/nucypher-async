@@ -2,7 +2,6 @@ from http import HTTPStatus
 import os
 
 import pytest
-import trio
 
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress

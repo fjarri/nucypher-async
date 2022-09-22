@@ -120,10 +120,20 @@ class Learner:
 
         self._seed_contacts = seed_contacts or []
 
-    def _add_verified_nodes(self, nodes: Iterable[PublicUrsula], stakes: Iterable[AmountT]) -> None:
-        for node, stake in zip(nodes, stakes):
-            self.fleet_sensor.report_verified_node(node, stake)
-        self.fleet_state.add_metadatas(nodes)
+    def _test_set_seed_contacts(self, seed_contacts: Iterable[Contact]) -> None:
+        """
+        This function is for tests only.
+        Supposed to be called before starting the server.
+        """
+        self._seed_contacts = list(seed_contacts)
+
+    def _test_add_verified_node(self, node: PublicUrsula, stake: AmountT) -> None:
+        """
+        This function is for tests only.
+        Supposed to be called before starting the server.
+        """
+        self.fleet_sensor.report_verified_node(node, stake)
+        self.fleet_state.add_metadatas([node])
 
     @producer
     async def verified_nodes_iter(
