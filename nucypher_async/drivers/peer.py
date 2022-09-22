@@ -162,11 +162,11 @@ class PeerInfo:
 
     @cached_property
     def operator_address(self) -> IdentityAddress:
-        return IdentityAddress(self._metadata_payload.derive_operator_address())
+        return IdentityAddress(bytes(self._metadata_payload.derive_operator_address()))
 
     @cached_property
     def staking_provider_address(self) -> IdentityAddress:
-        return IdentityAddress(self._metadata_payload.staking_provider_address)
+        return IdentityAddress(bytes(self._metadata_payload.staking_provider_address))
 
     @cached_property
     def public_key(self) -> PeerPublicKey:

@@ -1,4 +1,4 @@
-from nucypher_core import NodeMetadataPayload, NodeMetadata
+from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
 from nucypher_core.umbral import Signer, PublicKey
 
 from .base.time import BaseClock
@@ -101,7 +101,7 @@ class PublicUrsula(PeerInfo):
         # TODO: use Ursula instead of several arguments
         public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
         payload = NodeMetadataPayload(
-            staking_provider_address=bytes(staking_provider_address),
+            staking_provider_address=Address(bytes(staking_provider_address)),
             domain=domain.value,
             timestamp_epoch=int(clock.utcnow().timestamp()),
             operator_signature=operator_signature,

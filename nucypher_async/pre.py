@@ -5,6 +5,7 @@ import arrow
 import trio
 
 from nucypher_core import (
+    Address,
     TreasureMap,
     MessageKit,
     HRAC,
@@ -102,7 +103,7 @@ class Alice:
                     nodes.append(node)
 
         assigned_kfrags = {
-            bytes(node.staking_provider_address): (node.encrypting_key, kfrags.pop())
+            Address(bytes(node.staking_provider_address)): (node.encrypting_key, kfrags.pop())
             for node in nodes
         }
 
@@ -142,7 +143,7 @@ class RemoteAlice:
 
 
 def encrypt(encrypting_key: PublicKey, message: bytes) -> MessageKit:
-    return MessageKit(policy_encrypting_key=encrypting_key, plaintext=message)
+    return MessageKit(policy_encrypting_key=encrypting_key, plaintext=message, conditions=None)
 
 
 class Bob:
@@ -179,6 +180,8 @@ class Bob:
                 encrypted_kfrag=ekfrag,
                 publisher_verifying_key=treasure_map.publisher_verifying_key,
                 bob_verifying_key=self.verifying_key,
+                conditions=None,
+                context=None,
             )
             # TODO: why are we calling a private method here?
             response = await learner._peer_client.reencrypt(node.secure_contact, request)
@@ -194,7 +197,7 @@ class Bob:
                 nursery.cancel_scope.cancel()
 
         destinations = {
-            IdentityAddress(address): ekfrag
+            IdentityAddress(bytes(address)): ekfrag
             for address, ekfrag in treasure_map.destinations.items()
         }
         async with trio.open_nursery() as nursery:
