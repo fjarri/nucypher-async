@@ -187,7 +187,7 @@ class ConsoleHandler(Handler):
         self,
         level: Level = Level.DEBUG,
         formatter: Formatter = DEFAULT_FORMATTER,
-        stderr_at: Level = Level.WARNING,
+        stderr_at: Optional[Level] = Level.WARNING,
     ):
         self.level = level
         self.formatter = formatter
