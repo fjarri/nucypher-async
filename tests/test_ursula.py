@@ -1,20 +1,16 @@
-import os
+from typing import List
 
-import pytest
 import trio
+import trio.testing
 
-from nucypher_async.drivers.identity import IdentityAddress, AmountT
-from nucypher_async.drivers.peer import Contact, PeerHTTPServer
-from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
-from nucypher_async.config import UrsulaServerConfig
-from nucypher_async.domain import Domain
-from nucypher_async.storage import InMemoryStorage
-from nucypher_async.learner import Learner
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient
 
 
-async def test_learning(nursery, autojump_clock, chain_seeded_ursulas):
+async def test_learning(
+    nursery: trio.Nursery,
+    autojump_clock: trio.testing.MockClock,
+    chain_seeded_ursulas: List[UrsulaServer],
+) -> None:
 
     while True:
         # Wait multiple learning cycles

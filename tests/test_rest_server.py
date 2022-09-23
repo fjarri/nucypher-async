@@ -1,6 +1,6 @@
-from http import HTTPStatus
 import os
 
+import trio
 import pytest
 
 from nucypher_async.drivers.http_server import HTTPServerHandle
@@ -17,7 +17,7 @@ from nucypher_async.utils.logging import NULL_LOGGER
 
 
 @pytest.fixture
-def ursula_server():
+def ursula_server() -> UrsulaServer:
     config = UrsulaServerConfig(
         domain=Domain.MAINNET,
         contact=Contact("127.0.0.1", 9151),
@@ -37,7 +37,9 @@ def ursula_server():
     )
 
 
-async def test_client_real_server(nursery, capsys, ursula_server):
+async def test_client_real_server(
+    nursery: trio.Nursery, capsys: pytest.CaptureFixture[str], ursula_server: UrsulaServer
+) -> None:
     handle = HTTPServerHandle(PeerHTTPServer(ursula_server))
     await nursery.start(handle)
 

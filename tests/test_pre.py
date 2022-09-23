@@ -1,24 +1,25 @@
-import os
+from typing import List
 
-import pytest
 import trio
+import trio.testing
 
-from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.drivers.payment import AmountMATIC
-from nucypher_async.drivers.peer import Contact, PeerHTTPServer
 from nucypher_async.domain import Domain
-from nucypher_async.config import UrsulaServerConfig
-from nucypher_async.ursula import Ursula
 from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.pre import Alice, Bob, encrypt
 from nucypher_async.learner import Learner
-from nucypher_async.storage import InMemoryStorage
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient
+from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
+from nucypher_async.utils.logging import Logger
 
 
 async def test_verified_nodes_iter(
-    nursery, autojump_clock, fully_learned_ursulas, mock_network, mock_identity_client, logger
-):
+    nursery: trio.Nursery,
+    autojump_clock: trio.testing.MockClock,
+    fully_learned_ursulas: List[UrsulaServer],
+    mock_network: MockNetwork,
+    mock_identity_client: MockIdentityClient,
+    logger: Logger,
+) -> None:
 
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
     learner = Learner(
@@ -41,13 +42,13 @@ async def test_verified_nodes_iter(
 
 
 async def test_granting(
-    nursery,
-    autojump_clock,
-    fully_learned_ursulas,
-    mock_network,
-    mock_identity_client,
-    mock_payment_client,
-):
+    nursery: trio.Nursery,
+    autojump_clock: trio.testing.MockClock,
+    fully_learned_ursulas: List[UrsulaServer],
+    mock_network: MockNetwork,
+    mock_identity_client: MockIdentityClient,
+    mock_payment_client: MockPaymentClient,
+) -> None:
 
     alice = Alice()
     bob = Bob()

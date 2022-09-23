@@ -13,7 +13,7 @@ from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain
 from nucypher_async.config import UrsulaServerConfig
-from nucypher_async.drivers.peer import Contact, PeerHTTPServer, PeerInfo
+from nucypher_async.drivers.peer import Contact, PeerHTTPServer
 from nucypher_async.storage import InMemoryStorage
 
 
