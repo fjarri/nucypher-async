@@ -6,7 +6,7 @@ import trio.testing
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.domain import Domain
 from nucypher_async.server import UrsulaServer
-from nucypher_async.pre import Alice, Bob, encrypt
+from nucypher_async.client.pre import Alice, Bob, encrypt
 from nucypher_async.learner import Learner
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
 from nucypher_async.utils.logging import Logger

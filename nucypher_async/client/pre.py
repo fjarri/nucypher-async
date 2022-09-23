@@ -20,11 +20,11 @@ from nucypher_core.umbral import (
     VerifiedCapsuleFrag,
 )
 
-from .drivers.identity import IdentityAddress
-from .drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
-from .learner import Learner
-from .master_key import MasterKey
-from .verification import PublicUrsula
+from ..drivers.identity import IdentityAddress
+from ..drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
+from ..learner import Learner
+from ..master_key import MasterKey
+from ..verification import PublicUrsula
 
 
 @frozen
