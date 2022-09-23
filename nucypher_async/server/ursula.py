@@ -18,11 +18,11 @@ from ..drivers.peer import (
     PeerPrivateKey,
     PeerInfo,
 )
-from ..learner import Learner
 from ..ursula import Ursula
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from ..verification import PublicUrsula, verify_staking_local, PeerVerificationError
+from ..p2p.learner import Learner
+from ..p2p.verification import PublicUrsula, verify_staking_local, PeerVerificationError
 from .status import render_status
 from .config import UrsulaServerConfig
 

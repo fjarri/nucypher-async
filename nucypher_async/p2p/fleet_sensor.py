@@ -29,7 +29,7 @@ from typing_extensions import ParamSpec, Concatenate
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT
 from ..drivers.peer import Contact, PeerInfo
-from ..verification import PublicUrsula
+from .verification import PublicUrsula
 
 
 @frozen

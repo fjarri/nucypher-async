@@ -5,7 +5,7 @@ from nucypher_core import FleetStateChecksum
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact, PeerInfo
-from ..verification import PublicUrsula
+from .verification import PublicUrsula
 
 
 class FleetState:

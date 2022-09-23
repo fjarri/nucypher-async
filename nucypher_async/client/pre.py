@@ -22,9 +22,9 @@ from nucypher_core.umbral import (
 
 from ..drivers.identity import IdentityAddress
 from ..drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
-from ..learner import Learner
 from ..master_key import MasterKey
-from ..verification import PublicUrsula
+from ..p2p.learner import Learner
+from ..p2p.verification import PublicUrsula
 
 
 @frozen

@@ -9,11 +9,11 @@ from ..base.http_server import BaseHTTPServer, ASGI3Framework
 from ..base.porter import BasePorter
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_app, HTTPError
-from ..learner import Learner
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLPrivateKey, SSLCertificate
-from ..verification import PublicUrsula
+from ..p2p.learner import Learner
+from ..p2p.verification import PublicUrsula
 from .config import PorterServerConfig
 from .status import render_status
 

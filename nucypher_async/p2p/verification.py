@@ -1,9 +1,9 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
 from nucypher_core.umbral import Signer, PublicKey
 
-from .base.time import BaseClock
-from .drivers.identity import IdentityAddress, IdentityClientSession
-from .drivers.peer import (
+from ..base.time import BaseClock
+from ..drivers.identity import IdentityAddress, IdentityClientSession
+from ..drivers.peer import (
     PeerInfo,
     Contact,
     SecureContact,
@@ -11,8 +11,8 @@ from .drivers.peer import (
     PeerPrivateKey,
     PeerPublicKey,
 )
-from .domain import Domain
-from .ursula import Ursula
+from ..domain import Domain
+from ..ursula import Ursula
 
 
 class PeerVerificationError(PeerError):
