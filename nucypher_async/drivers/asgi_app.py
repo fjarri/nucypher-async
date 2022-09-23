@@ -20,6 +20,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 import trio
 
+from ..base.types import JSON
 from ..base.http_server import ASGI3Framework
 from ..base.peer import BasePeer, ServerSidePeerError, InactivePolicy
 from ..base.porter import BasePorter
@@ -60,7 +61,7 @@ async def peer_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> Re
     return Response(result_bytes)
 
 
-async def rest_api_call(logger: Logger, endpoint_future: Awaitable[str]) -> Response:
+async def rest_api_call(logger: Logger, endpoint_future: Awaitable[JSON]) -> Response:
     try:
         result_str = await endpoint_future
     except HTTPError as exc:
@@ -69,10 +70,7 @@ async def rest_api_call(logger: Logger, endpoint_future: Awaitable[str]) -> Resp
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
         return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    if isinstance(result_str, str):
-        return Response(result_str)
-    else:
-        return JSONResponse(result_str)
+    return JSONResponse(result_str)
 
 
 def make_lifespan(

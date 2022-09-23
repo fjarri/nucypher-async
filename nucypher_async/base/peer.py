@@ -49,7 +49,7 @@ class ServerSidePeerError(ABC, PeerError):
         ...
 
     def to_json(self) -> Dict[str, JSON]:
-        return dict(error=self.args[0], code=self.error_code())
+        return dict(error=self.args[0], code=self.error_code().value)
 
 
 def decode_peer_error(message: str) -> PeerError:

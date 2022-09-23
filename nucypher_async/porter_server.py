@@ -4,6 +4,7 @@ from typing import Tuple, List, Dict, Any, Iterable
 import trio
 from nucypher_core.umbral import VerifiedCapsuleFrag
 
+from .base.types import JSON
 from .base.http_server import BaseHTTPServer, ASGI3Framework
 from .base.porter import BasePorter
 from .drivers.identity import IdentityAddress
@@ -105,7 +106,8 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
         return nodes
 
-    async def endpoint_get_ursulas(self, request_json: Dict[str, Any]) -> Dict[str, Any]:
+    async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
+        assert isinstance(request_json, dict)  # TODO: use a proper JSON schema validator
         try:
             quantity = request_json["quantity"]
             if isinstance(quantity, str):
@@ -147,9 +149,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
 
         return dict(result=dict(ursulas=node_list), version="async-0.1.0-dev")
 
-    async def endpoint_retrieve_cfrags(
-        self, request_json: Dict[str, Any]
-    ) -> List[VerifiedCapsuleFrag]:
+    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> List[VerifiedCapsuleFrag]:
         raise NotImplementedError
 
     async def endpoint_status(self) -> str:

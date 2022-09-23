@@ -2,12 +2,26 @@
 # to be merged, here are our custom type annotations.
 # These are technically stricter than what the library accepts.
 
-from typing import Callable, Any, Generic, TypeVar, Sequence, MutableSequence, Iterable, overload
+from typing import (
+    Callable,
+    Any,
+    Generic,
+    TypeVar,
+    Sequence,
+    MutableSequence,
+    Iterable,
+    Protocol,
+    overload,
+)
+
+class Comparable(Protocol):
+    def __lt__(self, other: Comparable) -> bool: ...
+    def __eq__(self, other: object) -> bool: ...
 
 T = TypeVar("T")
 
 class SortedKeyList(MutableSequence[T]):
-    def __init__(self, key: Callable[[T], Any]): ...
+    def __init__(self, key: Callable[[T], Comparable]): ...
     def add(self, value: T) -> None: ...
     @overload
     def __getitem__(self, idx: int) -> T: ...
