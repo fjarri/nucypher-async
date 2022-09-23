@@ -63,14 +63,15 @@ async def peer_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> Re
 
 async def rest_api_call(logger: Logger, endpoint_future: Awaitable[JSON]) -> Response:
     try:
-        result_str = await endpoint_future
+        result = await endpoint_future
+        response = JSONResponse(result)
     except HTTPError as exc:
         return Response(exc.message, status_code=exc.status_code)
     except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
         return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return JSONResponse(result_str)
+    return response
 
 
 def make_lifespan(
