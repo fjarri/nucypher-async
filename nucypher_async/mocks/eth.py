@@ -34,8 +34,14 @@ class MockContract:
         assert isinstance(method, ReadMethod)
         args = method.inputs.decode_into_tuple(input_bytes)
         result = getattr(self, method.name)(*args)
-        # Note: assuming here that the result is a single value. Should be enough for mocks.
-        output_bytes = method.outputs.encode(result)
+        # Note: assuming here that if the result is a tuple,
+        # it's supposed to be encoded as several values.
+        # Should be fine for tests.
+        if isinstance(result, tuple):
+            results = result
+        else:
+            results = (result,)
+        output_bytes = method.outputs.encode(*results)
         return output_bytes
 
     def transact(self, address: Address, amount: Amount, data_bytes: bytes) -> None:
