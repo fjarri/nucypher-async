@@ -24,6 +24,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
         self._config = config
         self._logger = config.parent_logger.get_child("PorterServer")
         self.learner = Learner(
+            peer_client=config.peer_client,
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
@@ -141,7 +142,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
         node_list = [
             dict(
                 checksum_address=node.staking_provider_address.checksum,
-                uri=node.contact.uri,
+                uri=node.contact.uri(),
                 encrypting_key=bytes(node.encrypting_key).hex(),
             )
             for node in nodes
