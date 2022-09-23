@@ -62,13 +62,15 @@ class MockNetwork:
             await manager.run(self.nursery)
 
     async def stop_all(self) -> None:
-        async with trio.open_nursery() as nursery:
-            for _certificate, manager in self.known_servers.values():
-                nursery.start_soon(manager.shutdown)
+        for (host, port), (_certificate, manager) in self.known_servers.items():
+            await manager.shutdown()
 
 
 class MockHTTPClient:
     def __init__(self, mock_network: MockNetwork, host: str, certificate: SSLCertificate):
+        # TODO: a weird separation here: the target host's certificate
+        # is provided in the constructor, but then the target host can be selected
+        # at will in `_request()`.
         self._mock_network = mock_network
         self._host = host
         self._certificate = certificate
