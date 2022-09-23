@@ -1,4 +1,4 @@
-from typing import Dict, Set, cast
+from typing import Dict, Set, Tuple, List, cast
 
 from pons import Address, Amount, ContractABI, Client
 
@@ -34,6 +34,15 @@ class SimplePREApplication(MockContract):
 
     def isOperatorConfirmed(self, operator_address: Address) -> bool:
         return operator_address in self._confirmed_operators
+
+    def getActiveStakingProviders(
+        self, start_index: int, max_staking_providers: int
+    ) -> Tuple[int, List[Tuple[int, int]]]:
+        total = sum(amount.as_wei() for amount in self._stakes.values())
+        return total, [
+            (int.from_bytes(bytes(address), byteorder="big"), amount.as_wei())
+            for address, amount in self._stakes.items()
+        ]
 
     def mock_set_up(
         self,
