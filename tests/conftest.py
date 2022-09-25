@@ -7,7 +7,7 @@ import trio
 
 import nucypher_async.utils.logging as logging
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock, MockPeerClient
-from nucypher_async.ursula import Ursula
+from nucypher_async.characters import Ursula
 from nucypher_async.mocks import MockNetwork
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain

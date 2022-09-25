@@ -7,7 +7,7 @@ from .drivers.http_server import HTTPServerHandle
 from .drivers.peer import PeerHTTPServer
 from .drivers.identity import IdentityAccount
 from .master_key import EncryptedMasterKey
-from .ursula import Ursula
+from .characters import Ursula
 from .server import UrsulaServerConfig, PorterServerConfig, UrsulaServer, PorterServer
 
 

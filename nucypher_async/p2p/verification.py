@@ -12,7 +12,7 @@ from ..drivers.peer import (
     PeerPublicKey,
 )
 from ..domain import Domain
-from ..ursula import Ursula
+from ..characters import Ursula
 
 
 class PeerVerificationError(PeerError):

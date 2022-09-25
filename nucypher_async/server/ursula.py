@@ -18,7 +18,7 @@ from ..drivers.peer import (
     PeerPrivateKey,
     UrsulaInfo,
 )
-from ..ursula import Ursula
+from ..characters import Ursula
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..p2p.learner import Learner

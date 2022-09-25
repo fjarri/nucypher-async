@@ -9,9 +9,9 @@ from nucypher_core.umbral import (
     reencrypt,
 )
 
-from .drivers.identity import IdentityAccount
-from .drivers.peer import PeerPrivateKey
-from .master_key import MasterKey
+from ..drivers.identity import IdentityAccount
+from ..drivers.peer import PeerPrivateKey
+from ..master_key import MasterKey
 
 
 class Ursula:
