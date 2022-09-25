@@ -5,7 +5,7 @@ from nucypher_core import FleetStateChecksum
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact, UrsulaInfo
-from .verification import PublicUrsula
+from .verification import VerifiedUrsulaInfo
 
 
 class FleetState:
@@ -14,7 +14,7 @@ class FleetState:
     (of questionable usefulness, see https://github.com/nucypher/nucypher/issues/2876).
     """
 
-    def __init__(self, clock: BaseClock, this_node: Optional[PublicUrsula]):
+    def __init__(self, clock: BaseClock, this_node: Optional[VerifiedUrsulaInfo]):
         self._clock = clock
         self._my_address = this_node.staking_provider_address if this_node else None
         self._my_metadata = this_node.metadata if this_node else None

@@ -71,7 +71,8 @@ def _verify_peer_shared(
 
     if now < ursula_info.public_key.not_valid_before:
         raise PeerVerificationError(
-            "Peer public key will only become active " f"at {ursula_info.public_key.not_valid_before}"
+            "Peer public key will only become active "
+            f"at {ursula_info.public_key.not_valid_before}"
         )
 
     if now > ursula_info.public_key.not_valid_after:
@@ -85,7 +86,7 @@ def _verify_peer_shared(
         )
 
 
-class PublicUrsula(UrsulaInfo):
+class VerifiedUrsulaInfo(UrsulaInfo):
     @classmethod
     def generate(
         cls,
@@ -97,7 +98,7 @@ class PublicUrsula(UrsulaInfo):
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
-    ) -> "PublicUrsula":
+    ) -> "VerifiedUrsulaInfo":
         # TODO: use Ursula instead of several arguments
         public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
         payload = NodeMetadataPayload(
@@ -124,7 +125,7 @@ class PublicUrsula(UrsulaInfo):
         received_from: SecureContact,
         operator_address: IdentityAddress,
         domain: Domain,
-    ) -> "PublicUrsula":
+    ) -> "VerifiedUrsulaInfo":
 
         _verify_peer_shared(
             clock=clock,
@@ -151,7 +152,7 @@ class PublicUrsula(UrsulaInfo):
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
-    ) -> "PublicUrsula":
+    ) -> "VerifiedUrsulaInfo":
 
         _verify_peer_shared(
             clock=clock,

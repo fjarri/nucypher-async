@@ -9,7 +9,7 @@ from mako.template import Template
 
 from ..base.time import BaseClock
 from ..p2p.fleet_sensor import FleetSensor
-from ..p2p.verification import PublicUrsula
+from ..p2p.verification import VerifiedUrsulaInfo
 from ..utils.logging import Logger
 from ..drivers.asgi_app import HTTPError
 from ..version import CodeInfo
@@ -24,7 +24,7 @@ def render_status(
     clock: BaseClock,
     fleet_sensor: FleetSensor,
     started_at: arrow.Arrow,
-    node: Optional[PublicUrsula] = None,
+    node: Optional[VerifiedUrsulaInfo] = None,
 ) -> str:
 
     code_info = CodeInfo.collect()

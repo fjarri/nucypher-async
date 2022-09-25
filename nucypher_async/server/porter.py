@@ -13,7 +13,7 @@ from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLPrivateKey, SSLCertificate
 from ..p2p.learner import Learner
-from ..p2p.verification import PublicUrsula
+from ..p2p.verification import VerifiedUrsulaInfo
 from .config import PorterServerConfig
 from .status import render_status
 
@@ -86,7 +86,7 @@ class PorterServer(BaseHTTPServer, BasePorter):
         quantity: int,
         include_ursulas: Iterable[IdentityAddress],
         exclude_ursulas: Iterable[IdentityAddress],
-    ) -> List[PublicUrsula]:
+    ) -> List[VerifiedUrsulaInfo]:
         nodes = []
 
         async with self.learner.verified_nodes_iter(

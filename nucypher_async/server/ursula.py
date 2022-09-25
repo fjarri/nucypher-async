@@ -22,7 +22,7 @@ from ..ursula import Ursula
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..p2p.learner import Learner
-from ..p2p.verification import PublicUrsula, verify_staking_local, PeerVerificationError
+from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
 from .status import render_status
 from .config import UrsulaServerConfig
 
@@ -54,11 +54,11 @@ class UrsulaServer(BasePeerServer, BasePeer):
         self._storage = config.storage
 
         ursula_info = self._storage.get_my_ursula_info()
-        maybe_node: Optional[PublicUrsula] = None
+        maybe_node: Optional[VerifiedUrsulaInfo] = None
         if ursula_info is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
-                maybe_node = PublicUrsula.checked_local(
+                maybe_node = VerifiedUrsulaInfo.checked_local(
                     clock=self._clock,
                     ursula_info=ursula_info,
                     ursula=self.ursula,
@@ -74,7 +74,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         if maybe_node is None:
             self._logger.debug("Generating new metadata")
-            self._node = PublicUrsula.generate(
+            self._node = VerifiedUrsulaInfo.generate(
                 clock=self._clock,
                 peer_private_key=self.ursula.peer_private_key(),
                 signer=self.ursula.signer,

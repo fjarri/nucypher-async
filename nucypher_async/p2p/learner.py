@@ -29,7 +29,7 @@ from ..storage import InMemoryStorage, BaseStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
 from ..utils.producer import producer
-from .verification import PublicUrsula, verify_staking_remote, PeerVerificationError
+from .verification import VerifiedUrsulaInfo, verify_staking_remote, PeerVerificationError
 from .fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
 
@@ -83,7 +83,7 @@ class Learner:
         self,
         domain: Domain,
         identity_client: IdentityClient,
-        this_node: Optional[PublicUrsula] = None,
+        this_node: Optional[VerifiedUrsulaInfo] = None,
         peer_client: Optional[PeerClient] = None,
         seed_contacts: Optional[Iterable[Contact]] = None,
         parent_logger: Logger = NULL_LOGGER,
@@ -127,7 +127,7 @@ class Learner:
         """
         self._seed_contacts = list(seed_contacts)
 
-    def _test_add_verified_node(self, node: PublicUrsula, stake: AmountT) -> None:
+    def _test_add_verified_node(self, node: VerifiedUrsulaInfo, stake: AmountT) -> None:
         """
         This function is for tests only.
         Supposed to be called before starting the server.
@@ -138,7 +138,7 @@ class Learner:
     @producer
     async def verified_nodes_iter(
         self,
-        yield_: Callable[[PublicUrsula], Awaitable[None]],
+        yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
         addresses: Iterable[IdentityAddress],
         verified_within: Optional[float] = None,
     ) -> None:
@@ -190,7 +190,7 @@ class Learner:
     @producer
     async def random_verified_nodes_iter(
         self,
-        yield_: Callable[[PublicUrsula], Awaitable[None]],
+        yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
         amount: int,
         overhead: int = 0,
         verified_within: Optional[float] = None,
@@ -221,7 +221,7 @@ class Learner:
         drawn = 0
         failed = 0
 
-        send_channel, receive_channel = trio.open_memory_channel[Optional[PublicUrsula]](0)
+        send_channel, receive_channel = trio.open_memory_channel[Optional[VerifiedUrsulaInfo]](0)
 
         async def verify_and_yield(drawn_entry: StakingProviderEntry) -> None:
             node = await self._verify_contact_and_report(drawn_entry.contact)
@@ -259,7 +259,7 @@ class Learner:
                         nursery.cancel_scope.cancel()
                         return
 
-    async def _verify_contact(self, contact: Contact) -> Tuple[PublicUrsula, AmountT]:
+    async def _verify_contact(self, contact: Contact) -> Tuple[VerifiedUrsulaInfo, AmountT]:
         self._logger.debug("Verifying a contact {}", contact)
 
         # TODO: merge all of it into `public_information()`?
@@ -274,13 +274,13 @@ class Learner:
 
         # TODO: separate stateless checks (can be done once) and transient checks
         # (expiry, staking status etc), and only perform the former if the metadata changed.
-        node = PublicUrsula.checked_remote(
+        node = VerifiedUrsulaInfo.checked_remote(
             self._clock, ursula_info, secure_contact, operator_address, self.domain
         )
 
         return node, staked
 
-    async def _learn_from_node(self, node: PublicUrsula) -> List[UrsulaInfo]:
+    async def _learn_from_node(self, node: VerifiedUrsulaInfo) -> List[UrsulaInfo]:
         self._logger.debug(
             "Learning from {} ({})",
             node.contact,
@@ -303,7 +303,7 @@ class Learner:
 
         return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
 
-    async def _learn_from_node_and_report(self, node: PublicUrsula) -> None:
+    async def _learn_from_node_and_report(self, node: VerifiedUrsulaInfo) -> None:
         with self.fleet_sensor.try_lock_contact_for_learning(node.contact) as (
             contact,
             result,
@@ -340,7 +340,7 @@ class Learner:
                 # We just need to signal that the learning ended, no info to return
                 result.set(None)
 
-    async def _verify_contact_and_report(self, contact: Contact) -> Optional[PublicUrsula]:
+    async def _verify_contact_and_report(self, contact: Contact) -> Optional[VerifiedUrsulaInfo]:
         with self.fleet_sensor.try_lock_contact_for_verification(contact) as (contact_, result):
             if contact_ is None:
                 self._logger.debug("{} is already being verified", contact)
@@ -377,7 +377,7 @@ class Learner:
 
     # External API
 
-    def metadata_to_announce(self) -> List[PublicUrsula]:
+    def metadata_to_announce(self) -> List[VerifiedUrsulaInfo]:
         my_metadata = [self._this_node] if self._this_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 

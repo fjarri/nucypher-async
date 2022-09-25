@@ -29,12 +29,12 @@ from typing_extensions import ParamSpec, Concatenate
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT
 from ..drivers.peer import Contact, UrsulaInfo
-from .verification import PublicUrsula
+from .verification import VerifiedUrsulaInfo
 
 
 @frozen
 class NodeEntry:
-    node: PublicUrsula
+    node: VerifiedUrsulaInfo
     verified_at: arrow.Arrow
     staked_amount: AmountT
 
@@ -79,7 +79,7 @@ class VerifiedNodesDB:
 
     def add_node(
         self,
-        node: PublicUrsula,
+        node: VerifiedUrsulaInfo,
         staked_amount: AmountT,
         verified_at: arrow.Arrow,
         verify_at: arrow.Arrow,
@@ -100,11 +100,11 @@ class VerifiedNodesDB:
                 del self._verify_at[i]
                 break
 
-    def get_verified_at(self, node: PublicUrsula) -> arrow.Arrow:
+    def get_verified_at(self, node: VerifiedUrsulaInfo) -> arrow.Arrow:
         return self._nodes[node.staking_provider_address].verified_at
 
     def update_verify_at(
-        self, node: PublicUrsula, verified_at: arrow.Arrow, verify_at: arrow.Arrow
+        self, node: VerifiedUrsulaInfo, verified_at: arrow.Arrow, verify_at: arrow.Arrow
     ) -> None:
         assert node.staking_provider_address in self._nodes
 
@@ -127,7 +127,7 @@ class VerifiedNodesDB:
                 self._del_verify_at(entry.node)
                 break
 
-    def all_nodes(self) -> List[PublicUrsula]:
+    def all_nodes(self) -> List[VerifiedUrsulaInfo]:
         return [entry.node for entry in self._nodes.values()]
 
     def has_contact(self, contact: Contact) -> bool:
@@ -258,7 +258,7 @@ class FleetSensor:
     def __init__(
         self,
         clock: BaseClock,
-        this_node: Optional[PublicUrsula],
+        this_node: Optional[VerifiedUrsulaInfo],
     ):
 
         self._clock = clock
@@ -275,7 +275,7 @@ class FleetSensor:
 
         self._locked_contacts_for_learning: Dict[Contact, BroadcastValue[None]] = {}
         self._locked_contacts_for_verification: Dict[
-            Contact, BroadcastValue[Optional[PublicUrsula]]
+            Contact, BroadcastValue[Optional[VerifiedUrsulaInfo]]
         ] = {}
 
         self.new_verified_nodes_event = trio.Event()
@@ -283,7 +283,7 @@ class FleetSensor:
 
     def _calculate_next_verification(
         self,
-        node: PublicUrsula,
+        node: VerifiedUrsulaInfo,
         verified_at: arrow.Arrow,
         previously_verified_at: Optional[arrow.Arrow] = None,
     ) -> arrow.Arrow:
@@ -313,7 +313,7 @@ class FleetSensor:
         self._verified_nodes_db.remove_by_contact(contact)
 
     @_next_verification_time_may_change
-    def report_verified_node(self, node: PublicUrsula, staked_amount: AmountT) -> None:
+    def report_verified_node(self, node: VerifiedUrsulaInfo, staked_amount: AmountT) -> None:
 
         if (
             self._my_staking_provider_address
@@ -380,12 +380,12 @@ class FleetSensor:
         self._staking_providers = providers
         self._staking_providers_updated = self._clock.utcnow()
 
-    def verified_metadata(self) -> List[PublicUrsula]:
+    def verified_metadata(self) -> List[VerifiedUrsulaInfo]:
         return self._verified_nodes_db.all_nodes()
 
     def _add_node(
         self,
-        node: PublicUrsula,
+        node: VerifiedUrsulaInfo,
         staked_amount: AmountT,
         verified_at: arrow.Arrow,
         verify_at: arrow.Arrow,
@@ -452,12 +452,12 @@ class FleetSensor:
     @contextmanager
     def try_lock_contact_for_verification(
         self, contact: Contact
-    ) -> Iterator[Tuple[Optional[Contact], BroadcastValue[Optional[PublicUrsula]]]]:
+    ) -> Iterator[Tuple[Optional[Contact], BroadcastValue[Optional[VerifiedUrsulaInfo]]]]:
         if contact in self._locked_contacts_for_verification:
             yield None, self._locked_contacts_for_verification[contact]
             return
 
-        bval: BroadcastValue[Optional[PublicUrsula]] = BroadcastValue()
+        bval: BroadcastValue[Optional[VerifiedUrsulaInfo]] = BroadcastValue()
         self._locked_contacts_for_verification[contact] = bval
         try:
             yield contact, bval
@@ -475,7 +475,7 @@ class FleetSensor:
             now, contacts_num, exclude=self._locked_contacts_for_verification.keys()
         )
 
-    def get_nodes_to_learn_from(self, nodes_num: int) -> List[PublicUrsula]:
+    def get_nodes_to_learn_from(self, nodes_num: int) -> List[VerifiedUrsulaInfo]:
         entries = [
             entry
             for entry in self._verified_nodes_db._nodes.values()
