@@ -141,7 +141,7 @@ class SecureContact:
         return f"https://{self.contact.host}:{self.contact.port}"
 
 
-class PeerInfo:
+class UrsulaInfo:
     def __init__(self, metadata: NodeMetadata):
         self.metadata = metadata
 
@@ -193,7 +193,7 @@ class PeerInfo:
         return bytes(self.metadata)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "PeerInfo":
+    def from_bytes(cls, data: bytes) -> "UrsulaInfo":
         return cls(NodeMetadata.from_bytes(data))
 
 

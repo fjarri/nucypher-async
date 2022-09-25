@@ -28,7 +28,7 @@ from typing_extensions import ParamSpec, Concatenate
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT
-from ..drivers.peer import Contact, PeerInfo
+from ..drivers.peer import Contact, UrsulaInfo
 from .verification import PublicUrsula
 
 
@@ -93,7 +93,7 @@ class VerifiedNodesDB:
             VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
         )
 
-    def _del_verify_at(self, node: PeerInfo) -> None:
+    def _del_verify_at(self, node: UrsulaInfo) -> None:
         # TODO: we really need a SortedDict type
         for i in range(len(self._verify_at)):
             if self._verify_at[i].address == node.staking_provider_address:
@@ -116,7 +116,7 @@ class VerifiedNodesDB:
             VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
         )
 
-    def remove_node(self, node: PeerInfo) -> None:
+    def remove_node(self, node: UrsulaInfo) -> None:
         del self._nodes[node.staking_provider_address]
         self._del_verify_at(node)
 
@@ -356,7 +356,7 @@ class FleetSensor:
 
     @_next_verification_time_may_change
     def report_active_learning_results(
-        self, teacher_node: PeerInfo, metadatas: Iterable[PeerInfo]
+        self, teacher_node: UrsulaInfo, metadatas: Iterable[UrsulaInfo]
     ) -> None:
         for metadata in metadatas:
             if metadata.contact == teacher_node.contact and bytes(metadata) != bytes(teacher_node):
@@ -365,7 +365,7 @@ class FleetSensor:
 
     @_next_verification_time_may_change
     def report_passive_learning_results(
-        self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]
+        self, sender_host: Optional[str], metadatas: Iterable[UrsulaInfo]
     ) -> None:
 
         # Filter out only the contact(s) with `remote_address`.
@@ -394,7 +394,7 @@ class FleetSensor:
         self.new_verified_nodes_event.set()
         self.new_verified_nodes_event = trio.Event()
 
-    def _add_contacts(self, metadatas: Iterable[PeerInfo]) -> None:
+    def _add_contacts(self, metadatas: Iterable[UrsulaInfo]) -> None:
         for metadata in metadatas:
             contact = metadata.contact
             address = metadata.staking_provider_address

@@ -22,7 +22,7 @@ from nucypher_core import MetadataRequest
 from ..base.peer import PeerError
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
-from ..drivers.peer import Contact, PeerClient, PeerInfo
+from ..drivers.peer import Contact, PeerClient, UrsulaInfo
 from ..drivers.time import SystemClock
 from ..domain import Domain
 from ..storage import InMemoryStorage, BaseStorage
@@ -265,22 +265,22 @@ class Learner:
         # TODO: merge all of it into `public_information()`?
         secure_contact = await self._peer_client.handshake(contact)
         metadata = await self._peer_client.public_information(secure_contact)
-        peer_info = PeerInfo(metadata)
+        ursula_info = UrsulaInfo(metadata)
 
         async with self._identity_client.session() as session:
-            staking_provider_address = peer_info.staking_provider_address
+            staking_provider_address = ursula_info.staking_provider_address
             operator_address = await verify_staking_remote(session, staking_provider_address)
             staked = await session.get_staked_amount(staking_provider_address)
 
         # TODO: separate stateless checks (can be done once) and transient checks
         # (expiry, staking status etc), and only perform the former if the metadata changed.
         node = PublicUrsula.checked_remote(
-            self._clock, peer_info, secure_contact, operator_address, self.domain
+            self._clock, ursula_info, secure_contact, operator_address, self.domain
         )
 
         return node, staked
 
-    async def _learn_from_node(self, node: PublicUrsula) -> List[PeerInfo]:
+    async def _learn_from_node(self, node: PublicUrsula) -> List[UrsulaInfo]:
         self._logger.debug(
             "Learning from {} ({})",
             node.contact,
@@ -301,7 +301,7 @@ class Learner:
             # TODO: should it be a separate error class?
             raise PeerVerificationError("Failed to verify MetadataResponse") from exc
 
-        return [PeerInfo(metadata) for metadata in payload.announce_nodes]
+        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
 
     async def _learn_from_node_and_report(self, node: PublicUrsula) -> None:
         with self.fleet_sensor.try_lock_contact_for_learning(node.contact) as (
@@ -381,7 +381,7 @@ class Learner:
         my_metadata = [self._this_node] if self._this_node else []
         return my_metadata + self.fleet_sensor.verified_metadata()
 
-    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[PeerInfo]) -> None:
+    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[UrsulaInfo]) -> None:
 
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)

@@ -16,7 +16,7 @@ from ..drivers.peer import (
     BasePeerServer,
     SecureContact,
     PeerPrivateKey,
-    PeerInfo,
+    UrsulaInfo,
 )
 from ..ursula import Ursula
 from ..utils import BackgroundTask
@@ -53,14 +53,14 @@ class UrsulaServer(BasePeerServer, BasePeer):
         self._logger = config.parent_logger.get_child("UrsulaServer")
         self._storage = config.storage
 
-        peer_info = self._storage.get_my_peer_info()
+        ursula_info = self._storage.get_my_ursula_info()
         maybe_node: Optional[PublicUrsula] = None
-        if peer_info is not None:
+        if ursula_info is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
                 maybe_node = PublicUrsula.checked_local(
                     clock=self._clock,
-                    peer_info=peer_info,
+                    ursula_info=ursula_info,
                     ursula=self.ursula,
                     staking_provider_address=staking_provider_address,
                     contact=config.contact,
@@ -84,7 +84,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
                 contact=config.contact,
                 domain=config.domain,
             )
-            self._storage.set_my_peer_info(self._node)
+            self._storage.set_my_ursula_info(self._node)
         else:
             self._node = maybe_node
 
@@ -168,14 +168,14 @@ class UrsulaServer(BasePeerServer, BasePeer):
             )
             return MetadataResponse(self.ursula.signer, response_payload)
 
-        new_metadatas = [PeerInfo(m) for m in request.announce_nodes]
+        new_metadatas = [UrsulaInfo(m) for m in request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
         return await self.node_metadata_get()
 
     async def public_information(self) -> NodeMetadata:
-        # TODO: can we just return PeerInfo?
+        # TODO: can we just return UrsulaInfo?
         return self._node.metadata
 
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:

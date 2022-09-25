@@ -4,7 +4,7 @@ from nucypher_core.umbral import Signer, PublicKey
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import (
-    PeerInfo,
+    UrsulaInfo,
     Contact,
     SecureContact,
     PeerError,
@@ -49,43 +49,43 @@ async def verify_staking_remote(
 
 def _verify_peer_shared(
     clock: BaseClock,
-    peer_info: PeerInfo,
+    ursula_info: UrsulaInfo,
     expected_contact: Contact,
     expected_domain: Domain,
     expected_operator_address: IdentityAddress,
 ) -> None:
 
-    if peer_info.contact != expected_contact:
+    if ursula_info.contact != expected_contact:
         raise PeerVerificationError(
             f"Contact info mismatch: expected {expected_contact}, "
-            f"{peer_info.contact} in the metadata"
+            f"{ursula_info.contact} in the metadata"
         )
 
-    if peer_info.operator_address != expected_operator_address:
+    if ursula_info.operator_address != expected_operator_address:
         raise PeerVerificationError(
-            f"Invalid decentralized identity evidence: derived {peer_info.operator_address}, "
+            f"Invalid decentralized identity evidence: derived {ursula_info.operator_address}, "
             f"but the bonded address is {expected_operator_address}"
         )
 
     now = clock.utcnow()
 
-    if now < peer_info.public_key.not_valid_before:
+    if now < ursula_info.public_key.not_valid_before:
         raise PeerVerificationError(
-            "Peer public key will only become active " f"at {peer_info.public_key.not_valid_before}"
+            "Peer public key will only become active " f"at {ursula_info.public_key.not_valid_before}"
         )
 
-    if now > peer_info.public_key.not_valid_after:
+    if now > ursula_info.public_key.not_valid_after:
         raise PeerVerificationError(
-            f"Peer public key expired at {peer_info.public_key.not_valid_after}"
+            f"Peer public key expired at {ursula_info.public_key.not_valid_after}"
         )
 
-    if peer_info.domain != expected_domain:
+    if ursula_info.domain != expected_domain:
         raise PeerVerificationError(
-            f"Domain mismatch: expected {expected_domain}, {peer_info.domain} in the metadata"
+            f"Domain mismatch: expected {expected_domain}, {ursula_info.domain} in the metadata"
         )
 
 
-class PublicUrsula(PeerInfo):
+class PublicUrsula(UrsulaInfo):
     @classmethod
     def generate(
         cls,
@@ -120,7 +120,7 @@ class PublicUrsula(PeerInfo):
     def checked_remote(
         cls,
         clock: BaseClock,
-        peer_info: PeerInfo,
+        ursula_info: UrsulaInfo,
         received_from: SecureContact,
         operator_address: IdentityAddress,
         domain: Domain,
@@ -128,25 +128,25 @@ class PublicUrsula(PeerInfo):
 
         _verify_peer_shared(
             clock=clock,
-            peer_info=peer_info,
+            ursula_info=ursula_info,
             expected_contact=received_from.contact,
             expected_domain=domain,
             expected_operator_address=operator_address,
         )
 
-        if peer_info.public_key != received_from.public_key:
+        if ursula_info.public_key != received_from.public_key:
             raise PeerVerificationError(
                 "Peer public key mismatch between the payload "
                 "and the contact it was received from"
             )
 
-        return cls(peer_info.metadata)
+        return cls(ursula_info.metadata)
 
     @classmethod
     def checked_local(
         cls,
         clock: BaseClock,
-        peer_info: PeerInfo,
+        ursula_info: UrsulaInfo,
         ursula: Ursula,
         staking_provider_address: IdentityAddress,
         contact: Contact,
@@ -155,37 +155,37 @@ class PublicUrsula(PeerInfo):
 
         _verify_peer_shared(
             clock=clock,
-            peer_info=peer_info,
+            ursula_info=ursula_info,
             expected_contact=contact,
             expected_domain=domain,
             expected_operator_address=ursula.operator_address,
         )
 
-        if not ursula.peer_private_key().matches(peer_info.public_key):
+        if not ursula.peer_private_key().matches(ursula_info.public_key):
             raise PeerVerificationError(
                 "The public key in the metadata does not match the given private key"
             )
 
-        if peer_info.staking_provider_address != staking_provider_address:
+        if ursula_info.staking_provider_address != staking_provider_address:
             raise PeerVerificationError(
                 "Staking provider address mismatch: "
-                f"{peer_info.staking_provider_address} in the metadata, "
+                f"{ursula_info.staking_provider_address} in the metadata, "
                 f"{staking_provider_address} recorded in the blockchain"
             )
 
-        if peer_info.verifying_key != ursula.signer.verifying_key():
+        if ursula_info.verifying_key != ursula.signer.verifying_key():
             raise PeerVerificationError(
-                f"Verifying key mismatch: {peer_info.verifying_key} in the metadata, "
+                f"Verifying key mismatch: {ursula_info.verifying_key} in the metadata, "
                 f"{ursula.signer.verifying_key()} derived from the master key"
             )
 
-        if peer_info.encrypting_key != ursula.encrypting_key:
+        if ursula_info.encrypting_key != ursula.encrypting_key:
             raise PeerVerificationError(
-                f"Encrypting key mismatch: {peer_info.encrypting_key} in the metadata, "
+                f"Encrypting key mismatch: {ursula_info.encrypting_key} in the metadata, "
                 f"{ursula.encrypting_key} derived from the master key"
             )
 
-        return cls(peer_info.metadata)
+        return cls(ursula_info.metadata)
 
     def __str__(self) -> str:
         return f"RemoteUrsula({self.staking_provider_address.checksum})"

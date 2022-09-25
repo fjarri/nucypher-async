@@ -4,7 +4,7 @@ from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import Contact, PeerInfo
+from ..drivers.peer import Contact, UrsulaInfo
 from .verification import PublicUrsula
 
 
@@ -18,18 +18,18 @@ class FleetState:
         self._clock = clock
         self._my_address = this_node.staking_provider_address if this_node else None
         self._my_metadata = this_node.metadata if this_node else None
-        self._metadatas: Dict[IdentityAddress, PeerInfo] = {}
+        self._metadatas: Dict[IdentityAddress, UrsulaInfo] = {}
         self._contacts: Dict[Contact, IdentityAddress] = {}
         self._checksum: Optional[FleetStateChecksum] = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
 
-    def _add_metadata(self, metadata: PeerInfo) -> None:
+    def _add_metadata(self, metadata: UrsulaInfo) -> None:
         address = metadata.staking_provider_address
         contact = metadata.contact
         self._metadatas[address] = metadata
         self._contacts[contact] = address
 
-    def add_metadatas(self, metadatas: Iterable[PeerInfo]) -> None:
+    def add_metadatas(self, metadatas: Iterable[UrsulaInfo]) -> None:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address
