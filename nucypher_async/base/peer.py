@@ -121,7 +121,7 @@ _PEER_ERROR_CODE_TO_CLASS: Dict[PeerErrorCode, Callable[[str], ServerSidePeerErr
 }
 
 
-class BasePeer(ABC):
+class BaseUrsulaServer(ABC):
     @abstractmethod
     async def start(self, nursery: trio.Nursery) -> None:
         ...

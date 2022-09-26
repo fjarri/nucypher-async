@@ -4,7 +4,7 @@ import trio
 import click
 
 from .drivers.http_server import HTTPServerHandle
-from .drivers.peer import PeerHTTPServer
+from .drivers.peer import UrsulaHTTPServer
 from .drivers.identity import IdentityAccount
 from .master_key import EncryptedMasterKey
 from .characters import Ursula
@@ -78,7 +78,7 @@ def main() -> None:
 @click.argument("geth_password")
 def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
-    handle = HTTPServerHandle(PeerHTTPServer(server))
+    handle = HTTPServerHandle(UrsulaHTTPServer(server))
     trio.run(handle)
 
 

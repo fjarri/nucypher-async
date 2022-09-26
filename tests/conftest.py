@@ -12,7 +12,7 @@ from nucypher_async.mocks import MockNetwork
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain
 from nucypher_async.server import UrsulaServerConfig, UrsulaServer
-from nucypher_async.drivers.peer import Contact, PeerHTTPServer
+from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
 from nucypher_async.storage import InMemoryStorage
 
 
@@ -80,7 +80,7 @@ async def lonely_ursulas(
 
         server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
         servers.append(server)
-        mock_network.add_server(PeerHTTPServer(server))
+        mock_network.add_server(UrsulaHTTPServer(server))
 
     return servers
 

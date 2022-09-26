@@ -17,7 +17,7 @@ from nucypher_async.mocks import (
 from nucypher_async.utils.logging import Logger
 from nucypher_async.utils.ssl import SSLPrivateKey, SSLCertificate
 from nucypher_async.storage import InMemoryStorage
-from nucypher_async.drivers.peer import Contact, PeerHTTPServer
+from nucypher_async.drivers.peer import Contact
 
 
 @pytest.fixture

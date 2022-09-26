@@ -5,7 +5,7 @@ import pytest
 
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.peer import PeerClient, Contact, PeerHTTPServer
+from nucypher_async.drivers.peer import PeerClient, Contact, UrsulaHTTPServer
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.characters import Ursula
@@ -39,7 +39,7 @@ def ursula_server() -> UrsulaServer:
 async def test_client_real_server(
     nursery: trio.Nursery, capsys: pytest.CaptureFixture[str], ursula_server: UrsulaServer
 ) -> None:
-    handle = HTTPServerHandle(PeerHTTPServer(ursula_server))
+    handle = HTTPServerHandle(UrsulaHTTPServer(ursula_server))
     await nursery.start(handle)
 
     client = PeerClient()

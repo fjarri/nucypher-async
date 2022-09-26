@@ -23,7 +23,7 @@ from nucypher_core import (
 from nucypher_core.umbral import PublicKey
 
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
-from ..base.peer import PeerError, BasePeer, decode_peer_error, InvalidMessage
+from ..base.peer import PeerError, BaseUrsulaServer, decode_peer_error, InvalidMessage
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
@@ -292,17 +292,17 @@ class BasePeerServer(ABC):
     def peer_private_key(self) -> PeerPrivateKey:
         ...
 
-    @abstractmethod
-    def peer(self) -> BasePeer:
-        ...
+
+class BasePeerAndUrsulaServer(BasePeerServer, BaseUrsulaServer):
+    ...
 
 
-class PeerHTTPServer(BaseHTTPServer):
+class UrsulaHTTPServer(BaseHTTPServer):
     """
     An adapter from peer server to HTTP server.
     """
 
-    def __init__(self, server: BasePeerServer):
+    def __init__(self, server: BasePeerAndUrsulaServer):
         self.server = server
 
     def host_and_port(self) -> Tuple[str, int]:
@@ -316,4 +316,4 @@ class PeerHTTPServer(BaseHTTPServer):
         return self.server.peer_private_key()._as_ssl_private_key()
 
     def into_asgi_app(self) -> ASGI3Framework:
-        return make_peer_asgi_app(self.server.peer())
+        return make_peer_asgi_app(self.server)

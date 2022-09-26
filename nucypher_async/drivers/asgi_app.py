@@ -22,7 +22,7 @@ import trio
 
 from ..base.types import JSON
 from ..base.http_server import ASGI3Framework
-from ..base.peer import BasePeer, ServerSidePeerError, InactivePolicy
+from ..base.peer import BaseUrsulaServer, ServerSidePeerError, InactivePolicy
 from ..base.porter import BasePorter
 from ..utils.logging import Logger
 
@@ -93,7 +93,7 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_peer_asgi_app(peer: BasePeer) -> ASGI3Framework:
+def make_peer_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """

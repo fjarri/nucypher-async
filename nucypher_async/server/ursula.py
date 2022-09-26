@@ -10,10 +10,10 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from ..base.peer import BasePeer, InactivePolicy, GenericPeerError
+from ..base.peer import BaseUrsulaServer, InactivePolicy, GenericPeerError
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import (
-    BasePeerServer,
+    BasePeerAndUrsulaServer,
     SecureContact,
     PeerPrivateKey,
     UrsulaInfo,
@@ -27,7 +27,7 @@ from .status import render_status
 from .config import UrsulaServerConfig
 
 
-class UrsulaServer(BasePeerServer, BasePeer):
+class UrsulaServer(BasePeerAndUrsulaServer):
     @classmethod
     async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig) -> "UrsulaServer":
 
@@ -118,9 +118,6 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
     def logger(self) -> Logger:
         return self._logger
-
-    def peer(self) -> BasePeer:
-        return self
 
     async def start(self, nursery: trio.Nursery) -> None:
         assert not self.started
