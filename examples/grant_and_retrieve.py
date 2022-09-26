@@ -1,22 +1,32 @@
 import os
-from typing import NamedTuple
+from typing import NamedTuple, Tuple, List
 
 import trio
+import trio.testing
 from eth_account import Account
+from hexbytes import HexBytes
 
-from nucypher_async.ursula import Ursula
-from nucypher_async.ursula_server import UrsulaServer
-from nucypher_async.learner import Learner
-from nucypher_async.config import UrsulaServerConfig
+from nucypher_async.characters import Ursula
+from nucypher_async.server import UrsulaServer, UrsulaServerConfig
+from nucypher_async.p2p.learner import Learner
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
 from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
 from nucypher_async.drivers.http_server import HTTPServerHandle
-from nucypher_async.drivers.peer import Contact, PeerClient, PeerHTTPServer
+from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
 from nucypher_async.storage import InMemoryStorage
-from nucypher_async.drivers.time import Clock, SystemClock
+from nucypher_async.base.time import BaseClock
+from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
 from nucypher_async.domain import Domain
-from nucypher_async.pre import Alice, Bob, RemoteAlice, RemoteBob, encrypt
+from nucypher_async.client.pre import (
+    Alice,
+    Bob,
+    RemoteAlice,
+    RemoteBob,
+    encrypt,
+    MessageKit,
+    Policy,
+)
 from nucypher_async.utils.logging import Logger, ConsoleHandler, Level
 
 
@@ -34,14 +44,14 @@ class Context(NamedTuple):
     domain: Domain
     identity_client: IdentityClient
     payment_client: PaymentClient
-    seed_contact: Contact
-    clock: Clock
+    clock: BaseClock
 
 
-async def run_local_ursula_fleet(context, nursery):
+async def run_local_ursula_fleet(
+    context: Context, nursery: trio.Nursery
+) -> Tuple[List[HTTPServerHandle], Contact]:
 
     handles = []
-    contacts = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
         ursula = Ursula()
@@ -51,6 +61,8 @@ async def run_local_ursula_fleet(context, nursery):
             seed_contacts = [Contact(LOCALHOST, PORT_BASE)]
         else:
             seed_contacts = []
+
+        assert isinstance(context.identity_client, MockIdentityClient)
 
         # Initialize the newly created staking provider and operator
         staking_provider_account = IdentityAccount.random()
@@ -73,20 +85,22 @@ async def run_local_ursula_fleet(context, nursery):
         )
 
         server = await UrsulaServer.async_init(ursula, config)
-        handle = HTTPServerHandle(PeerHTTPServer(server))
+        handle = HTTPServerHandle(UrsulaHTTPServer(server))
         await nursery.start(handle)
         handles.append(handle)
 
     return handles, Contact(LOCALHOST, PORT_BASE)
 
 
-async def alice_grants(context, alice, remote_bob):
+async def alice_grants(
+    context: Context, seed_contact: Contact, alice: Alice, remote_bob: RemoteBob
+) -> Tuple[RemoteAlice, Policy]:
 
     learner = Learner(
         identity_client=context.identity_client,
         domain=context.domain,
         parent_logger=context.logger.get_child("Learner-Alice"),
-        seed_contacts=[context.seed_contact],
+        seed_contacts=[seed_contact],
         clock=context.clock,
     )
 
@@ -106,13 +120,20 @@ async def alice_grants(context, alice, remote_bob):
     return alice.public_info(), policy
 
 
-async def bob_decrypts(context, bob, remote_alice, policy, message_kit):
+async def bob_decrypts(
+    context: Context,
+    seed_contact: Contact,
+    bob: Bob,
+    remote_alice: RemoteAlice,
+    policy: Policy,
+    message_kit: MessageKit,
+) -> bytes:
 
     learner = Learner(
         identity_client=context.identity_client,
         domain=context.domain,
         parent_logger=context.logger.get_child("Learner-Bob"),
-        seed_contacts=[context.seed_contact],
+        seed_contacts=[seed_contact],
         clock=context.clock,
     )
 
@@ -126,27 +147,23 @@ async def bob_decrypts(context, bob, remote_alice, policy, message_kit):
     return decrypted
 
 
-async def main(mocked=True):
+async def main(mocked: bool = True) -> None:
 
-    context = Context(
-        logger=Logger(handlers=[ConsoleHandler(level=Level.INFO)]),
-        domain=None,
-        identity_client=None,
-        payment_client=None,
-        seed_contact=None,
-        clock=None,
-    )
+    logger = Logger(handlers=[ConsoleHandler(level=Level.INFO)])
+    domain = Domain.IBEX
 
     if mocked:
-        context = context._replace(
-            domain=Domain.IBEX,
+        context = Context(
+            logger=logger,
+            domain=domain,
             identity_client=MockIdentityClient(),
             payment_client=MockPaymentClient(),
             clock=MockClock(),
         )
     else:
-        context = context._replace(
-            domain=Domain.IBEX,
+        context = Context(
+            logger=logger,
+            domain=domain,
             identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.IBEX),
             payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.IBEX),
             clock=SystemClock(),
@@ -161,8 +178,6 @@ async def main(mocked=True):
         else:
             seed_contact = Contact("ibex.nucypher.network", 9151)
 
-        context = context._replace(seed_contact=seed_contact)
-
         bob = Bob()
         remote_bob = bob.public_info()
 
@@ -171,20 +186,24 @@ async def main(mocked=True):
         else:
             # TODO: don't expose eth_account.Account
             acc = Account.from_key(
-                b"$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an"
+                HexBytes(
+                    b"$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an"
+                )
             )
             payment_account = PaymentAccount(acc)
 
         alice = Alice(payment_account=payment_account)
 
         context.logger.info("Alice grants")
-        remote_alice, policy = await alice_grants(context, alice, remote_bob)
+        remote_alice, policy = await alice_grants(context, seed_contact, alice, remote_bob)
 
         message = b"a secret message"
         message_kit = encrypt(policy.encrypting_key, message)
 
         context.logger.info("Bob retrieves")
-        decrypted = await bob_decrypts(context, bob, remote_alice, policy, message_kit)
+        decrypted = await bob_decrypts(
+            context, seed_contact, bob, remote_alice, policy, message_kit
+        )
 
         assert message == decrypted
         context.logger.info("Message decrypted successfully!")
@@ -195,15 +214,12 @@ async def main(mocked=True):
                 await handle.shutdown()
 
 
-def run_main(mocked=True):
+def run_main(mocked: bool = True) -> None:
     if mocked:
-        from trio.testing import MockClock
-
-        clock = MockClock(autojump_threshold=0)
+        clock = trio.testing.MockClock(autojump_threshold=0)
+        trio.run(main, mocked, clock=clock)
     else:
-        clock = None
-
-    trio.run(main, mocked, clock=clock)
+        trio.run(main, mocked)
 
 
 if __name__ == "__main__":
