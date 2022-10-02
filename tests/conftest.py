@@ -91,7 +91,7 @@ async def chain_seeded_ursulas(
 ) -> AsyncIterator[List[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
     # but the graph is fully connected.
-    for server1, server2 in itertools.pairwise(lonely_ursulas):
+    for server1, server2 in zip(lonely_ursulas[:-1], lonely_ursulas[1:]):
         server2.learner._test_set_seed_contacts([server1.secure_contact().contact])
 
     await mock_network.start_all()
