@@ -10,21 +10,21 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from .base.peer import BasePeer, InactivePolicy, GenericPeerError
-from .drivers.identity import IdentityAddress
-from .drivers.peer import (
+from ..base.peer import BasePeer, InactivePolicy, GenericPeerError
+from ..drivers.identity import IdentityAddress
+from ..drivers.peer import (
     BasePeerServer,
     SecureContact,
     PeerPrivateKey,
     PeerInfo,
 )
-from .learner import Learner
+from ..learner import Learner
+from ..ursula import Ursula
+from ..utils import BackgroundTask
+from ..utils.logging import Logger
+from ..verification import PublicUrsula, verify_staking_local, PeerVerificationError
 from .status import render_status
-from .ursula import Ursula
 from .config import UrsulaServerConfig
-from .utils import BackgroundTask
-from .utils.logging import Logger
-from .verification import PublicUrsula, verify_staking_local, PeerVerificationError
 
 
 class UrsulaServer(BasePeerServer, BasePeer):
@@ -199,8 +199,7 @@ class UrsulaServer(BasePeerServer, BasePeer):
 
         response = ReencryptionResponse(
             signer=self.ursula.signer,
-            capsules=request.capsules,
-            vcfrags=vcfrags,
+            capsules_and_vcfrags=list(zip(request.capsules, vcfrags)),
         )
 
         return response

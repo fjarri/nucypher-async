@@ -3,7 +3,7 @@ from typing import List
 import trio
 import trio.testing
 
-from nucypher_async.ursula_server import UrsulaServer
+from nucypher_async.server import UrsulaServer
 
 
 async def test_learning(

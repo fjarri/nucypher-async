@@ -7,12 +7,12 @@ import humanize
 from mako import exceptions as mako_exceptions
 from mako.template import Template
 
-from .base.time import BaseClock
-from .p2p.fleet_sensor import FleetSensor
-from .verification import PublicUrsula
-from .utils.logging import Logger
-from .drivers.asgi_app import HTTPError
-from .version import CodeInfo
+from ..base.time import BaseClock
+from ..p2p.fleet_sensor import FleetSensor
+from ..verification import PublicUrsula
+from ..utils.logging import Logger
+from ..drivers.asgi_app import HTTPError
+from ..version import CodeInfo
 
 
 BASE_DIR = Path(__file__).parent

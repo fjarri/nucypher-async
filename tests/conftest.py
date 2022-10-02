@@ -9,10 +9,9 @@ import nucypher_async.utils.logging as logging
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock, MockPeerClient
 from nucypher_async.ursula import Ursula
 from nucypher_async.mocks import MockNetwork
-from nucypher_async.ursula_server import UrsulaServer
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain
-from nucypher_async.config import UrsulaServerConfig
+from nucypher_async.server import UrsulaServerConfig, UrsulaServer
 from nucypher_async.drivers.peer import Contact, PeerHTTPServer
 from nucypher_async.storage import InMemoryStorage
 

@@ -4,15 +4,15 @@ from pathlib import Path
 from attrs import frozen
 from platformdirs import PlatformDirs
 
-from .base.time import BaseClock
-from .utils.ssl import SSLCertificate, SSLPrivateKey
-from .drivers.time import SystemClock
-from .drivers.identity import IdentityClient
-from .drivers.payment import PaymentClient
-from .drivers.peer import PeerClient, Contact
-from .domain import Domain
-from .storage import BaseStorage, InMemoryStorage, FileSystemStorage
-from .utils.logging import Logger, Handler, ConsoleHandler, RotatingFileHandler
+from ..base.time import BaseClock
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
+from ..drivers.time import SystemClock
+from ..drivers.identity import IdentityClient
+from ..drivers.payment import PaymentClient
+from ..drivers.peer import PeerClient, Contact
+from ..domain import Domain
+from ..storage import BaseStorage, InMemoryStorage, FileSystemStorage
+from ..utils.logging import Logger, Handler, ConsoleHandler, RotatingFileHandler
 
 
 def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
