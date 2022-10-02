@@ -18,7 +18,7 @@ from ..drivers.peer import (
     PeerPrivateKey,
     UrsulaInfo,
 )
-from ..characters import Ursula
+from ..characters.pre import Ursula, PublisherCard
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..p2p.learner import Learner
@@ -188,7 +188,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         verified_kfrag = self.ursula.decrypt_kfrag(
             encrypted_kfrag=request.encrypted_kfrag,
             hrac=hrac,
-            publisher_verifying_key=request.publisher_verifying_key,
+            publisher_card=PublisherCard(request.publisher_verifying_key),
         )
 
         # TODO: catch reencryption errors (if any) and raise RPC error here

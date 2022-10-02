@@ -6,7 +6,8 @@ import trio.testing
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.domain import Domain
 from nucypher_async.server import UrsulaServer
-from nucypher_async.client.pre import Alice, Bob, encrypt
+from nucypher_async.characters.pre import Delegator, Recipient, Publisher
+from nucypher_async.client.pre import grant, retrieve_and_decrypt, encrypt
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
 from nucypher_async.utils.logging import Logger
@@ -50,8 +51,9 @@ async def test_granting(
     mock_payment_client: MockPaymentClient,
 ) -> None:
 
-    alice = Alice()
-    bob = Bob()
+    alice = Delegator.random()
+    publisher = Publisher.random()
+    bob = Recipient.random()
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
 
     alice_learner = Learner(
@@ -62,24 +64,29 @@ async def test_granting(
     )
 
     # Fund Alice
-    mock_payment_client.mock_set_balance(alice.payment_address, AmountMATIC.ether(1))
+    mock_payment_client.mock_set_balance(publisher.payment_address, AmountMATIC.ether(1))
+
+    policy = alice.make_policy(
+        recipient_card=bob.card(),
+        label=b"some label",
+        threshold=2,
+        shares=3,
+    )
 
     with trio.fail_after(10):
-        policy = await alice.grant(
+        enacted_policy = await grant(
+            policy=policy,
+            recipient_card=bob.card(),
+            publisher=publisher,
             learner=alice_learner,
             payment_client=mock_payment_client,
-            bob=bob.public_info(),
-            label=b"some label",
-            threshold=2,
-            shares=3,
-            # TODO: using preselected Ursulas since blockchain is not implemeneted yet
             handpicked_addresses=[
                 server._node.staking_provider_address for server in fully_learned_ursulas[:3]
             ],
         )
 
     message = b"a secret message"
-    message_kit = encrypt(policy.encrypting_key, message)
+    message_kit = encrypt(policy, message)
 
     bob_learner = Learner(
         domain=Domain.MAINNET,
@@ -89,11 +96,13 @@ async def test_granting(
     )
 
     with trio.fail_after(10):
-        message_back = await bob.retrieve_and_decrypt(
-            bob_learner,
-            message_kit,
-            policy.encrypted_treasure_map,
-            remote_alice=alice.public_info(),
+        message_back = await retrieve_and_decrypt(
+            learner=bob_learner,
+            message_kit=message_kit,
+            enacted_policy=enacted_policy,
+            delegator_card=alice.card(),
+            recipient=bob,
+            publisher_card=publisher.card(),
         )
 
     assert message_back == message

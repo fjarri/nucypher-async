@@ -6,7 +6,17 @@ import trio.testing
 from eth_account import Account
 from hexbytes import HexBytes
 
-from nucypher_async.characters import Ursula
+from nucypher_async.master_key import MasterKey
+from nucypher_async.characters.pre import (
+    Ursula,
+    Delegator,
+    Recipient,
+    DelegatorCard,
+    RecipientCard,
+    Publisher,
+    PublisherCard,
+    Policy,
+)
 from nucypher_async.server import UrsulaServer, UrsulaServerConfig
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
@@ -19,13 +29,11 @@ from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
 from nucypher_async.domain import Domain
 from nucypher_async.client.pre import (
-    Alice,
-    Bob,
-    RemoteAlice,
-    RemoteBob,
     encrypt,
+    grant,
+    retrieve_and_decrypt,
     MessageKit,
-    Policy,
+    EnactedPolicy,
 )
 from nucypher_async.utils.logging import Logger, ConsoleHandler, Level
 
@@ -93,8 +101,12 @@ async def run_local_ursula_fleet(
 
 
 async def alice_grants(
-    context: Context, seed_contact: Contact, alice: Alice, remote_bob: RemoteBob
-) -> Tuple[RemoteAlice, Policy]:
+    context: Context,
+    seed_contact: Contact,
+    delegator: Delegator,
+    publisher: Publisher,
+    recipient_card: RecipientCard,
+) -> EnactedPolicy:
 
     learner = Learner(
         identity_client=context.identity_client,
@@ -108,24 +120,29 @@ async def alice_grants(
     await learner.seed_round()
     await learner.verification_round()
 
-    policy = await alice.grant(
-        learner=learner,
-        payment_client=context.payment_client,
-        bob=remote_bob,
+    policy = delegator.make_policy(
+        recipient_card=recipient_card,
         label=b"label-" + os.urandom(8).hex().encode(),
         threshold=2,
         shares=3,
     )
 
-    return alice.public_info(), policy
+    return await grant(
+        policy=policy,
+        recipient_card=recipient_card,
+        publisher=publisher,
+        learner=learner,
+        payment_client=context.payment_client,
+    )
 
 
 async def bob_decrypts(
     context: Context,
     seed_contact: Contact,
-    bob: Bob,
-    remote_alice: RemoteAlice,
-    policy: Policy,
+    recipient: Recipient,
+    delegator_card: DelegatorCard,
+    publisher_card: PublisherCard,
+    enacted_policy: EnactedPolicy,
     message_kit: MessageKit,
 ) -> bytes:
 
@@ -137,11 +154,13 @@ async def bob_decrypts(
         clock=context.clock,
     )
 
-    decrypted = await bob.retrieve_and_decrypt(
+    decrypted = await retrieve_and_decrypt(
         learner=learner,
         message_kit=message_kit,
-        encrypted_treasure_map=policy.encrypted_treasure_map,
-        remote_alice=remote_alice,
+        enacted_policy=enacted_policy,
+        delegator_card=delegator_card,
+        recipient=recipient,
+        publisher_card=publisher_card,
     )
 
     return decrypted
@@ -178,8 +197,8 @@ async def main(mocked: bool = True) -> None:
         else:
             seed_contact = Contact("ibex.nucypher.network", 9151)
 
-        bob = Bob()
-        remote_bob = bob.public_info()
+        bob_keys = MasterKey.random()
+        bob = Recipient(bob_keys)
 
         if mocked:
             payment_account = PaymentAccount.random()
@@ -192,17 +211,20 @@ async def main(mocked: bool = True) -> None:
             )
             payment_account = PaymentAccount(acc)
 
-        alice = Alice(payment_account=payment_account)
+        alice_keys = MasterKey.random()
+        alice = Delegator(alice_keys)
+        publisher_keys = MasterKey.random()
+        publisher = Publisher(publisher_keys, payment_account)
 
         context.logger.info("Alice grants")
-        remote_alice, policy = await alice_grants(context, seed_contact, alice, remote_bob)
+        policy = await alice_grants(context, seed_contact, alice, publisher, bob.card())
 
         message = b"a secret message"
-        message_kit = encrypt(policy.encrypting_key, message)
+        message_kit = encrypt(policy, message)
 
         context.logger.info("Bob retrieves")
         decrypted = await bob_decrypts(
-            context, seed_contact, bob, remote_alice, policy, message_kit
+            context, seed_contact, bob, alice.card(), publisher.card(), policy, message_kit
         )
 
         assert message == decrypted
