@@ -1,8 +1,9 @@
 import http
-from typing import Tuple, List, Dict, Any, Iterable
+from typing import Tuple, List, Dict, Any, Iterable, Iterator, Callable
 
+import attrs
 import trio
-from nucypher_core.umbral import VerifiedCapsuleFrag
+from nucypher_core.umbral import VerifiedCapsuleFrag, PublicKey
 
 from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
@@ -16,6 +17,32 @@ from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedUrsulaInfo
 from .config import PorterServerConfig
 from .status import render_status
+from .. import schema
+
+
+@attrs.frozen
+class GetUrsulasRequest:
+    quantity: int
+    include_ursulas: List[IdentityAddress] = []
+    exclude_ursulas: List[IdentityAddress] = []
+
+
+@attrs.frozen
+class UrsulaResult:
+    checksum_address: IdentityAddress
+    uri: str
+    encrypting_key: PublicKey
+
+
+@attrs.frozen
+class GetUrsulasResult:
+    ursulas: List[UrsulaResult]
+
+
+@attrs.frozen
+class GetUrsulasResponse:
+    result: GetUrsulasResult
+    version: str
 
 
 class PorterServer(BaseHTTPServer, BasePorter):
@@ -108,31 +135,27 @@ class PorterServer(BaseHTTPServer, BasePorter):
         return nodes
 
     async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
-        assert isinstance(request_json, dict)  # TODO: use a proper JSON schema validator
         try:
-            quantity = request_json["quantity"]
-            if isinstance(quantity, str):
-                quantity = int(quantity)
-            include_ursulas = request_json.get("include_ursulas", [])
-            exclude_ursulas = request_json.get("exclude_ursulas", [])
-
-            include_ursulas = [IdentityAddress.from_hex(address) for address in include_ursulas]
-            exclude_ursulas = [IdentityAddress.from_hex(address) for address in exclude_ursulas]
-        except Exception as exc:
+            request = schema.from_json(GetUrsulasRequest, request_json)
+        except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        if quantity > len(self.learner.fleet_sensor._staking_providers):
+        if request.quantity > len(self.learner.fleet_sensor._staking_providers):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
         # TODO: add support for excluding Ursulas
-        if exclude_ursulas:
+        if request.exclude_ursulas:
             raise HTTPError(
                 "Excluding Ursulas is currently not supported", http.HTTPStatus.BAD_REQUEST
             )
 
         try:
             with trio.fail_after(5):
-                nodes = await self._get_ursulas(quantity, include_ursulas, exclude_ursulas)
+                nodes = await self._get_ursulas(
+                    quantity=request.quantity,
+                    include_ursulas=request.include_ursulas,
+                    exclude_ursulas=request.exclude_ursulas,
+                )
 
         except trio.TooSlowError as exc:
             raise HTTPError(
@@ -140,17 +163,20 @@ class PorterServer(BaseHTTPServer, BasePorter):
             ) from exc
 
         node_list = [
-            dict(
-                checksum_address=node.staking_provider_address.checksum,
+            UrsulaResult(
+                checksum_address=node.staking_provider_address,
                 uri=node.contact.uri(),
-                encrypting_key=bytes(node.encrypting_key).hex(),
+                encrypting_key=node.encrypting_key,
             )
             for node in nodes
         ]
+        response = GetUrsulasResponse(
+            result=GetUrsulasResult(ursulas=node_list), version="async-0.1.0-dev"
+        )
 
-        return dict(result=dict(ursulas=node_list), version="async-0.1.0-dev")
+        return schema.to_json(response)
 
-    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> List[VerifiedCapsuleFrag]:
+    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> JSON:
         raise NotImplementedError
 
     async def endpoint_status(self) -> str:

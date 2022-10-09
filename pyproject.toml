@@ -22,7 +22,9 @@ dependencies = [
     "arrow>=1",
     "humanize>=4.3",
     "typing-extensions>=4.2",
-    "trio-typing>=0.7"
+    "trio-typing>=0.7",
+    "attrs>=22",
+    "cattrs>=22",
 ]
 requires-python = ">=3.8"
 license-expression = "GPL-3.0-only"
@@ -38,7 +40,7 @@ docs = [
     "furo",
 ]
 lint = [
-    "mypy>=0.941",
+    "mypy>=0.982",
     "trio-typing[mypy]>=0.7",
     "black",
     "types-setuptools>=63",
