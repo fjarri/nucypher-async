@@ -94,43 +94,43 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGIFramework:
+def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
 
-    logger = peer.logger().get_child("App")
+    logger = ursula_server.logger().get_child("App")
 
     async def ping(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
-        return await binary_api_call(logger, peer.endpoint_ping(remote_host))
+        return await binary_api_call(logger, ursula_server.endpoint_ping(remote_host))
 
     async def node_metadata_get(request: Request) -> Response:
-        return await binary_api_call(logger, peer.endpoint_node_metadata_get())
+        return await binary_api_call(logger, ursula_server.endpoint_node_metadata_get())
 
     async def node_metadata_post(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await binary_api_call(
-            logger, peer.endpoint_node_metadata_post(remote_host, request_bytes)
+            logger, ursula_server.endpoint_node_metadata_post(remote_host, request_bytes)
         )
 
     async def public_information(request: Request) -> Response:
-        return await binary_api_call(logger, peer.endpoint_public_information())
+        return await binary_api_call(logger, ursula_server.endpoint_public_information())
 
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
-        return await binary_api_call(logger, peer.endpoint_reencrypt(request_bytes))
+        return await binary_api_call(logger, ursula_server.endpoint_reencrypt(request_bytes))
 
     async def status(request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
-        return await rest_api_call(logger, peer.endpoint_status())
+        return await rest_api_call(logger, ursula_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
-        await peer.start(nursery)
+        await ursula_server.start(nursery)
 
     async def on_shutdown(nursery: trio.Nursery) -> None:
-        await peer.stop(nursery)
+        await ursula_server.stop(nursery)
 
     routes = [
         Route(f"/{UrsulaRoutes.PING}", ping),
@@ -148,31 +148,31 @@ def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGIFramework:
     return cast(ASGIFramework, app)
 
 
-def make_porter_asgi_app(porter: BasePorterServer) -> ASGIFramework:
+def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """
 
-    logger = porter.logger().get_child("App")
+    logger = porter_server.logger().get_child("App")
 
     async def get_ursulas(request: Request) -> Response:
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
-        return await rest_api_call(logger, porter.endpoint_get_ursulas(json_request))
+        return await rest_api_call(logger, porter_server.endpoint_get_ursulas(json_request))
 
     async def retrieve_cfrags(request: Request) -> Response:
         json_request = await request.json() if await request.body() else {}
         json_request.update(request.query_params)
-        return await rest_api_call(logger, porter.endpoint_retrieve_cfrags(json_request))
+        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(json_request))
 
     async def status(request: Request) -> Response:
-        return await rest_api_call(logger, porter.endpoint_status())
+        return await rest_api_call(logger, porter_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
-        await porter.start(nursery)
+        await porter_server.start(nursery)
 
     async def on_shutdown(nursery: trio.Nursery) -> None:
-        await porter.stop(nursery)
+        await porter_server.stop(nursery)
 
     routes = [
         Route(f"/{PorterRoutes.GET_URSULAS}", get_ursulas),
