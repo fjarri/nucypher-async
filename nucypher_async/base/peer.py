@@ -19,7 +19,43 @@ class PeerErrorCode(Enum):
 
 
 class PeerError(Exception):
-    pass
+
+    @staticmethod
+    def from_json(encoded_json: bytes) -> "PeerError":
+        # This method is separate from `ServerSidePeerError.to_json` because the result
+        # is not necessarily a `ServerSidePeerError` - we can get `UntypedPeerError` too,
+        # if the error message is malformed.
+        try:
+            parsed_message = json.loads(encoded_json)
+        except json.decoder.JSONDecodeError:
+            # Support for other implementation that just returns strings
+            return UntypedPeerError(encoded_json)
+
+        if not isinstance(parsed_message, dict):
+            return UntypedPeerError(f"Peer error message is not a dictionary: {parsed_message}")
+
+        try:
+            code = parsed_message["code"]
+        except KeyError:
+            return UntypedPeerError(f"'code' is not set in the error dict: {parsed_message}")
+
+        try:
+            error = parsed_message["error"]
+        except KeyError:
+            return UntypedPeerError(f"'error' is not set in the error dict: {parsed_message}")
+
+        try:
+            code_obj = PeerErrorCode(code)
+        except ValueError:
+            return UntypedPeerError(f"Unknown peer error code {code}: {parsed_message}")
+
+        try:
+            cls = _PEER_ERROR_CODE_TO_CLASS[code_obj]
+            return cls(error)
+        except KeyError as exc:
+            # Raising because this is not a peer error, this is a bug.
+            # If the code is in the enum, there should be a class corresponding to it.
+            raise ValueError(f"Unknown error class for {code}: {error}") from exc
 
 
 class UntypedPeerError(PeerError):
@@ -40,40 +76,6 @@ class ServerSidePeerError(ABC, PeerError):
 
     def to_json(self) -> Dict[str, JSON]:
         return dict(error=self.args[0], code=self.error_code().value)
-
-
-def decode_peer_error(message: bytes) -> PeerError:
-    try:
-        parsed_message = json.loads(message)
-    except json.decoder.JSONDecodeError:
-        # Support for other implementation that just returns strings
-        return UntypedPeerError(message)
-
-    if not isinstance(parsed_message, dict):
-        return UntypedPeerError(f"Peer error message is not a dictionary: {parsed_message}")
-
-    try:
-        code = parsed_message["code"]
-    except KeyError:
-        return UntypedPeerError(f"'code' is not set in the error dict: {parsed_message}")
-
-    try:
-        error = parsed_message["error"]
-    except KeyError:
-        return UntypedPeerError(f"'error' is not set in the error dict: {parsed_message}")
-
-    try:
-        code_obj = PeerErrorCode(code)
-    except ValueError:
-        return UntypedPeerError(f"Unknown peer error code {code}: {parsed_message}")
-
-    try:
-        cls = _PEER_ERROR_CODE_TO_CLASS[code_obj]
-        return cls(error)
-    except KeyError as exc:
-        # Raising because this is not a peer error, this is a bug.
-        # If the code is in the enum, there should be a class corresponding to it.
-        raise ValueError(f"Unknown error class for {code}: {error}") from exc
 
 
 class GenericPeerError(ServerSidePeerError):

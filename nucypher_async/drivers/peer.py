@@ -14,7 +14,7 @@ import arrow
 import httpx
 
 from ..base.http_server import BaseHTTPServer, ASGIFramework
-from ..base.peer import PeerError, decode_peer_error
+from ..base.peer import PeerError
 from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
 from ..utils import temp_file
@@ -187,7 +187,7 @@ class PeerClient:
 
             response_data = response.read()
             if response.status_code != http.HTTPStatus.OK:
-                raise decode_peer_error(response_data)
+                raise PeerError.from_json(response_data)
             return response_data
 
 
