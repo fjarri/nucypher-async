@@ -1,7 +1,8 @@
 """
-The job of the REST dirver is to encapsulate dealing with the specific request library
-(currently ``httpx``), extract request data and convert status codes to exceptions.
-It is the "client" countrerpart of ``asgi_app``.
+The job of the peer dirver is to encapsulate dealing with the specific way peers communicate
+(currently, this is HTTP requests), along with the library used for this purpose (`httpx`).
+The related details are also hidden here (e.g. that a peer contact is a DNS name + port,
+or that its transport key is a SSL certificate).
 """
 
 from abc import ABC, abstractmethod
