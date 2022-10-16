@@ -14,7 +14,7 @@ import arrow
 import httpx
 
 from ..base.http_server import BaseHTTPServer, ASGIFramework
-from ..base.peer import PeerError
+from ..base.peer_error import PeerError
 from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
 from ..utils import temp_file

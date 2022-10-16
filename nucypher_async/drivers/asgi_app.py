@@ -22,7 +22,7 @@ import trio
 
 from ..base.types import JSON
 from ..base.http_server import ASGIFramework
-from ..base.peer import ServerSidePeerError, InactivePolicy
+from ..base.peer_error import ServerSidePeerError, InactivePolicy
 from ..base.ursula import BaseUrsulaServer
 from ..base.porter import BasePorterServer
 from ..utils.logging import Logger

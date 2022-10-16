@@ -12,7 +12,7 @@ from nucypher_core import (
 )
 from nucypher_core.umbral import PublicKey
 
-from ..base.peer import InvalidMessage
+from ..base.peer_error import InvalidMessage
 from ..domain import Domain
 from ..drivers.peer import Contact, SecureContact, PeerPublicKey, PeerClient
 from ..drivers.identity import IdentityAddress

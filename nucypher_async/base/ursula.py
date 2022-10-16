@@ -10,7 +10,7 @@ from nucypher_core import (
 )
 import trio
 
-from .peer import InvalidMessage
+from .peer_error import InvalidMessage
 from ..utils.logging import Logger
 
 

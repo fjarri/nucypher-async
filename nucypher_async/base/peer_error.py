@@ -19,7 +19,6 @@ class PeerErrorCode(Enum):
 
 
 class PeerError(Exception):
-
     @staticmethod
     def from_json(encoded_json: bytes) -> "PeerError":
         # This method is separate from `ServerSidePeerError.to_json` because the result

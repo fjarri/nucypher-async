@@ -19,7 +19,7 @@ import trio
 
 from nucypher_core import MetadataRequest
 
-from ..base.peer import PeerError
+from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
 from ..drivers.peer import Contact, PeerClient
