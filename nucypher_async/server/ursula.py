@@ -10,7 +10,7 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from ..base.peer import BaseUrsulaServer, InactivePolicy, GenericPeerError
+from ..base.peer import InactivePolicy, GenericPeerError
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import (
     BasePeerAndUrsulaServer,

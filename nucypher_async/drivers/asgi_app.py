@@ -22,8 +22,9 @@ import trio
 
 from ..base.types import JSON
 from ..base.http_server import ASGI3Framework
-from ..base.peer import BaseUrsulaServer, ServerSidePeerError, InactivePolicy
-from ..base.porter import BasePorter
+from ..base.peer import ServerSidePeerError, InactivePolicy
+from ..base.ursula import BaseUrsulaServer
+from ..base.porter import BasePorterServer
 from ..utils.logging import Logger
 
 
@@ -147,7 +148,7 @@ def make_peer_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
     return cast(ASGI3Framework, app)
 
 
-def make_porter_app(porter: BasePorter) -> ASGI3Framework:
+def make_porter_app(porter: BasePorterServer) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """

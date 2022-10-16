@@ -6,7 +6,7 @@ from ..utils.logging import Logger
 from .types import JSON
 
 
-class BasePorter(ABC):
+class BasePorterServer(ABC):
     """
     A base class for a stateful Porter -
     a service exposing node sampling/lookup via REST.

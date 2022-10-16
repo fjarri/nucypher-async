@@ -7,7 +7,7 @@ from nucypher_core.umbral import VerifiedCapsuleFrag, PublicKey
 
 from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
-from ..base.porter import BasePorter
+from ..base.porter import BasePorterServer
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_app, HTTPError
 from ..utils import BackgroundTask
@@ -45,7 +45,7 @@ class GetUrsulasResponse:
     version: str
 
 
-class PorterServer(BaseHTTPServer, BasePorter):
+class PorterServer(BaseHTTPServer, BasePorterServer):
     def __init__(self, config: PorterServerConfig):
         self._clock = config.clock
         self._config = config

@@ -23,7 +23,8 @@ from nucypher_core import (
 from nucypher_core.umbral import PublicKey
 
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
-from ..base.peer import PeerError, BaseUrsulaServer, decode_peer_error, InvalidMessage
+from ..base.peer import PeerError, decode_peer_error, InvalidMessage
+from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
