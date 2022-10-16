@@ -12,12 +12,12 @@ from hypercorn.typing import (
     ASGISendEvent,
 )
 
-from ..base.http_server import BaseHTTPServer, ASGI3Framework
+from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..utils.ssl import SSLCertificate
 
 
 class LifespanManager:
-    def __init__(self, app: ASGI3Framework):
+    def __init__(self, app: ASGIFramework):
         self.app = app
         self._send_channel, self._receive_channel = trio.open_memory_channel[ASGIReceiveEvent](0)
         self._startup_complete = trio.Event()

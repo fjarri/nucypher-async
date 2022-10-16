@@ -6,7 +6,7 @@ import trio
 from nucypher_core.umbral import PublicKey
 
 from ..base.types import JSON
-from ..base.http_server import BaseHTTPServer, ASGI3Framework
+from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.porter import BasePorterServer
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
@@ -81,7 +81,7 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
     def ssl_private_key(self) -> SSLPrivateKey:
         return self._config.ssl_private_key
 
-    def into_asgi_app(self) -> ASGI3Framework:
+    def into_asgi_app(self) -> ASGIFramework:
         return make_porter_asgi_app(self)
 
     def logger(self) -> Logger:

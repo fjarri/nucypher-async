@@ -21,7 +21,7 @@ from starlette.routing import Route
 import trio
 
 from ..base.types import JSON
-from ..base.http_server import ASGI3Framework
+from ..base.http_server import ASGIFramework
 from ..base.peer import ServerSidePeerError, InactivePolicy
 from ..base.ursula import BaseUrsulaServer
 from ..base.porter import BasePorterServer
@@ -94,7 +94,7 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
+def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGIFramework:
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
@@ -145,10 +145,10 @@ def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast(ASGI3Framework, app)
+    return cast(ASGIFramework, app)
 
 
-def make_porter_asgi_app(porter: BasePorterServer) -> ASGI3Framework:
+def make_porter_asgi_app(porter: BasePorterServer) -> ASGIFramework:
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """
@@ -184,4 +184,4 @@ def make_porter_asgi_app(porter: BasePorterServer) -> ASGI3Framework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast(ASGI3Framework, app)
+    return cast(ASGIFramework, app)

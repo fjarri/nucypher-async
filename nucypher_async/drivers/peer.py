@@ -13,7 +13,7 @@ from typing import Tuple, AsyncIterator, Any, Optional
 import arrow
 import httpx
 
-from ..base.http_server import BaseHTTPServer, ASGI3Framework
+from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.peer import PeerError, decode_peer_error
 from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
@@ -223,5 +223,5 @@ class UrsulaHTTPServer(BaseHTTPServer):
     def ssl_private_key(self) -> SSLPrivateKey:
         return self.server.peer_private_key()._as_ssl_private_key()
 
-    def into_asgi_app(self) -> ASGI3Framework:
+    def into_asgi_app(self) -> ASGIFramework:
         return make_ursula_asgi_app(self.server)
