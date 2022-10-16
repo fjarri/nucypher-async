@@ -43,7 +43,7 @@ class HTTPError(Exception):
         self.status_code = status_code
 
 
-async def peer_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> Response:
+async def binary_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> Response:
     try:
         result_bytes = await endpoint_future
     except ServerSidePeerError as exc:
@@ -94,7 +94,7 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_peer_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
+def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a network peer (Ursula).
     """
@@ -103,24 +103,24 @@ def make_peer_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
 
     async def ping(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
-        return await peer_api_call(logger, peer.endpoint_ping(remote_host))
+        return await binary_api_call(logger, peer.endpoint_ping(remote_host))
 
     async def node_metadata_get(request: Request) -> Response:
-        return await peer_api_call(logger, peer.endpoint_node_metadata_get())
+        return await binary_api_call(logger, peer.endpoint_node_metadata_get())
 
     async def node_metadata_post(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
-        return await peer_api_call(
+        return await binary_api_call(
             logger, peer.endpoint_node_metadata_post(remote_host, request_bytes)
         )
 
     async def public_information(request: Request) -> Response:
-        return await peer_api_call(logger, peer.endpoint_public_information())
+        return await binary_api_call(logger, peer.endpoint_public_information())
 
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
-        return await peer_api_call(logger, peer.endpoint_reencrypt(request_bytes))
+        return await binary_api_call(logger, peer.endpoint_reencrypt(request_bytes))
 
     async def status(request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
@@ -148,7 +148,7 @@ def make_peer_asgi_app(peer: BaseUrsulaServer) -> ASGI3Framework:
     return cast(ASGI3Framework, app)
 
 
-def make_porter_app(porter: BasePorterServer) -> ASGI3Framework:
+def make_porter_asgi_app(porter: BasePorterServer) -> ASGI3Framework:
     """
     Returns an ASGI app serving as a front-end for a Porter.
     """

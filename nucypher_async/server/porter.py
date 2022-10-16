@@ -9,7 +9,7 @@ from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
 from ..base.porter import BasePorterServer
 from ..drivers.identity import IdentityAddress
-from ..drivers.asgi_app import make_porter_app, HTTPError
+from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLPrivateKey, SSLCertificate
@@ -82,7 +82,7 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         return self._config.ssl_private_key
 
     def into_asgi_app(self) -> ASGI3Framework:
-        return make_porter_app(self)
+        return make_porter_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger

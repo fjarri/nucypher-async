@@ -28,7 +28,7 @@ from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .asgi_app import make_peer_asgi_app
+from .asgi_app import make_ursula_asgi_app
 from .identity import IdentityAddress
 from ..domain import Domain
 
@@ -317,4 +317,4 @@ class UrsulaHTTPServer(BaseHTTPServer):
         return self.server.peer_private_key()._as_ssl_private_key()
 
     def into_asgi_app(self) -> ASGI3Framework:
-        return make_peer_asgi_app(self.server)
+        return make_ursula_asgi_app(self.server)
