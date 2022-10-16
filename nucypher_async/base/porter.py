@@ -6,6 +6,12 @@ from ..utils.logging import Logger
 from .types import JSON
 
 
+class PorterRoutes:
+    GET_URSULAS = "get_ursulas"
+    RETRIEVE_CFRAGS = "retrieve_cfrags"
+    STATUS = "status"
+
+
 class BasePorterServer(ABC):
     """
     A base class for a stateful Porter -

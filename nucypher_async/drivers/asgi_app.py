@@ -23,8 +23,8 @@ import trio
 from ..base.types import JSON
 from ..base.http_server import ASGIFramework
 from ..base.peer_error import ServerSidePeerError, InactivePolicy
-from ..base.ursula import BaseUrsulaServer
-from ..base.porter import BasePorterServer
+from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
+from ..base.porter import BasePorterServer, PorterRoutes
 from ..utils.logging import Logger
 
 
@@ -133,12 +133,12 @@ def make_ursula_asgi_app(peer: BaseUrsulaServer) -> ASGIFramework:
         await peer.stop(nursery)
 
     routes = [
-        Route("/ping", ping),
-        Route("/node_metadata", node_metadata_get),
-        Route("/node_metadata", node_metadata_post, methods=["POST"]),
-        Route("/public_information", public_information),
-        Route("/reencrypt", reencrypt, methods=["POST"]),
-        Route("/status", status),
+        Route(f"/{UrsulaRoutes.PING}", ping),
+        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_get),
+        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
+        Route(f"/{UrsulaRoutes.PUBLIC_INFORMATION}", public_information),
+        Route(f"/{UrsulaRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
+        Route(f"/{UrsulaRoutes.STATUS}", status),
     ]
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
@@ -175,9 +175,9 @@ def make_porter_asgi_app(porter: BasePorterServer) -> ASGIFramework:
         await porter.stop(nursery)
 
     routes = [
-        Route("/get_ursulas", get_ursulas),
-        Route("/retrieve_cfrags", retrieve_cfrags),
-        Route("/status", status),
+        Route(f"/{PorterRoutes.GET_URSULAS}", get_ursulas),
+        Route(f"/{PorterRoutes.RETRIEVE_CFRAGS}", retrieve_cfrags),
+        Route(f"/{PorterRoutes.STATUS}", status),
     ]
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)

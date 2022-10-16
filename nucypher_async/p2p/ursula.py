@@ -13,6 +13,7 @@ from nucypher_core import (
 from nucypher_core.umbral import PublicKey
 
 from ..base.peer_error import InvalidMessage
+from ..base.ursula import UrsulaRoutes
 from ..domain import Domain
 from ..drivers.peer import Contact, SecureContact, PeerPublicKey, PeerClient
 from ..drivers.identity import IdentityAddress
@@ -102,32 +103,36 @@ class UrsulaClient(PeerClient):
         return await self._peer_client.handshake(contact)
 
     async def ping(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self._peer_client.communicate(secure_contact, "ping")
+        response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.PING)
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:
             raise InvalidMessage.for_message(str, exc)
 
     async def node_metadata_get(self, secure_contact: SecureContact) -> MetadataResponse:
-        response_bytes = await self._peer_client.communicate(secure_contact, "node_metadata")
+        response_bytes = await self._peer_client.communicate(
+            secure_contact, UrsulaRoutes.NODE_METADATA
+        )
         return unwrap_bytes(response_bytes, MetadataResponse)
 
     async def node_metadata_post(
         self, secure_contact: SecureContact, metadata_request: MetadataRequest
     ) -> MetadataResponse:
         response_bytes = await self._peer_client.communicate(
-            secure_contact, "node_metadata", bytes(metadata_request)
+            secure_contact, UrsulaRoutes.NODE_METADATA, bytes(metadata_request)
         )
         return unwrap_bytes(response_bytes, MetadataResponse)
 
     async def public_information(self, secure_contact: SecureContact) -> NodeMetadata:
-        response_bytes = await self._peer_client.communicate(secure_contact, "public_information")
+        response_bytes = await self._peer_client.communicate(
+            secure_contact, UrsulaRoutes.PUBLIC_INFORMATION
+        )
         return unwrap_bytes(response_bytes, NodeMetadata)
 
     async def reencrypt(
         self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest
     ) -> ReencryptionResponse:
         response_bytes = await self._peer_client.communicate(
-            secure_contact, "reencrypt", bytes(reencryption_request)
+            secure_contact, UrsulaRoutes.REENCRYPT, bytes(reencryption_request)
         )
         return unwrap_bytes(response_bytes, ReencryptionResponse)

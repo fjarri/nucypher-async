@@ -180,7 +180,7 @@ class PeerClient:
         Sends an optional message to the specified route and returns the response bytes.
         """
         async with self._http_client(secure_contact.public_key) as client:
-            path = secure_contact._uri + "/" + route
+            path = f"{secure_contact._uri}/{route}"
             if data is None:
                 response = await client.get(path)
             else:
