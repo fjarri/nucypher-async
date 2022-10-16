@@ -1,9 +1,9 @@
 import http
-from typing import Tuple, List, Dict, Any, Iterable, Iterator, Callable
+from typing import Tuple, List, Iterable
 
 import attrs
 import trio
-from nucypher_core.umbral import VerifiedCapsuleFrag, PublicKey
+from nucypher_core.umbral import PublicKey
 
 from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGI3Framework

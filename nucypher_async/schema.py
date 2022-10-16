@@ -1,7 +1,6 @@
-from typing import List, Type, TypeVar, cast, Any
-from attrs import frozen
-import cattrs
+from typing import Type, TypeVar, cast, Any
 
+import cattrs
 from nucypher_core.umbral import PublicKey
 
 from .drivers.identity import IdentityAddress
@@ -17,7 +16,7 @@ def unstructure_identity_address(val: IdentityAddress) -> str:
 
 
 def structure_public_key(val: str, cls: Type[PublicKey]) -> PublicKey:
-    return PublicKey.from_bytes(bytes.fromhex(val))
+    return cls.from_bytes(bytes.fromhex(val))
 
 
 def unstructure_public_key(val: PublicKey) -> str:

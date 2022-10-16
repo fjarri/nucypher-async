@@ -15,7 +15,6 @@ from typing import (
     TypeVar,
     Generic,
     Callable,
-    Any,
     Iterator,
     cast,
 )

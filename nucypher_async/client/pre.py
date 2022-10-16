@@ -8,20 +8,18 @@ from nucypher_core import (
     Address,
     TreasureMap,
     MessageKit,
-    HRAC,
     ReencryptionRequest,
     EncryptedTreasureMap,
     EncryptedKeyFrag,
 )
 from nucypher_core.umbral import (
-    generate_kfrags,
     PublicKey,
     Capsule,
     VerifiedCapsuleFrag,
 )
 
 from ..drivers.identity import IdentityAddress
-from ..drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
+from ..drivers.payment import PaymentClient
 from ..characters.pre import (
     Policy,
     RecipientCard,
@@ -30,7 +28,6 @@ from ..characters.pre import (
     PublisherCard,
     Recipient,
 )
-from ..master_key import MasterKey
 from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedUrsulaInfo
 
@@ -113,7 +110,6 @@ async def retrieve(
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-    publisher_card: PublisherCard,
 ) -> Set[VerifiedCapsuleFrag]:
 
     responses: Set[VerifiedCapsuleFrag] = set()
@@ -178,7 +174,6 @@ async def retrieve_and_decrypt(
         treasure_map=treasure_map,
         delegator_card=delegator_card,
         recipient_card=recipient.card(),
-        publisher_card=publisher_card,
     )
 
     return recipient.decrypt_message_kit(

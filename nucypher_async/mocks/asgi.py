@@ -62,7 +62,7 @@ class MockNetwork:
             await manager.run(self.nursery)
 
     async def stop_all(self) -> None:
-        for (host, port), (_certificate, manager) in self.known_servers.items():
+        for (_host, _port), (_certificate, manager) in self.known_servers.items():
             await manager.shutdown()
 
 

@@ -1,15 +1,12 @@
-from typing import Optional, Iterable, Set, List, Mapping, Tuple
+from typing import Optional, Iterable, List, Mapping, Tuple
 
 from attrs import frozen
-import arrow
-import trio
 
 from nucypher_core import (
     Address,
     TreasureMap,
     MessageKit,
     HRAC,
-    ReencryptionRequest,
     EncryptedTreasureMap,
     EncryptedKeyFrag,
 )
@@ -23,8 +20,8 @@ from nucypher_core.umbral import (
 )
 
 from ..drivers.peer import PeerPrivateKey
-from ..drivers.identity import IdentityAddress, IdentityAccount
-from ..drivers.payment import PaymentAccount, PaymentAccountSigner, PaymentClient, PaymentAddress
+from ..drivers.identity import IdentityAccount
+from ..drivers.payment import PaymentAccount, PaymentAccountSigner
 from ..master_key import MasterKey
 
 

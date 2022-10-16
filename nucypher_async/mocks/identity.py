@@ -38,6 +38,7 @@ class SimplePREApplication(MockContract):
     def getActiveStakingProviders(
         self, start_index: int, max_staking_providers: int
     ) -> Tuple[int, List[Tuple[int, int]]]:
+        # TODO: support pagination
         total = sum(amount.as_wei() for amount in self._stakes.values())
         return total, [
             (int.from_bytes(bytes(address), byteorder="big"), amount.as_wei())
