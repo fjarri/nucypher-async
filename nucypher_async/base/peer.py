@@ -42,7 +42,7 @@ class ServerSidePeerError(ABC, PeerError):
         return dict(error=self.args[0], code=self.error_code().value)
 
 
-def decode_peer_error(message: str) -> PeerError:
+def decode_peer_error(message: bytes) -> PeerError:
     try:
         parsed_message = json.loads(message)
     except json.decoder.JSONDecodeError:
@@ -50,22 +50,22 @@ def decode_peer_error(message: str) -> PeerError:
         return UntypedPeerError(message)
 
     if not isinstance(parsed_message, dict):
-        return UntypedPeerError(f"Peer error message is not a dictionary: {message}")
+        return UntypedPeerError(f"Peer error message is not a dictionary: {parsed_message}")
 
     try:
         code = parsed_message["code"]
     except KeyError:
-        return UntypedPeerError(f"'code' is not set in the error dict: {message}")
+        return UntypedPeerError(f"'code' is not set in the error dict: {parsed_message}")
 
     try:
         error = parsed_message["error"]
     except KeyError:
-        return UntypedPeerError(f"'error' is not set in the error dict: {message}")
+        return UntypedPeerError(f"'error' is not set in the error dict: {parsed_message}")
 
     try:
         code_obj = PeerErrorCode(code)
     except ValueError:
-        return UntypedPeerError(f"Unknown peer error code {code}: {message}")
+        return UntypedPeerError(f"Unknown peer error code {code}: {parsed_message}")
 
     try:
         cls = _PEER_ERROR_CODE_TO_CLASS[code_obj]

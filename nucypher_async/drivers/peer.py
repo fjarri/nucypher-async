@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import cached_property
 import http
-from typing import Tuple, AsyncIterator, TypeVar, Protocol, Any, Type
+from typing import Tuple, AsyncIterator, TypeVar, Protocol, Any, Type, Optional
 
 import arrow
 import httpx
@@ -139,7 +139,7 @@ class SecureContact:
 
     @property
     def _uri(self) -> str:
-        return f"https://{self.contact.host}:{self.contact.port}"
+        return self.contact.uri()
 
 
 class UrsulaInfo:
@@ -208,11 +208,8 @@ class Deserializable(Protocol[DeserializableT_co]):
 
 
 def unwrap_bytes(
-    response: httpx.Response, cls: Type[Deserializable[DeserializableT_co]]
+    message_bytes: bytes, cls: Type[Deserializable[DeserializableT_co]]
 ) -> DeserializableT_co:
-    if response.status_code != http.HTTPStatus.OK:
-        raise decode_peer_error(response.text)
-    message_bytes = response.read()
     try:
         message = cls.from_bytes(message_bytes)
     except ValueError as exc:
@@ -250,38 +247,51 @@ class PeerClient:
         public_key = PeerPublicKey(certificate)
         return SecureContact(contact, public_key)
 
-    async def ping(self, secure_contact: SecureContact) -> str:
+    async def communicate(
+        self, secure_contact: SecureContact, route: str, data: Optional[bytes] = None
+    ) -> bytes:
         async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + "/ping")
-        return response.text
+            path = secure_contact._uri + "/" + route
+            if data is None:
+                response = await client.get(path)
+            else:
+                response = await client.post(path, content=data)
+
+            response_data = response.read()
+            if response.status_code != http.HTTPStatus.OK:
+                raise decode_peer_error(response_data)
+            return response_data
+
+    async def ping(self, secure_contact: SecureContact) -> str:
+        response_bytes = await self.communicate(secure_contact, "ping")
+        try:
+            return response_bytes.decode()
+        except UnicodeDecodeError as exc:
+            raise InvalidMessage.for_message(str, exc)
 
     async def node_metadata_get(self, secure_contact: SecureContact) -> MetadataResponse:
-        async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + "/node_metadata")
-        return unwrap_bytes(response, MetadataResponse)
+        response_bytes = await self.communicate(secure_contact, "node_metadata")
+        return unwrap_bytes(response_bytes, MetadataResponse)
 
     async def node_metadata_post(
         self, secure_contact: SecureContact, metadata_request: MetadataRequest
     ) -> MetadataResponse:
-        async with self._http_client(secure_contact.public_key) as client:
-            response = await client.post(
-                secure_contact._uri + "/node_metadata", content=bytes(metadata_request)
-            )
-        return unwrap_bytes(response, MetadataResponse)
+        response_bytes = await self.communicate(
+            secure_contact, "node_metadata", bytes(metadata_request)
+        )
+        return unwrap_bytes(response_bytes, MetadataResponse)
 
     async def public_information(self, secure_contact: SecureContact) -> NodeMetadata:
-        async with self._http_client(secure_contact.public_key) as client:
-            response = await client.get(secure_contact._uri + "/public_information")
-        return unwrap_bytes(response, NodeMetadata)
+        response_bytes = await self.communicate(secure_contact, "public_information")
+        return unwrap_bytes(response_bytes, NodeMetadata)
 
     async def reencrypt(
         self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest
     ) -> ReencryptionResponse:
-        async with self._http_client(secure_contact.public_key) as client:
-            response = await client.post(
-                secure_contact._uri + "/reencrypt", content=bytes(reencryption_request)
-            )
-        return unwrap_bytes(response, ReencryptionResponse)
+        response_bytes = await self.communicate(
+            secure_contact, "reencrypt", bytes(reencryption_request)
+        )
+        return unwrap_bytes(response_bytes, ReencryptionResponse)
 
 
 class BasePeerServer(ABC):
