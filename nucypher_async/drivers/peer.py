@@ -8,29 +8,18 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import cached_property
 import http
-from typing import Tuple, AsyncIterator, TypeVar, Protocol, Any, Type, Optional
+from typing import Tuple, AsyncIterator, Any, Optional
 
 import arrow
 import httpx
-from nucypher_core import (
-    NodeMetadata,
-    MetadataRequest,
-    MetadataResponse,
-    ReencryptionRequest,
-    ReencryptionResponse,
-    NodeMetadataPayload,
-)
-from nucypher_core.umbral import PublicKey
 
 from ..base.http_server import BaseHTTPServer, ASGI3Framework
-from ..base.peer import PeerError, decode_peer_error, InvalidMessage
+from ..base.peer import PeerError, decode_peer_error
 from ..base.ursula import BaseUrsulaServer
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
 from .asgi_app import make_ursula_asgi_app
-from .identity import IdentityAddress
-from ..domain import Domain
 
 
 class PeerConnectionError(PeerError):
@@ -142,85 +131,14 @@ class SecureContact:
         return self.contact.uri()
 
 
-class UrsulaInfo:
-    def __init__(self, metadata: NodeMetadata):
-        self.metadata = metadata
-
-    @cached_property
-    def _metadata_payload(self) -> NodeMetadataPayload:
-        # making it a cached property since it has to create and populate new object
-        # from a Rust extension, which takes some time.
-        return self.metadata.payload
-
-    @cached_property
-    def contact(self) -> Contact:
-        payload = self._metadata_payload
-        return Contact(payload.host, payload.port)
-
-    @cached_property
-    def secure_contact(self) -> SecureContact:
-        return SecureContact(self.contact, self.public_key)
-
-    @cached_property
-    def operator_address(self) -> IdentityAddress:
-        return IdentityAddress(bytes(self._metadata_payload.derive_operator_address()))
-
-    @cached_property
-    def staking_provider_address(self) -> IdentityAddress:
-        return IdentityAddress(bytes(self._metadata_payload.staking_provider_address))
-
-    @cached_property
-    def public_key(self) -> PeerPublicKey:
-        return PeerPublicKey.from_bytes(self._metadata_payload.certificate_der)
-
-    @cached_property
-    def domain(self) -> Domain:
-        return Domain(self._metadata_payload.domain)
-
-    @property
-    def encrypting_key(self) -> PublicKey:
-        return self._metadata_payload.encrypting_key
-
-    @property
-    def verifying_key(self) -> PublicKey:
-        return self._metadata_payload.verifying_key
-
-    @cached_property
-    def timestamp(self) -> arrow.Arrow:
-        return arrow.get(self._metadata_payload.timestamp_epoch)
-
-    def __bytes__(self) -> bytes:
-        # TODO: cache it too?
-        return bytes(self.metadata)
-
-    @classmethod
-    def from_bytes(cls, data: bytes) -> "UrsulaInfo":
-        return cls(NodeMetadata.from_bytes(data))
-
-
-DeserializableT_co = TypeVar("DeserializableT_co", covariant=True)
-
-
-class Deserializable(Protocol[DeserializableT_co]):
-    @classmethod
-    def from_bytes(cls, data: bytes) -> DeserializableT_co:
-        ...
-
-
-def unwrap_bytes(
-    message_bytes: bytes, cls: Type[Deserializable[DeserializableT_co]]
-) -> DeserializableT_co:
-    try:
-        message = cls.from_bytes(message_bytes)
-    except ValueError as exc:
-        # Should we have a different error type for message format errors on client side?
-        raise InvalidMessage.for_message(cls, exc) from exc
-    return message
-
-
 class PeerClient:
     @asynccontextmanager
     async def _http_client(self, public_key: PeerPublicKey) -> AsyncIterator[httpx.AsyncClient]:
+        """
+        Creates a client context manager to send HTTP requests.
+        Can be overridden in mocks.
+        """
+
         # It would be nice avoid saving the certificate to disk at each request.
         # Having a cache directory requires too much architectural overhead,
         # and with the current frequency of REST calls it just isn't worth it.
@@ -237,12 +155,19 @@ class PeerClient:
                     raise PeerConnectionError(str(exc)) from exc
 
     async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
+        """
+        Fetches the SSL certificate for the contact.
+        Can be overridden in mocks.
+        """
         try:
             return await fetch_certificate(contact.host, contact.port)
         except OSError as exc:
             raise PeerConnectionError(str(exc)) from exc
 
     async def handshake(self, contact: Contact) -> SecureContact:
+        """
+        Resolves a peer contact into a secure contact that can be used for communication.
+        """
         certificate = await self._fetch_certificate(contact)
         public_key = PeerPublicKey(certificate)
         return SecureContact(contact, public_key)
@@ -250,6 +175,9 @@ class PeerClient:
     async def communicate(
         self, secure_contact: SecureContact, route: str, data: Optional[bytes] = None
     ) -> bytes:
+        """
+        Sends an optional message to the specified route and returns the response bytes.
+        """
         async with self._http_client(secure_contact.public_key) as client:
             path = secure_contact._uri + "/" + route
             if data is None:
@@ -261,37 +189,6 @@ class PeerClient:
             if response.status_code != http.HTTPStatus.OK:
                 raise decode_peer_error(response_data)
             return response_data
-
-    async def ping(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self.communicate(secure_contact, "ping")
-        try:
-            return response_bytes.decode()
-        except UnicodeDecodeError as exc:
-            raise InvalidMessage.for_message(str, exc)
-
-    async def node_metadata_get(self, secure_contact: SecureContact) -> MetadataResponse:
-        response_bytes = await self.communicate(secure_contact, "node_metadata")
-        return unwrap_bytes(response_bytes, MetadataResponse)
-
-    async def node_metadata_post(
-        self, secure_contact: SecureContact, metadata_request: MetadataRequest
-    ) -> MetadataResponse:
-        response_bytes = await self.communicate(
-            secure_contact, "node_metadata", bytes(metadata_request)
-        )
-        return unwrap_bytes(response_bytes, MetadataResponse)
-
-    async def public_information(self, secure_contact: SecureContact) -> NodeMetadata:
-        response_bytes = await self.communicate(secure_contact, "public_information")
-        return unwrap_bytes(response_bytes, NodeMetadata)
-
-    async def reencrypt(
-        self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest
-    ) -> ReencryptionResponse:
-        response_bytes = await self.communicate(
-            secure_contact, "reencrypt", bytes(reencryption_request)
-        )
-        return unwrap_bytes(response_bytes, ReencryptionResponse)
 
 
 class BasePeerServer(ABC):

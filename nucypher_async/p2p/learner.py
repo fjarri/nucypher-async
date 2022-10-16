@@ -22,13 +22,14 @@ from nucypher_core import MetadataRequest
 from ..base.peer import PeerError
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
-from ..drivers.peer import Contact, PeerClient, UrsulaInfo
+from ..drivers.peer import Contact, PeerClient
 from ..drivers.time import SystemClock
 from ..domain import Domain
 from ..storage import InMemoryStorage, BaseStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
 from ..utils.producer import producer
+from .ursula import UrsulaInfo, UrsulaClient
 from .verification import VerifiedUrsulaInfo, verify_staking_remote, PeerVerificationError
 from .fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
@@ -101,7 +102,7 @@ class Learner:
             storage = InMemoryStorage()
         self._storage = storage
 
-        self._peer_client = peer_client
+        self._ursula_client = UrsulaClient(peer_client)
         self._identity_client = identity_client
 
         self.domain = domain
@@ -263,8 +264,8 @@ class Learner:
         self._logger.debug("Verifying a contact {}", contact)
 
         # TODO: merge all of it into `public_information()`?
-        secure_contact = await self._peer_client.handshake(contact)
-        metadata = await self._peer_client.public_information(secure_contact)
+        secure_contact = await self._ursula_client.handshake(contact)
+        metadata = await self._ursula_client.public_information(secure_contact)
         ursula_info = UrsulaInfo(metadata)
 
         async with self._identity_client.session() as session:
@@ -289,11 +290,11 @@ class Learner:
 
         if self._this_node:
             request = MetadataRequest(self.fleet_state.checksum, [self._this_node.metadata])
-            metadata_response = await self._peer_client.node_metadata_post(
+            metadata_response = await self._ursula_client.node_metadata_post(
                 node.secure_contact, request
             )
         else:
-            metadata_response = await self._peer_client.node_metadata_get(node.secure_contact)
+            metadata_response = await self._ursula_client.node_metadata_get(node.secure_contact)
 
         try:
             payload = metadata_response.verify(node.verifying_key)

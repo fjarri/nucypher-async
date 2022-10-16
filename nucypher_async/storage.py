@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nucypher_core import NodeMetadata
 
-from .drivers.peer import UrsulaInfo
+from .p2p.ursula import UrsulaInfo
 
 
 class BaseStorage(ABC):

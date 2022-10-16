@@ -4,7 +4,6 @@ from nucypher_core.umbral import Signer, PublicKey
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import (
-    UrsulaInfo,
     Contact,
     SecureContact,
     PeerError,
@@ -13,6 +12,7 @@ from ..drivers.peer import (
 )
 from ..domain import Domain
 from ..characters.pre import Ursula
+from .ursula import UrsulaInfo
 
 
 class PeerVerificationError(PeerError):

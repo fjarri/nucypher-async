@@ -4,7 +4,8 @@ from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import Contact, UrsulaInfo
+from ..drivers.peer import Contact
+from .ursula import UrsulaInfo
 from .verification import VerifiedUrsulaInfo
 
 

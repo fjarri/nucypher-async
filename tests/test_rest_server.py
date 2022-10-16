@@ -12,6 +12,7 @@ from nucypher_async.characters.pre import Ursula
 from nucypher_async.domain import Domain
 from nucypher_async.server import UrsulaServerConfig, UrsulaServer
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
+from nucypher_async.p2p.ursula import UrsulaClient
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
@@ -42,7 +43,7 @@ async def test_client_real_server(
     handle = HTTPServerHandle(UrsulaHTTPServer(ursula_server))
     await nursery.start(handle)
 
-    client = PeerClient()
+    client = UrsulaClient(PeerClient())
     response = await client.ping(ursula_server.secure_contact())
     assert response == "127.0.0.1"
 

@@ -127,7 +127,7 @@ async def retrieve(
             context=None,
         )
         # TODO: why are we calling a private method here?
-        response = await learner._peer_client.reencrypt(node.secure_contact, request)
+        response = await learner._ursula_client.reencrypt(node.secure_contact, request)
         verified_cfrags = response.verify(
             capsules=request.capsules,
             alice_verifying_key=delegator_card.verifying_key,

@@ -16,11 +16,11 @@ from ..drivers.peer import (
     BasePeerAndUrsulaServer,
     SecureContact,
     PeerPrivateKey,
-    UrsulaInfo,
 )
 from ..characters.pre import Ursula, PublisherCard
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
+from ..p2p.ursula import UrsulaInfo
 from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
 from .status import render_status

@@ -27,7 +27,8 @@ from typing_extensions import ParamSpec, Concatenate
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, AmountT
-from ..drivers.peer import Contact, UrsulaInfo
+from ..drivers.peer import Contact
+from .ursula import UrsulaInfo
 from .verification import VerifiedUrsulaInfo
 
 
