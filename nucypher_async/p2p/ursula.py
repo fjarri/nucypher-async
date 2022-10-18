@@ -95,7 +95,7 @@ def unwrap_bytes(
     return message
 
 
-class UrsulaClient(PeerClient):
+class UrsulaClient:
     def __init__(self, peer_client: PeerClient):
         self._peer_client = peer_client
 
