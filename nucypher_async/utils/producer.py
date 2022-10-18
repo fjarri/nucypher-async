@@ -1,4 +1,3 @@
-import inspect
 import sys
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -21,31 +20,19 @@ import trio
 
 Param = ParamSpec("Param")
 RetType = TypeVar("RetType")
-Self = TypeVar("Self")
 
 
 def producer(
-    wrapped: Callable[
-        Concatenate[Self, Callable[[RetType], Awaitable[None]], Param], Awaitable[None]
-    ]
-) -> Callable[Concatenate[Self, Param], AsyncContextManager[trio.abc.ReceiveChannel[RetType]]]:
+    wrapped: Callable[Concatenate[Callable[[RetType], Awaitable[None]], Param], Awaitable[None]]
+) -> Callable[Param, AsyncContextManager[trio.abc.ReceiveChannel[RetType]]]:
     """
     Trio does not allow yielding from inside open nurseries,
     so this function is used to emulate the functionality of an async generator
     by using a channel.
 
-    Note: this decorator only supports standalone functions and instance methods
-    (not static- or classmethods), and for the instance methods the first argument must be ``self``.
+    Note: this decorator only supports standalone functions, whose first argument is
+    a callable that is used in place of `yield`.
     """
-
-    # We are modifying the wrapped callable's signature, adding an argument.
-    # It is quite tricky to make it work with all possible function/method declarations,
-    # so we're limiting ourselves to two cases: a standalone function,
-    # or a typical instance method with `self` as the first argument.
-    signature = inspect.signature(wrapped)
-    decorated_method = (
-        len(signature.parameters) > 0 and list(signature.parameters.keys())[0] == "self"
-    )
 
     @asynccontextmanager
     @wraps(wrapped)
@@ -55,20 +42,11 @@ def producer(
             Tuple[Type[BaseException], BaseException, TracebackType], Tuple[None, None, None]
         ] = (None, None, None)
 
-        # Add the yield function to the arguments.
-        # In the decorated method case, it will be bound to the instance
-        # **after** the decorator is applied, so we need to add our new arg after ``self``.
-        if decorated_method:
-            self_, *other_args = args
-            args_with_yield = (self_, send_channel.send, *other_args)
-        else:
-            args_with_yield = (send_channel.send, *args)
-
         async def worker() -> None:
             nonlocal exc_info
             with send_channel:
                 try:
-                    await wrapped(*args_with_yield, **kwds)
+                    await wrapped(send_channel.send, *args, **kwds)
                 except Exception:
                     # If we just let it raise here, this exception may be ignored.
                     # Instead, we're saving the traceback to raise it after the nursery is closed.

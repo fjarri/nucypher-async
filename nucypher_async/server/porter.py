@@ -14,6 +14,13 @@ from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLPrivateKey, SSLCertificate
 from ..p2p.learner import Learner
+from ..p2p.algorithms import (
+    learning_task,
+    verification_task,
+    staker_query_task,
+    verified_nodes_iter,
+    random_verified_nodes_iter,
+)
 from ..p2p.verification import VerifiedUrsulaInfo
 from .config import PorterServerConfig
 from .status import render_status
@@ -60,13 +67,18 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             storage=config.storage,
         )
 
-        self._verification_task = BackgroundTask(
-            worker=self.learner.verification_task, logger=self._logger
-        )
-        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
-        self._staker_query_task = BackgroundTask(
-            worker=self.learner.staker_query_task, logger=self._logger
-        )
+        async def _verification_task(stop_event: trio.Event) -> None:
+            await verification_task(stop_event, self.learner)
+
+        async def _learning_task(stop_event: trio.Event) -> None:
+            await learning_task(stop_event, self.learner)
+
+        async def _staker_query_task(stop_event: trio.Event) -> None:
+            await staker_query_task(stop_event, self.learner)
+
+        self._verification_task = BackgroundTask(worker=_verification_task, logger=self._logger)
+        self._learning_task = BackgroundTask(worker=_learning_task, logger=self._logger)
+        self._staker_query_task = BackgroundTask(worker=_staker_query_task, logger=self._logger)
 
         self._started_at = self._clock.utcnow()
 
@@ -116,15 +128,16 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
     ) -> List[VerifiedUrsulaInfo]:
         nodes = []
 
-        async with self.learner.verified_nodes_iter(
-            include_ursulas, verified_within=60
+        async with verified_nodes_iter(
+            self.learner, include_ursulas, verified_within=60
         ) as node_iter:
             async for node in node_iter:
                 nodes.append(node)
 
         if len(nodes) < quantity:
             overhead = max(1, (quantity - len(nodes)) // 5)
-            async with self.learner.random_verified_nodes_iter(
+            async with random_verified_nodes_iter(
+                learner=self.learner,
                 amount=quantity,
                 overhead=overhead,
                 verified_within=60,
@@ -140,7 +153,7 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        if request.quantity > len(self.learner.fleet_sensor._staking_providers):
+        if request.quantity > len(self.learner.get_available_staking_providers()):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
 
         # TODO: add support for excluding Ursulas
@@ -184,6 +197,6 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             node=None,
             logger=self._logger,
             clock=self._clock,
-            fleet_sensor=self.learner.fleet_sensor,
+            snapshot=self.learner.get_snapshot(),
             started_at=self._started_at,
         )

@@ -136,3 +136,12 @@ class UrsulaClient(PeerClient):
             secure_contact, UrsulaRoutes.REENCRYPT, bytes(reencryption_request)
         )
         return unwrap_bytes(response_bytes, ReencryptionResponse)
+
+    async def status(self, secure_contact: SecureContact) -> str:
+        response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.STATUS)
+        try:
+            return response_bytes.decode()
+        except UnicodeDecodeError as exc:
+            # TODO: the error contents is the HTML page with Mako traceback,
+            # process it accordingly.
+            raise InvalidMessage.for_message(str, exc)

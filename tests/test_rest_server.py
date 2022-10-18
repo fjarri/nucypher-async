@@ -47,5 +47,7 @@ async def test_client_real_server(
     response = await client.ping(ursula_server.secure_contact())
     assert response == "127.0.0.1"
 
+    response = await client.status(ursula_server.secure_contact())
+
     await handle.shutdown()
     capsys.readouterr()

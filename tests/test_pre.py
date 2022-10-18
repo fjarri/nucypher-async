@@ -9,6 +9,7 @@ from nucypher_async.server import UrsulaServer
 from nucypher_async.characters.pre import Delegator, Recipient, Publisher
 from nucypher_async.client.pre import grant, retrieve_and_decrypt, encrypt
 from nucypher_async.p2p.learner import Learner
+from nucypher_async.p2p.algorithms import verified_nodes_iter
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
 from nucypher_async.utils.logging import Logger
 
@@ -35,7 +36,7 @@ async def test_verified_nodes_iter(
     nodes = []
 
     with trio.fail_after(10):
-        async with learner.verified_nodes_iter(addresses) as aiter:
+        async with verified_nodes_iter(learner, addresses) as aiter:
             async for node in aiter:
                 nodes.append(node)
 

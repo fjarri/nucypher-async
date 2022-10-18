@@ -18,7 +18,9 @@ async def test_learning(
         await trio.sleep(100)
 
         known_nodes = {
-            server._node.staking_provider_address: server.learner.metadata_to_announce()
+            server._node.staking_provider_address: server.learner.get_verified_ursulas(
+                include_this_node=True
+            )
             for server in chain_seeded_ursulas
         }
 

@@ -8,7 +8,7 @@ from mako import exceptions as mako_exceptions
 from mako.template import Template
 
 from ..base.time import BaseClock
-from ..p2p.fleet_sensor import FleetSensor
+from ..p2p.fleet_sensor import FleetSensorSnapshot
 from ..p2p.verification import VerifiedUrsulaInfo
 from ..utils.logging import Logger
 from ..drivers.asgi_app import HTTPError
@@ -22,7 +22,7 @@ STATUS_TEMPLATE = Template(filename=str(BASE_DIR / "status.mako")).get_def("main
 def render_status(
     logger: Logger,
     clock: BaseClock,
-    fleet_sensor: FleetSensor,
+    snapshot: FleetSensorSnapshot,
     started_at: arrow.Arrow,
     node: Optional[VerifiedUrsulaInfo] = None,
 ) -> str:
@@ -31,7 +31,7 @@ def render_status(
 
     try:
         return STATUS_TEMPLATE.render(
-            fleet_sensor,
+            snapshot,
             node,
             started_at,
             code_info,

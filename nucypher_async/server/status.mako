@@ -1,4 +1,4 @@
-<%def name="main(fleet_sensor, node, started_at, code_info)">
+<%def name="main(snapshot, node, started_at, code_info)">
 <!DOCTYPE html>
 <html>
 <head>
@@ -74,10 +74,8 @@
 </style>
 </body>
     <%
-        verified_node_entries = fleet_sensor._verified_nodes_db._nodes
-        verify_at = {
-            entry.address: entry
-            for entry in fleet_sensor._verified_nodes_db._verify_at}
+        verified_node_entries = snapshot.verified_node_entries
+        verify_at = snapshot.verify_at_entries
 
         if code_info.release:
             version_str = code_info.version
@@ -167,8 +165,8 @@
     %endif
 
     <%
-        contacts = fleet_sensor._contacts_db._addresses_to_contacts
-        staking_providers = fleet_sensor._staking_providers
+        contacts = snapshot.addresses_to_contacts
+        staking_providers = snapshot.staking_providers
     %>
 
     <h3>Contacts (${len(contacts)} total)</h3>

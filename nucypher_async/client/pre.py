@@ -29,6 +29,7 @@ from ..characters.pre import (
     Recipient,
 )
 from ..p2p.learner import Learner
+from ..p2p.algorithms import verified_nodes_iter, random_verified_nodes_iter
 from ..p2p.verification import VerifiedUrsulaInfo
 
 
@@ -55,14 +56,15 @@ async def grant(
 
     handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
     nodes = []
-    async with learner.verified_nodes_iter(handpicked_addresses) as nodes_iter:
+    async with verified_nodes_iter(learner, handpicked_addresses) as nodes_iter:
         async for node in nodes_iter:
             nodes.append(node)
 
     shares = len(policy.key_frags)
     if len(nodes) < shares:
         # TODO: implement ranking for granting, don't just pick random nodes
-        async with learner.random_verified_nodes_iter(
+        async with random_verified_nodes_iter(
+            learner,
             shares - len(nodes),
             # exclude=handpicked_addresses # TODO:
         ) as node_iter:
@@ -78,7 +80,7 @@ async def grant(
         policy=policy, recipient_card=recipient_card, assigned_kfrags=assigned_kfrags
     )
 
-    policy_start = learner._clock.utcnow()
+    policy_start = learner.clock.utcnow()
     policy_end = policy_start.shift(days=30)  # TODO: make adjustable
 
     async with payment_client.session() as session:
@@ -126,8 +128,7 @@ async def retrieve(
             conditions=None,
             context=None,
         )
-        # TODO: why are we calling a private method here?
-        response = await learner._ursula_client.reencrypt(node.secure_contact, request)
+        response = await learner.reencrypt(node.secure_contact, request)
         verified_cfrags = response.verify(
             capsules=request.capsules,
             alice_verifying_key=delegator_card.verifying_key,
@@ -144,7 +145,7 @@ async def retrieve(
         for address, ekfrag in treasure_map.destinations.items()
     }
     async with trio.open_nursery() as nursery:
-        async with learner.verified_nodes_iter(destinations) as node_iter:
+        async with verified_nodes_iter(learner, destinations) as node_iter:
             async for node in node_iter:
                 nursery.start_soon(
                     reencrypt,

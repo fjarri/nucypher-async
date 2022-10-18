@@ -22,6 +22,7 @@ from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..p2p.ursula import UrsulaInfo
 from ..p2p.learner import Learner
+from ..p2p.algorithms import verification_task, learning_task
 from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
 from .status import render_status
 from .config import UrsulaServerConfig
@@ -103,10 +104,14 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
         self._started_at = self._clock.utcnow()
 
-        self._verification_task = BackgroundTask(
-            worker=self.learner.verification_task, logger=self._logger
-        )
-        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
+        async def _verification_task(stop_event: trio.Event) -> None:
+            await verification_task(stop_event, self.learner)
+
+        async def _learning_task(stop_event: trio.Event) -> None:
+            await learning_task(stop_event, self.learner)
+
+        self._verification_task = BackgroundTask(worker=_verification_task, logger=self._logger)
+        self._learning_task = BackgroundTask(worker=_learning_task, logger=self._logger)
 
         self.started = False
 
@@ -145,7 +150,9 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         raise GenericPeerError()
 
     async def node_metadata_get(self) -> MetadataResponse:
-        announce_nodes = [m.metadata for m in self.learner.metadata_to_announce()]
+        announce_nodes = [
+            m.metadata for m in self.learner.get_verified_ursulas(include_this_node=True)
+        ]
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
@@ -206,6 +213,6 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             node=self._node,
             logger=self._logger,
             clock=self._clock,
-            fleet_sensor=self.learner.fleet_sensor,
+            snapshot=self.learner.get_snapshot(),
             started_at=self._started_at,
         )

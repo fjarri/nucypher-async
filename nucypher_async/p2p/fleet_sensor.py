@@ -52,6 +52,14 @@ class StakingProviderEntry:
     weight: int
 
 
+@frozen
+class FleetSensorSnapshot:
+    verified_node_entries: Dict[IdentityAddress, NodeEntry]
+    verify_at_entries: Dict[IdentityAddress, VerifyAtEntry]
+    addresses_to_contacts: Dict[IdentityAddress, Set[Contact]]
+    staking_providers: Dict[IdentityAddress, AmountT]
+
+
 BroadcastValueT = TypeVar("BroadcastValueT")
 
 
@@ -485,6 +493,8 @@ class FleetSensor:
         return [entry.node for entry in sampled]
 
     def get_available_staking_providers(self) -> List[StakingProviderEntry]:
+        # TODO: update this list as we verify nodes, so that we could just return it on call -
+        # Porter needs this to reduce its response time.
         entries = []
         for address, entry in self._verified_nodes_db._nodes.items():
             if (
@@ -549,3 +559,13 @@ class FleetSensor:
         print("Locked contacts for learning:", file=file)
         print(list(self._locked_contacts_for_learning.keys()), file=file)
         return file.getvalue()
+
+    def get_snapshot(self) -> FleetSensorSnapshot:
+        return FleetSensorSnapshot(
+            verified_node_entries=dict(self._verified_nodes_db._nodes),
+            verify_at_entries={
+                entry.address: entry for entry in self._verified_nodes_db._verify_at
+            },
+            addresses_to_contacts=dict(self._contacts_db._addresses_to_contacts),
+            staking_providers=dict(self._staking_providers),
+        )
