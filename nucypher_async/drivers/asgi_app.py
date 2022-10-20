@@ -176,7 +176,7 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
 
     routes = [
         Route(f"/{PorterRoutes.GET_URSULAS}", get_ursulas),
-        Route(f"/{PorterRoutes.RETRIEVE_CFRAGS}", retrieve_cfrags),
+        Route(f"/{PorterRoutes.RETRIEVE_CFRAGS}", retrieve_cfrags, methods=["POST"]),
         Route(f"/{PorterRoutes.STATUS}", status),
     ]
 

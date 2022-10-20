@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, Set, Union
+from typing import Optional, Iterable, Set, Union, Dict
 
 from attrs import frozen
 import arrow
@@ -112,9 +112,9 @@ async def retrieve(
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-) -> Set[VerifiedCapsuleFrag]:
+) -> Dict[IdentityAddress, VerifiedCapsuleFrag]:
 
-    responses: Set[VerifiedCapsuleFrag] = set()
+    responses: Dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
     async def reencrypt(
         nursery: trio.Nursery, node: VerifiedUrsulaInfo, ekfrag: EncryptedKeyFrag
@@ -136,7 +136,7 @@ async def retrieve(
             policy_encrypting_key=treasure_map.policy_encrypting_key,
             bob_encrypting_key=recipient_card.encrypting_key,
         )
-        responses.add(verified_cfrags[0])
+        responses[node.staking_provider_address] = verified_cfrags[0]
         if len(responses) == treasure_map.threshold:
             nursery.cancel_scope.cancel()
 
@@ -178,5 +178,5 @@ async def retrieve_and_decrypt(
     )
 
     return recipient.decrypt_message_kit(
-        message_kit=message_kit, treasure_map=treasure_map, vcfrags=vcfrags
+        message_kit=message_kit, treasure_map=treasure_map, vcfrags=vcfrags.values()
     )

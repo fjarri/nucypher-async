@@ -1,13 +1,16 @@
 import http
-from typing import Tuple, List, Iterable
+from typing import Tuple, List, Iterable, Optional, Dict
 
 import attrs
 import trio
-from nucypher_core.umbral import PublicKey
+from nucypher_core import TreasureMap, RetrievalKit, Context
+from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.porter import BasePorterServer
+from ..characters.pre import DelegatorCard, RecipientCard
+from ..client.pre import retrieve
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
 from ..utils import BackgroundTask
@@ -15,6 +18,7 @@ from ..utils.logging import Logger
 from ..utils.ssl import SSLPrivateKey, SSLCertificate
 from ..p2p.learner import Learner
 from ..p2p.algorithms import (
+    get_ursulas,
     learning_task,
     verification_task,
     staker_query_task,
@@ -49,6 +53,32 @@ class GetUrsulasResult:
 @attrs.frozen
 class GetUrsulasResponse:
     result: GetUrsulasResult
+    version: str
+
+
+@attrs.frozen
+class RetrieveCFragsRequest:
+    treasure_map: TreasureMap
+    retrieval_kits: List[RetrievalKit]
+    alice_verifying_key: PublicKey
+    bob_encrypting_key: PublicKey
+    bob_verifying_key: PublicKey
+    context: Optional[Context]
+
+
+@attrs.frozen
+class RetrievalResult:
+    cfrags: Dict[IdentityAddress, VerifiedCapsuleFrag]
+
+
+@attrs.frozen
+class RetrieveCFragsResult:
+    retrieval_results: List[RetrievalResult]
+
+
+@attrs.frozen
+class RetrieveCFragsResponse:
+    result: RetrieveCFragsResult
     version: str
 
 
@@ -120,33 +150,6 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         self.started = False
 
-    async def _get_ursulas(
-        self,
-        quantity: int,
-        include_ursulas: Iterable[IdentityAddress],
-        exclude_ursulas: Iterable[IdentityAddress],
-    ) -> List[VerifiedUrsulaInfo]:
-        nodes = []
-
-        async with verified_nodes_iter(
-            self.learner, include_ursulas, verified_within=60
-        ) as node_iter:
-            async for node in node_iter:
-                nodes.append(node)
-
-        if len(nodes) < quantity:
-            overhead = max(1, (quantity - len(nodes)) // 5)
-            async with random_verified_nodes_iter(
-                learner=self.learner,
-                amount=quantity,
-                overhead=overhead,
-                verified_within=60,
-            ) as node_iter:
-                async for node in node_iter:
-                    nodes.append(node)
-
-        return nodes
-
     async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
         try:
             request = schema.from_json(GetUrsulasRequest, request_json)
@@ -164,12 +167,12 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         try:
             with trio.fail_after(5):
-                nodes = await self._get_ursulas(
+                nodes = await get_ursulas(
+                    learner=self.learner,
                     quantity=request.quantity,
                     include_ursulas=request.include_ursulas,
                     exclude_ursulas=request.exclude_ursulas,
                 )
-
         except trio.TooSlowError as exc:
             raise HTTPError(
                 "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
@@ -190,7 +193,28 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         return schema.to_json(response)
 
     async def endpoint_retrieve_cfrags(self, request_json: JSON) -> JSON:
-        raise NotImplementedError
+        try:
+            request = schema.from_json(RetrieveCFragsRequest, request_json)
+        except Exception as exc:  # TODO: catch the validation error
+            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+
+        retrieval_results = []
+        for retrieval_kit in request.retrieval_kits:
+            vcfrags = await retrieve(
+                learner=self.learner,
+                capsule=retrieval_kit.capsule,
+                treasure_map=request.treasure_map,
+                delegator_card=DelegatorCard(request.alice_verifying_key),
+                recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
+            )
+            retrieval_results.append(RetrievalResult(vcfrags))
+
+        response = RetrieveCFragsResponse(
+            result=RetrieveCFragsResult(retrieval_results=retrieval_results),
+            version="async-0.1.0-dev",
+        )
+
+        return schema.to_json(response)
 
     async def endpoint_status(self) -> str:
         return render_status(

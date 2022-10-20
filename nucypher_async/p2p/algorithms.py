@@ -2,7 +2,17 @@ from bisect import bisect_right
 from itertools import accumulate
 import datetime
 import random
-from typing import TypeVar, Generic, Sequence, Callable, Awaitable, Iterable, Optional, Mapping
+from typing import (
+    TypeVar,
+    Generic,
+    Sequence,
+    Callable,
+    Awaitable,
+    Iterable,
+    Optional,
+    Mapping,
+    List,
+)
 
 import trio
 
@@ -211,3 +221,29 @@ async def random_verified_nodes_iter(
                 if returned == amount:
                     nursery.cancel_scope.cancel()
                     return
+
+
+async def get_ursulas(
+    learner: Learner,
+    quantity: int,
+    include_ursulas: Iterable[IdentityAddress],
+    exclude_ursulas: Iterable[IdentityAddress],
+) -> List[VerifiedUrsulaInfo]:
+    nodes = []
+
+    async with verified_nodes_iter(learner, include_ursulas, verified_within=60) as node_iter:
+        async for node in node_iter:
+            nodes.append(node)
+
+    if len(nodes) < quantity:
+        overhead = max(1, (quantity - len(nodes)) // 5)
+        async with random_verified_nodes_iter(
+            learner=learner,
+            amount=quantity,
+            overhead=overhead,
+            verified_within=60,
+        ) as node_iter:
+            async for node in node_iter:
+                nodes.append(node)
+
+    return nodes
