@@ -79,7 +79,7 @@ def main() -> None:
 def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
     handle = HTTPServerHandle(UrsulaHTTPServer(server))
-    trio.run(handle)
+    trio.run(handle.startup)
 
 
 @main.command()
@@ -87,4 +87,4 @@ def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None
 def porter(config_path: str) -> None:
     server = make_porter_server(config_path)
     handle = HTTPServerHandle(server)
-    trio.run(handle)
+    trio.run(handle.startup)

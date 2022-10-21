@@ -89,7 +89,7 @@ class HTTPServerHandle:
         self._shutdown_event = trio.Event()
         self._shutdown_finished = trio.Event()
 
-    async def __call__(self, *, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED) -> None:
+    async def startup(self, *, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED) -> None:
         """
         Starts the server in an external event loop.
         Useful for the cases when it needs to run in parallel with other servers or clients.

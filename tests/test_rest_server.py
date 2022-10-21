@@ -41,7 +41,7 @@ async def test_client_real_server(
     nursery: trio.Nursery, capsys: pytest.CaptureFixture[str], ursula_server: UrsulaServer
 ) -> None:
     handle = HTTPServerHandle(UrsulaHTTPServer(ursula_server))
-    await nursery.start(handle)
+    await nursery.start(handle.startup)
 
     client = UrsulaClient(PeerClient())
     response = await client.ping(ursula_server.secure_contact())
