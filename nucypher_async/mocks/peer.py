@@ -19,7 +19,7 @@ class MockPeerClient(PeerClient):
 
     async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
         # TODO: raise ConnectionError if the server is not found
-        certificate, _server = self._mock_network.known_servers[(contact.host, contact.port)]
+        certificate, _manager = self._mock_network.get_server(contact.host, contact.port)
         return certificate
 
     @asynccontextmanager

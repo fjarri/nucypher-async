@@ -1,19 +1,25 @@
-import itertools
 import os
-from typing import List, Iterator, AsyncIterator
+from typing import List, Iterator, AsyncIterator, Tuple
 
 import pytest
 import trio
 
 import nucypher_async.utils.logging as logging
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock, MockPeerClient
+from nucypher_async.mocks import (
+    MockIdentityClient,
+    MockPaymentClient,
+    MockClock,
+    MockPeerClient,
+    MockHTTPServerHandle,
+)
 from nucypher_async.characters.pre import Ursula
 from nucypher_async.mocks import MockNetwork
 from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain
-from nucypher_async.server import UrsulaServerConfig, UrsulaServer
+from nucypher_async.server import UrsulaServerConfig, UrsulaServer, PorterServerConfig, PorterServer
 from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
 from nucypher_async.storage import InMemoryStorage
+from nucypher_async.utils.ssl import SSLPrivateKey, SSLCertificate
 
 
 @pytest.fixture(scope="session")
@@ -55,7 +61,7 @@ async def lonely_ursulas(
     ursulas: List[Ursula],
     logger: logging.Logger,
     mock_clock: MockClock,
-) -> List[UrsulaServer]:
+) -> List[Tuple[MockHTTPServerHandle, UrsulaServer]]:
     servers = []
 
     for i in range(10):
@@ -79,36 +85,40 @@ async def lonely_ursulas(
         )
 
         server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
-        servers.append(server)
-        mock_network.add_server(UrsulaHTTPServer(server))
+        handle = mock_network.add_server(UrsulaHTTPServer(server))
+        servers.append((handle, server))
 
     return servers
 
 
 @pytest.fixture
 async def chain_seeded_ursulas(
-    mock_network: MockNetwork, lonely_ursulas: List[UrsulaServer]
+    mock_network: MockNetwork, lonely_ursulas: List[Tuple[MockHTTPServerHandle, UrsulaServer]]
 ) -> AsyncIterator[List[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
     # but the graph is fully connected.
-    for server1, server2 in zip(lonely_ursulas[:-1], lonely_ursulas[1:]):
+    for (_handle1, server1), (_handle2, server2) in zip(lonely_ursulas[:-1], lonely_ursulas[1:]):
         server2.learner._test_set_seed_contacts([server1.secure_contact().contact])
 
-    await mock_network.start_all()
-    yield lonely_ursulas
-    await mock_network.stop_all()
+    for handle, _server in lonely_ursulas:
+        await handle.startup()
+
+    yield [server for _handle, server in lonely_ursulas]
+
+    for handle, _server in lonely_ursulas:
+        await handle.shutdown()
 
 
 @pytest.fixture
 async def fully_learned_ursulas(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    lonely_ursulas: List[UrsulaServer],
+    lonely_ursulas: List[Tuple[MockHTTPServerHandle, UrsulaServer]],
 ) -> AsyncIterator[List[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
     # but the graph is fully connected.
-    for server in lonely_ursulas:
-        for other_server in lonely_ursulas:
+    for _handle, server in lonely_ursulas:
+        for _other_handle, other_server in lonely_ursulas:
             if other_server is server:
                 continue
 
@@ -117,6 +127,47 @@ async def fully_learned_ursulas(
                 stake = await session.get_staked_amount(peer_info.staking_provider_address)
             server.learner._test_add_verified_node(peer_info, stake)
 
-    await mock_network.start_all()
-    yield lonely_ursulas
-    await mock_network.stop_all()
+    for handle, _server in lonely_ursulas:
+        await handle.startup()
+
+    yield [server for _handle, server in lonely_ursulas]
+
+    for handle, _server in lonely_ursulas:
+        await handle.shutdown()
+
+
+@pytest.fixture
+async def porter_server(
+    mock_network: MockNetwork,
+    mock_identity_client: MockIdentityClient,
+    fully_learned_ursulas: List[UrsulaServer],
+    logger: logging.Logger,
+    mock_clock: MockClock,
+    autojump_clock: trio.testing.MockClock,
+) -> AsyncIterator[PorterServer]:
+
+    host = "127.0.0.1"
+    port = 9000
+    ssl_private_key = SSLPrivateKey.from_seed(b"1231234")
+    ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
+
+    config = PorterServerConfig(
+        domain=Domain.MAINNET,
+        host=host,
+        port=port,
+        ssl_private_key=ssl_private_key,
+        ssl_certificate=ssl_certificate,
+        identity_client=mock_identity_client,
+        peer_client=MockPeerClient(mock_network, host),
+        parent_logger=logger,
+        storage=InMemoryStorage(),
+        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        clock=mock_clock,
+    )
+    server = PorterServer(config)
+
+    handle = mock_network.add_server(server)
+
+    await handle.startup()
+    yield server
+    await handle.shutdown()

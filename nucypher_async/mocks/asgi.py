@@ -23,9 +23,9 @@ class LifespanManager:
         self._startup_complete = trio.Event()
         self._shutdown_complete = trio.Event()
 
-    async def run(self, nursery: trio.Nursery) -> None:
+    async def startup(self, nursery: trio.Nursery) -> None:
         lifespan: LifespanScope = {"type": "lifespan", "asgi": {"version": "3.0"}}
-        nursery.start_soon(self.app, lifespan, self.receive, self.send)
+        nursery.start_soon(self.app, lifespan, self._receive, self._send)
         event: LifespanStartupEvent = {"type": "lifespan.startup"}
         await self._send_channel.send(event)
         await self._startup_complete.wait()
@@ -35,35 +35,53 @@ class LifespanManager:
         await self._send_channel.send(event)
         await self._shutdown_complete.wait()
 
-    async def receive(self) -> ASGIReceiveEvent:
+    async def _receive(self) -> ASGIReceiveEvent:
         return await self._receive_channel.receive()
 
-    async def send(self, message: ASGISendEvent) -> None:
+    async def _send(self, message: ASGISendEvent) -> None:
         if message["type"] == "lifespan.startup.complete":
             self._startup_complete.set()
         elif message["type"] == "lifespan.shutdown.complete":
             self._shutdown_complete.set()
 
 
+class MockHTTPServerHandle:
+    def __init__(self, network: "MockNetwork", host: str, port: int):
+        self._network = network
+        self._host = host
+        self._port = port
+
+    async def startup(self) -> None:
+        await self._network.startup(self._host, self._port)
+
+    async def shutdown(self) -> None:
+        await self._network.shutdown(self._host, self._port)
+
+
 class MockNetwork:
     def __init__(self, nursery: trio.Nursery):
-        self.known_servers: Dict[Tuple[str, int], Tuple[SSLCertificate, LifespanManager]] = {}
-        self.nursery = nursery
+        self._known_servers: Dict[Tuple[str, int], Tuple[SSLCertificate, LifespanManager]] = {}
+        self._nursery = nursery
 
-    def add_server(self, server: BaseHTTPServer) -> None:
+    def add_server(self, server: BaseHTTPServer) -> MockHTTPServerHandle:
         app = server.into_asgi_app()
         manager = LifespanManager(app)
         certificate = server.ssl_certificate()
         host, port = server.host_and_port()
-        self.known_servers[(host, port)] = (certificate, manager)
+        assert (host, port) not in self._known_servers
+        self._known_servers[(host, port)] = (certificate, manager)
+        return MockHTTPServerHandle(self, host, port)
 
-    async def start_all(self) -> None:
-        for _certificate, manager in self.known_servers.values():
-            await manager.run(self.nursery)
+    async def startup(self, host: str, port: int) -> None:
+        _certificate, manager = self._known_servers[(host, port)]
+        await manager.startup(self._nursery)
 
-    async def stop_all(self) -> None:
-        for (_host, _port), (_certificate, manager) in self.known_servers.items():
-            await manager.shutdown()
+    async def shutdown(self, host: str, port: int) -> None:
+        _certificate, manager = self._known_servers[(host, port)]
+        await manager.startup(self._nursery)
+
+    def get_server(self, host: str, port: int) -> Tuple[SSLCertificate, LifespanManager]:
+        return self._known_servers[(host, port)]
 
 
 class MockHTTPClient:
@@ -89,9 +107,7 @@ class MockHTTPClient:
         url_parts = urlparse(url)
         assert url_parts.hostname is not None, "Hostname is missing from the url"
         assert url_parts.port is not None, "Port is missing from the url"
-        certificate, manager = self._mock_network.known_servers[
-            (url_parts.hostname, url_parts.port)
-        ]
+        certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
         assert self._certificate == certificate
         transport = httpx.ASGITransport(app=manager.app, client=(self._host, 9999))
         async with httpx.AsyncClient(transport=transport) as client:
