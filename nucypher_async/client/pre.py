@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, Set, Union, Dict
+from typing import Optional, Iterable, Set, Union, Dict, List
 
 from attrs import frozen
 import arrow
@@ -11,6 +11,7 @@ from nucypher_core import (
     ReencryptionRequest,
     EncryptedTreasureMap,
     EncryptedKeyFrag,
+    RetrievalKit,
 )
 from nucypher_core.umbral import (
     PublicKey,
@@ -154,6 +155,28 @@ async def retrieve(
                     destinations[node.staking_provider_address],
                 )
     return responses
+
+
+async def retrieve_batch(
+    learner: Learner,
+    retrieval_kits: List[RetrievalKit],
+    treasure_map: TreasureMap,
+    delegator_card: DelegatorCard,
+    recipient_card: RecipientCard,
+) -> List[Dict[IdentityAddress, VerifiedCapsuleFrag]]:
+    # TODO: the simlpest implementation
+    # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
+    vcfrags_batch = []
+    for retrieval_kit in retrieval_kits:
+        vcfrags = await retrieve(
+            learner=learner,
+            capsule=retrieval_kit.capsule,
+            treasure_map=treasure_map,
+            delegator_card=delegator_card,
+            recipient_card=recipient_card,
+        )
+        vcfrags_batch.append(vcfrags)
+    return vcfrags_batch
 
 
 async def retrieve_and_decrypt(

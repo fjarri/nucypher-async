@@ -10,7 +10,7 @@ from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.porter import BasePorterServer
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..client.pre import retrieve
+from ..client.pre import retrieve_batch
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
 from ..utils import BackgroundTask
@@ -198,16 +198,15 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        retrieval_results = []
-        for retrieval_kit in request.retrieval_kits:
-            vcfrags = await retrieve(
-                learner=self.learner,
-                capsule=retrieval_kit.capsule,
-                treasure_map=request.treasure_map,
-                delegator_card=DelegatorCard(request.alice_verifying_key),
-                recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
-            )
-            retrieval_results.append(RetrievalResult(vcfrags))
+        vcfrags_batch = await retrieve_batch(
+            learner=self.learner,
+            retrieval_kits=request.retrieval_kits,
+            treasure_map=request.treasure_map,
+            delegator_card=DelegatorCard(request.alice_verifying_key),
+            recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
+        )
+
+        retrieval_results = [RetrievalResult(vcfrags) for vcfrags in vcfrags_batch]
 
         response = RetrieveCFragsResponse(
             result=RetrieveCFragsResult(retrieval_results=retrieval_results),
