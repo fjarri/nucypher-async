@@ -156,14 +156,14 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
     logger = porter_server.logger().get_child("App")
 
     async def get_ursulas(request: Request) -> Response:
-        json_request = await request.json() if await request.body() else {}
-        json_request.update(request.query_params)
-        return await rest_api_call(logger, porter_server.endpoint_get_ursulas(json_request))
+        request_body = await request.json() if await request.body() else {}
+        return await rest_api_call(
+            logger, porter_server.endpoint_get_ursulas(dict(request.query_params), request_body)
+        )
 
     async def retrieve_cfrags(request: Request) -> Response:
-        json_request = await request.json() if await request.body() else {}
-        json_request.update(request.query_params)
-        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(json_request))
+        request_body = await request.json() if await request.body() else {}
+        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(request_body))
 
     async def status(request: Request) -> Response:
         return await rest_api_call(logger, porter_server.endpoint_status())

@@ -21,6 +21,7 @@ from nucypher_async.client.pre import grant, encrypt, retrieve_and_decrypt
 
 async def test_get_ursulas(
     mock_network: MockNetwork,
+    fully_learned_ursulas: List[UrsulaServer],
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,
 ) -> None:
@@ -28,8 +29,17 @@ async def test_get_ursulas(
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient(http_client, "127.0.0.1", 9000)
 
-    ursulas = await porter_client.get_ursulas(quantity=3)
+    some_ursulas = [
+        fully_learned_ursulas[3]._node.staking_provider_address,
+        fully_learned_ursulas[7]._node.staking_provider_address,
+    ]
+    ursulas = await porter_client.get_ursulas(quantity=3, include_ursulas=some_ursulas)
     assert len(ursulas) == 3
+    assert all(ursula in ursulas for ursula in some_ursulas)
+
+    ursulas = await porter_client.get_ursulas(quantity=8, exclude_ursulas=some_ursulas)
+    assert len(ursulas) == 8
+    assert all(ursula not in ursulas for ursula in some_ursulas)
 
 
 async def test_retrieve_cfrags(

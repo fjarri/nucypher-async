@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Dict, Any
 
 import trio
 
@@ -27,11 +28,13 @@ class BasePorterServer(ABC):
         ...
 
     @abstractmethod
-    async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
+    async def endpoint_get_ursulas(
+        self, request_params: Dict[str, str], request_body: JSON
+    ) -> JSON:
         ...
 
     @abstractmethod
-    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> JSON:
+    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
         ...
 
     @abstractmethod

@@ -17,6 +17,7 @@ from typing import (
 import trio
 
 from ..drivers.identity import IdentityAddress
+from ..drivers.peer import Contact
 from ..utils import wait_for_any
 from ..utils.producer import producer
 from .fleet_sensor import NodeEntry, StakingProviderEntry
@@ -163,6 +164,7 @@ async def random_verified_nodes_iter(
     amount: int,
     overhead: int = 0,
     verified_within: Optional[float] = None,
+    exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
 ) -> None:
 
     if learner.is_empty():
@@ -173,10 +175,12 @@ async def random_verified_nodes_iter(
     providers = learner.get_available_staking_providers()
     reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
+    exclude_ursulas = set(exclude_ursulas) if exclude_ursulas else set()
+
     def is_usable(
         address: IdentityAddress, node_entries: Mapping[IdentityAddress, NodeEntry]
     ) -> bool:
-        if drawn_entry.address not in node_entries:
+        if address not in node_entries:
             return False
 
         if verified_within is None:
@@ -190,8 +194,8 @@ async def random_verified_nodes_iter(
 
     send_channel, receive_channel = trio.open_memory_channel[Optional[VerifiedUrsulaInfo]](0)
 
-    async def verify_and_yield(drawn_entry: StakingProviderEntry) -> None:
-        node = await learner.verify_contact_and_report(drawn_entry.contact)
+    async def verify_and_yield(contact: Contact) -> None:
+        node = await learner.verify_contact_and_report(contact)
         await send_channel.send(node)
 
     async with trio.open_nursery() as nursery:
@@ -200,17 +204,23 @@ async def random_verified_nodes_iter(
             node_entries = learner.get_verified_node_entries()
 
             while drawn < amount + failed + overhead and reservoir:
-                drawn += 1
-                drawn_entry = reservoir.draw()
+                drawn_address = reservoir.draw().address
+                if drawn_address in exclude_ursulas:
+                    continue
+                if drawn_address not in node_entries:
+                    continue
 
-                if is_usable(drawn_entry.address, node_entries):
+                drawn += 1
+                entry = node_entries[drawn_address]
+
+                if is_usable(drawn_address, node_entries):
                     returned += 1
-                    await yield_(node_entries[drawn_entry.address].node)
+                    await yield_(entry.node)
                     if returned == amount:
                         nursery.cancel_scope.cancel()
                         return
                 else:
-                    nursery.start_soon(verify_and_yield, drawn_entry)
+                    nursery.start_soon(verify_and_yield, entry.node.contact)
 
             node = await receive_channel.receive()
             if node is None:
@@ -226,22 +236,28 @@ async def random_verified_nodes_iter(
 async def get_ursulas(
     learner: Learner,
     quantity: int,
-    include_ursulas: Iterable[IdentityAddress],
-    exclude_ursulas: Iterable[IdentityAddress],
+    include_ursulas: Optional[Iterable[IdentityAddress]] = None,
+    exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
 ) -> List[VerifiedUrsulaInfo]:
     nodes = []
 
-    async with verified_nodes_iter(learner, include_ursulas, verified_within=60) as node_iter:
+    include = set(include_ursulas) if include_ursulas else set()
+    exclude = set(exclude_ursulas) if exclude_ursulas else set()
+
+    # Note: include_ursulas takes priority over exclude_ursulas
+    async with verified_nodes_iter(learner, include, verified_within=60) as node_iter:
         async for node in node_iter:
             nodes.append(node)
 
     if len(nodes) < quantity:
-        overhead = max(1, (quantity - len(nodes)) // 5)
+        quantity_remaining = quantity - len(nodes)
+        overhead = max(1, quantity_remaining // 5)
         async with random_verified_nodes_iter(
             learner=learner,
-            amount=quantity,
+            amount=quantity_remaining,
             overhead=overhead,
             verified_within=60,
+            exclude_ursulas=exclude | include,
         ) as node_iter:
             async for node in node_iter:
                 nodes.append(node)

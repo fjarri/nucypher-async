@@ -1,5 +1,5 @@
 import http
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, cast
 
 import attrs
 import trio
@@ -147,20 +147,37 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         self.started = False
 
-    async def endpoint_get_ursulas(self, request_json: JSON) -> JSON:
+    async def endpoint_get_ursulas(
+        self, request_params: Dict[str, str], request_body: JSON
+    ) -> JSON:
+
+        # TODO: find a more structured way to parse this
+        if not isinstance(request_body, dict):
+            raise HTTPError("Request body must be a dictionary", http.HTTPStatus.BAD_REQUEST)
+
+        request_body = dict(request_body)
         try:
-            request = schema.from_json(GetUrsulasRequest, request_json)
+            if "quantity" in request_params:
+                request_body["quantity"] = int(request_params["quantity"])
+            if "include_ursulas" in request_params and request_params["include_ursulas"] != "":
+                request_body["include_ursulas"] = cast(
+                    JSON, request_params["include_ursulas"].split(",")
+                )
+            if "exclude_ursulas" in request_params and request_params["exclude_ursulas"] != "":
+                request_body["exclude_ursulas"] = cast(
+                    JSON, request_params["exclude_ursulas"].split(",")
+                )
+        except Exception as exc:
+            self._logger.error("Failed to parse request parameters", exc_info=True)
+            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+
+        try:
+            request = schema.from_json(GetUrsulasRequest, request_body)
         except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
         if request.quantity > len(self.learner.get_available_staking_providers()):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
-
-        # TODO: add support for excluding Ursulas
-        if request.exclude_ursulas:
-            raise HTTPError(
-                "Excluding Ursulas is currently not supported", http.HTTPStatus.BAD_REQUEST
-            )
 
         try:
             with trio.fail_after(5):
@@ -189,9 +206,9 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         return schema.to_json(response)
 
-    async def endpoint_retrieve_cfrags(self, request_json: JSON) -> JSON:
+    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
-            request = schema.from_json(RetrieveCFragsRequest, request_json)
+            request = schema.from_json(RetrieveCFragsRequest, request_body)
         except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 

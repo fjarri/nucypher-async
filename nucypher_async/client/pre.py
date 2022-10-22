@@ -30,7 +30,7 @@ from ..characters.pre import (
     Recipient,
 )
 from ..p2p.learner import Learner
-from ..p2p.algorithms import verified_nodes_iter, random_verified_nodes_iter
+from ..p2p.algorithms import verified_nodes_iter, get_ursulas
 from ..p2p.verification import VerifiedUrsulaInfo
 from .porter import PorterClient
 
@@ -57,21 +57,13 @@ async def grant(
             raise RuntimeError(f"Policy {policy.hrac} is already active")
 
     handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
-    nodes = []
-    async with verified_nodes_iter(learner, handpicked_addresses) as nodes_iter:
-        async for node in nodes_iter:
-            nodes.append(node)
-
     shares = len(policy.key_frags)
-    if len(nodes) < shares:
-        # TODO: implement ranking for granting, don't just pick random nodes
-        async with random_verified_nodes_iter(
-            learner,
-            shares - len(nodes),
-            # exclude=handpicked_addresses # TODO:
-        ) as node_iter:
-            async for node in node_iter:
-                nodes.append(node)
+
+    nodes = await get_ursulas(
+        learner=learner,
+        quantity=shares,
+        include_ursulas=handpicked_addresses,
+    )
 
     assigned_kfrags = {
         Address(bytes(node.staking_provider_address)): (node.encrypting_key, key_frag)
