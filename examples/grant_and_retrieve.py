@@ -155,15 +155,15 @@ async def bob_decrypts(
     )
 
     decrypted = await retrieve_and_decrypt(
-        learner=learner,
-        message_kit=message_kit,
+        client=learner,
+        message_kits=[message_kit],
         enacted_policy=enacted_policy,
         delegator_card=delegator_card,
         recipient=recipient,
         publisher_card=publisher_card,
     )
 
-    return decrypted
+    return decrypted[0]
 
 
 async def main(mocked: bool = True) -> None:

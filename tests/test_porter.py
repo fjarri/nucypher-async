@@ -3,8 +3,6 @@ from typing import List
 import trio
 import trio.testing
 
-from nucypher_core import RetrievalKit
-
 from nucypher_async.domain import Domain
 from nucypher_async.server import PorterServer, UrsulaServer
 from nucypher_async.mocks import (
@@ -17,9 +15,8 @@ from nucypher_async.mocks import (
 from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.characters.pre import Delegator, Recipient, Publisher
-from nucypher_async.client.pre import grant, encrypt
-from nucypher_async.server.porter import RetrieveCFragsRequest
-from nucypher_async import schema
+from nucypher_async.client.porter import PorterClient
+from nucypher_async.client.pre import grant, encrypt, retrieve_and_decrypt
 
 
 async def test_get_ursulas(
@@ -29,10 +26,10 @@ async def test_get_ursulas(
 ) -> None:
     mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
     http_client = mock_client.as_httpx_async_client()
-    response = await http_client.get("https://127.0.0.1:9000/get_ursulas?quantity=3")
-    assert response.status_code == 200
-    result = response.json()
-    assert len(result["result"]["ursulas"]) == 3
+    porter_client = PorterClient(http_client, "127.0.0.1", 9000)
+
+    ursulas = await porter_client.get_ursulas(quantity=3)
+    assert len(ursulas) == 3
 
 
 async def test_retrieve_cfrags(
@@ -45,6 +42,7 @@ async def test_retrieve_cfrags(
 ) -> None:
     mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
     http_client = mock_client.as_httpx_async_client()
+    porter_client = PorterClient(http_client, "127.0.0.1", 9000)
 
     alice = Delegator.random()
     publisher = Publisher.random()
@@ -83,22 +81,13 @@ async def test_retrieve_cfrags(
     message = b"a secret message"
     message_kit = encrypt(policy, message)
 
-    tmap = bob.decrypt_treasure_map(enacted_policy.encrypted_treasure_map, publisher.card())
-    rkit = RetrievalKit.from_message_kit(message_kit)
-    request = RetrieveCFragsRequest(
-        treasure_map=tmap,
-        retrieval_kits=[rkit],
-        alice_verifying_key=alice.verifying_key,
-        bob_encrypting_key=bob.encrypting_key,
-        bob_verifying_key=bob.verifying_key,
-        context=None,
+    decrypted = await retrieve_and_decrypt(
+        client=porter_client,
+        message_kits=[message_kit],
+        enacted_policy=enacted_policy,
+        delegator_card=alice.card(),
+        recipient=bob,
+        publisher_card=publisher.card(),
     )
 
-    import json
-
-    response = await http_client.post(
-        "https://127.0.0.1:9000/retrieve_cfrags", content=json.dumps(schema.to_json(request))
-    )
-    assert response.status_code == 200
-    result = response.json()
-    print(result)
+    assert decrypted == [message]

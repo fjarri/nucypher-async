@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, Set, Union, Dict, List
+from typing import Optional, Iterable, Union, Dict, List, Mapping
 
 from attrs import frozen
 import arrow
@@ -32,6 +32,7 @@ from ..characters.pre import (
 from ..p2p.learner import Learner
 from ..p2p.algorithms import verified_nodes_iter, random_verified_nodes_iter
 from ..p2p.verification import VerifiedUrsulaInfo
+from .porter import PorterClient
 
 
 @frozen
@@ -107,6 +108,27 @@ def encrypt(policy: Union[Policy, EnactedPolicy], message: bytes) -> MessageKit:
     )
 
 
+@frozen
+class RetrievalState:
+    retrieval_kit: RetrievalKit
+    vcfrags: Dict[IdentityAddress, VerifiedCapsuleFrag]
+
+    @classmethod
+    def from_message_kit(cls, message_kit: MessageKit) -> "RetrievalState":
+        return cls(RetrievalKit.from_message_kit(message_kit), {})
+
+    def with_vcfrags(
+        self, vcfrags: Mapping[IdentityAddress, VerifiedCapsuleFrag]
+    ) -> "RetrievalState":
+        old_rkit = self.retrieval_kit
+        addresses = {Address(bytes(address)) for address in vcfrags}
+        new_queried_addresses = old_rkit.queried_addresses | addresses
+        new_rkit = RetrievalKit(old_rkit.capsule, new_queried_addresses, old_rkit.conditions)
+        new_vcfrags = dict(self.vcfrags)
+        new_vcfrags.update(vcfrags)
+        return RetrievalState(new_rkit, new_vcfrags)
+
+
 async def retrieve(
     learner: Learner,
     capsule: Capsule,
@@ -157,49 +179,92 @@ async def retrieve(
     return responses
 
 
-async def retrieve_batch(
+async def retrieve_via_learner(
     learner: Learner,
-    retrieval_kits: List[RetrievalKit],
+    retrieval_states: List[RetrievalState],
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-) -> List[Dict[IdentityAddress, VerifiedCapsuleFrag]]:
+) -> List[RetrievalState]:
     # TODO: the simlpest implementation
     # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
-    vcfrags_batch = []
-    for retrieval_kit in retrieval_kits:
+    new_states = []
+    for state in retrieval_states:
         vcfrags = await retrieve(
             learner=learner,
-            capsule=retrieval_kit.capsule,
+            capsule=state.retrieval_kit.capsule,
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient_card,
         )
-        vcfrags_batch.append(vcfrags)
-    return vcfrags_batch
+        new_states.append(state.with_vcfrags(vcfrags))
+    return new_states
+
+
+async def retrieve_via_porter(
+    porter_client: PorterClient,
+    retrieval_states: List[RetrievalState],
+    treasure_map: TreasureMap,
+    delegator_card: DelegatorCard,
+    recipient_card: RecipientCard,
+) -> List[RetrievalState]:
+
+    retrieval_kits = [state.retrieval_kit for state in retrieval_states]
+    response = await porter_client.retrieve_cfrags(
+        treasure_map=treasure_map,
+        retrieval_kits=retrieval_kits,
+        delegator_card=delegator_card,
+        recipient_card=recipient_card,
+        context=None,
+    )
+
+    return [
+        old_state.with_vcfrags(vcfrags) for old_state, vcfrags in zip(retrieval_states, response)
+    ]
 
 
 async def retrieve_and_decrypt(
-    learner: Learner,
-    message_kit: MessageKit,
+    client: Union[Learner, PorterClient],
+    message_kits: Iterable[MessageKit],
     enacted_policy: EnactedPolicy,
     delegator_card: DelegatorCard,
     recipient: Recipient,
     publisher_card: PublisherCard,
-) -> bytes:
+) -> List[bytes]:
 
     treasure_map = recipient.decrypt_treasure_map(
         enacted_policy.encrypted_treasure_map, publisher_card
     )
 
-    vcfrags = await retrieve(
-        learner=learner,
-        capsule=message_kit.capsule,
-        treasure_map=treasure_map,
-        delegator_card=delegator_card,
-        recipient_card=recipient.card(),
-    )
+    retrieval_states = [
+        RetrievalState.from_message_kit(message_kit) for message_kit in message_kits
+    ]
 
-    return recipient.decrypt_message_kit(
-        message_kit=message_kit, treasure_map=treasure_map, vcfrags=vcfrags.values()
-    )
+    # TODO: run mutliple rounds until completion
+    if isinstance(client, Learner):
+        retrieval_states = await retrieve_via_learner(
+            learner=client,
+            retrieval_states=retrieval_states,
+            treasure_map=treasure_map,
+            delegator_card=delegator_card,
+            recipient_card=recipient.card(),
+        )
+    else:
+        retrieval_states = await retrieve_via_porter(
+            porter_client=client,
+            retrieval_states=retrieval_states,
+            treasure_map=treasure_map,
+            delegator_card=delegator_card,
+            recipient_card=recipient.card(),
+        )
+
+    # TODO: check that we have enough vcfrags
+
+    decrypted = [
+        recipient.decrypt_message_kit(
+            message_kit=message_kit, treasure_map=treasure_map, vcfrags=state.vcfrags.values()
+        )
+        for state, message_kit in zip(retrieval_states, message_kits)
+    ]
+
+    return decrypted

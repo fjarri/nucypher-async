@@ -97,13 +97,13 @@ async def test_granting(
     )
 
     with trio.fail_after(10):
-        message_back = await retrieve_and_decrypt(
-            learner=bob_learner,
-            message_kit=message_kit,
+        decrypted = await retrieve_and_decrypt(
+            client=bob_learner,
+            message_kits=[message_kit],
             enacted_policy=enacted_policy,
             delegator_card=alice.card(),
             recipient=bob,
             publisher_card=publisher.card(),
         )
 
-    assert message_back == message
+    assert decrypted == [message]

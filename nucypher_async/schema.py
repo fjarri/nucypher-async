@@ -3,7 +3,7 @@ from typing import Type, TypeVar, cast, Any
 
 import cattrs
 from nucypher_core import TreasureMap, Context, RetrievalKit
-from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
+from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag, CapsuleFrag
 
 from .drivers.identity import IdentityAddress
 from .base.types import JSON
@@ -41,6 +41,10 @@ def unstructure_retrieval_kit(val: RetrievalKit) -> str:
     return base64.b64encode(bytes(val)).decode()
 
 
+def structure_cfrag(val: str, cls: Type[CapsuleFrag]) -> CapsuleFrag:
+    return cls.from_bytes(base64.b64decode(val.encode()))
+
+
 def unstructure_vcfrag(val: VerifiedCapsuleFrag) -> str:
     return base64.b64encode(bytes(val)).decode()
 
@@ -67,6 +71,7 @@ _CONVERTER.register_unstructure_hook(TreasureMap, unstructure_treasure_map)
 _CONVERTER.register_structure_hook(RetrievalKit, structure_retrieval_kit)
 _CONVERTER.register_unstructure_hook(RetrievalKit, unstructure_retrieval_kit)
 
+_CONVERTER.register_structure_hook(CapsuleFrag, structure_cfrag)
 _CONVERTER.register_unstructure_hook(VerifiedCapsuleFrag, unstructure_vcfrag)
 
 _CONVERTER.register_structure_hook(Context, structure_context)

@@ -1,5 +1,5 @@
 import http
-from typing import Tuple, List, Iterable, Optional, Dict
+from typing import Tuple, List, Optional, Dict
 
 import attrs
 import trio
@@ -10,7 +10,7 @@ from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.porter import BasePorterServer
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..client.pre import retrieve_batch
+from ..client.pre import retrieve_via_learner, RetrievalState
 from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
 from ..utils import BackgroundTask
@@ -22,20 +22,10 @@ from ..p2p.algorithms import (
     learning_task,
     verification_task,
     staker_query_task,
-    verified_nodes_iter,
-    random_verified_nodes_iter,
 )
-from ..p2p.verification import VerifiedUrsulaInfo
 from .config import PorterServerConfig
 from .status import render_status
 from .. import schema
-
-
-@attrs.frozen
-class GetUrsulasRequest:
-    quantity: int
-    include_ursulas: List[IdentityAddress] = []
-    exclude_ursulas: List[IdentityAddress] = []
 
 
 @attrs.frozen
@@ -54,6 +44,13 @@ class GetUrsulasResult:
 class GetUrsulasResponse:
     result: GetUrsulasResult
     version: str
+
+
+@attrs.frozen
+class GetUrsulasRequest:
+    quantity: int
+    include_ursulas: List[IdentityAddress] = []
+    exclude_ursulas: List[IdentityAddress] = []
 
 
 @attrs.frozen
@@ -198,15 +195,17 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         except Exception as exc:  # TODO: catch the validation error
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        vcfrags_batch = await retrieve_batch(
+        retrieval_states = [RetrievalState(rkit, {}) for rkit in request.retrieval_kits]
+
+        new_states = await retrieve_via_learner(
             learner=self.learner,
-            retrieval_kits=request.retrieval_kits,
+            retrieval_states=retrieval_states,
             treasure_map=request.treasure_map,
             delegator_card=DelegatorCard(request.alice_verifying_key),
             recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
         )
 
-        retrieval_results = [RetrievalResult(vcfrags) for vcfrags in vcfrags_batch]
+        retrieval_results = [RetrievalResult(state.vcfrags) for state in new_states]
 
         response = RetrieveCFragsResponse(
             result=RetrieveCFragsResult(retrieval_results=retrieval_results),
