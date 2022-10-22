@@ -156,7 +156,7 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
     logger = porter_server.logger().get_child("App")
 
     async def get_ursulas(request: Request) -> Response:
-        request_body = await request.json() if await request.body() else {}
+        request_body = await request.json() if await request.body() else None
         return await rest_api_call(
             logger, porter_server.endpoint_get_ursulas(dict(request.query_params), request_body)
         )

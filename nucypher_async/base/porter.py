@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import trio
 
@@ -29,7 +29,7 @@ class BasePorterServer(ABC):
 
     @abstractmethod
     async def endpoint_get_ursulas(
-        self, request_params: Dict[str, str], request_body: JSON
+        self, request_params: Dict[str, str], request_body: Optional[JSON]
     ) -> JSON:
         ...
 

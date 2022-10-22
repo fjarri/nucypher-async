@@ -9,57 +9,7 @@ from nucypher_core.umbral import PublicKey, CapsuleFrag, VerifiedCapsuleFrag
 from ..drivers.identity import IdentityAddress
 from ..characters.pre import DelegatorCard, RecipientCard
 from .. import schema
-
-
-@attrs.frozen
-class UrsulaResult:
-    checksum_address: IdentityAddress
-    uri: str
-    encrypting_key: PublicKey
-
-
-@attrs.frozen
-class GetUrsulasResult:
-    ursulas: List[UrsulaResult]
-
-
-@attrs.frozen
-class GetUrsulasResponse:
-    result: GetUrsulasResult
-    version: str
-
-
-@attrs.frozen
-class GetUrsulasRequest:
-    quantity: int
-    include_ursulas: List[IdentityAddress] = []
-    exclude_ursulas: List[IdentityAddress] = []
-
-
-@attrs.frozen
-class RetrieveCFragsRequest:
-    treasure_map: TreasureMap
-    retrieval_kits: List[RetrievalKit]
-    alice_verifying_key: PublicKey
-    bob_encrypting_key: PublicKey
-    bob_verifying_key: PublicKey
-    context: Optional[Context]
-
-
-@attrs.frozen
-class ClientRetrievalResult:
-    cfrags: Dict[IdentityAddress, CapsuleFrag]
-
-
-@attrs.frozen
-class ClientRetrieveCFragsResult:
-    retrieval_results: List[ClientRetrievalResult]
-
-
-@attrs.frozen
-class ClientRetrieveCFragsResponse:
-    result: ClientRetrieveCFragsResult
-    version: str
+from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
 
 class PorterClient:

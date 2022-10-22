@@ -23,60 +23,19 @@ from ..p2p.algorithms import (
     verification_task,
     staker_query_task,
 )
+from .. import schema
+from ..schema.porter import (
+    GetUrsulasRequest,
+    UrsulaResult,
+    GetUrsulasResponse,
+    GetUrsulasResult,
+    ServerRetrieveCFragsResponse,
+    ServerRetrieveCFragsResult,
+    ServerRetrievalResult,
+    RetrieveCFragsRequest,
+)
 from .config import PorterServerConfig
 from .status import render_status
-from .. import schema
-
-
-@attrs.frozen
-class UrsulaResult:
-    checksum_address: IdentityAddress
-    uri: str
-    encrypting_key: PublicKey
-
-
-@attrs.frozen
-class GetUrsulasResult:
-    ursulas: List[UrsulaResult]
-
-
-@attrs.frozen
-class GetUrsulasResponse:
-    result: GetUrsulasResult
-    version: str
-
-
-@attrs.frozen
-class GetUrsulasRequest:
-    quantity: int
-    include_ursulas: List[IdentityAddress] = []
-    exclude_ursulas: List[IdentityAddress] = []
-
-
-@attrs.frozen
-class RetrieveCFragsRequest:
-    treasure_map: TreasureMap
-    retrieval_kits: List[RetrievalKit]
-    alice_verifying_key: PublicKey
-    bob_encrypting_key: PublicKey
-    bob_verifying_key: PublicKey
-    context: Optional[Context]
-
-
-@attrs.frozen
-class RetrievalResult:
-    cfrags: Dict[IdentityAddress, VerifiedCapsuleFrag]
-
-
-@attrs.frozen
-class RetrieveCFragsResult:
-    retrieval_results: List[RetrievalResult]
-
-
-@attrs.frozen
-class RetrieveCFragsResponse:
-    result: RetrieveCFragsResult
-    version: str
 
 
 class PorterServer(BaseHTTPServer, BasePorterServer):
@@ -148,33 +107,29 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         self.started = False
 
     async def endpoint_get_ursulas(
-        self, request_params: Dict[str, str], request_body: JSON
+        self, request_params: Dict[str, str], request_body: Optional[JSON]
     ) -> JSON:
 
-        # TODO: find a more structured way to parse this
-        if not isinstance(request_body, dict):
-            raise HTTPError("Request body must be a dictionary", http.HTTPStatus.BAD_REQUEST)
-
-        request_body = dict(request_body)
         try:
-            if "quantity" in request_params:
-                request_body["quantity"] = int(request_params["quantity"])
-            if "include_ursulas" in request_params and request_params["include_ursulas"] != "":
-                request_body["include_ursulas"] = cast(
-                    JSON, request_params["include_ursulas"].split(",")
-                )
-            if "exclude_ursulas" in request_params and request_params["exclude_ursulas"] != "":
-                request_body["exclude_ursulas"] = cast(
-                    JSON, request_params["exclude_ursulas"].split(",")
-                )
-        except Exception as exc:
-            self._logger.error("Failed to parse request parameters", exc_info=True)
+            request = GetUrsulasRequest.from_query_params(request_params)
+        except schema.ValidationError as exc:
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        try:
-            request = schema.from_json(GetUrsulasRequest, request_body)
-        except Exception as exc:  # TODO: catch the validation error
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+        if request_body is not None:
+            try:
+                request_from_body = schema.from_json(GetUrsulasRequest, request_body)
+            except schema.ValidationError as exc:
+                raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+
+            # TODO: kind of weird. Who would use both query params and body?
+            # Also, should GET request even support a body?
+            # What does the reference implementation do?
+            request = attrs.evolve(
+                request_from_body,
+                quantity=request.quantity,
+                include_ursulas=request.include_ursulas,
+                exclude_ursulas=request.exclude_ursulas,
+            )
 
         if request.quantity > len(self.learner.get_available_staking_providers()):
             raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
@@ -222,10 +177,10 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
         )
 
-        retrieval_results = [RetrievalResult(state.vcfrags) for state in new_states]
+        retrieval_results = [ServerRetrievalResult(state.vcfrags) for state in new_states]
 
-        response = RetrieveCFragsResponse(
-            result=RetrieveCFragsResult(retrieval_results=retrieval_results),
+        response = ServerRetrieveCFragsResponse(
+            result=ServerRetrieveCFragsResult(retrieval_results=retrieval_results),
             version="async-0.1.0-dev",
         )
 
