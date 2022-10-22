@@ -1,17 +1,14 @@
 import http
-from typing import Tuple, List, Optional, Dict, cast
+from typing import Tuple, Optional, Dict
 
 import attrs
 import trio
-from nucypher_core import TreasureMap, RetrievalKit, Context
-from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from ..base.types import JSON
 from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.porter import BasePorterServer
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..client.pre import retrieve_via_learner, RetrievalState
-from ..drivers.identity import IdentityAddress
 from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
@@ -164,7 +161,7 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
     async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
             request = schema.from_json(RetrieveCFragsRequest, request_body)
-        except Exception as exc:  # TODO: catch the validation error
+        except schema.ValidationError as exc:
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
         retrieval_states = [RetrievalState(rkit, {}) for rkit in request.retrieval_kits]

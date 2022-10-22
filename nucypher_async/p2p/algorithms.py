@@ -20,7 +20,7 @@ from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact
 from ..utils import wait_for_any
 from ..utils.producer import producer
-from .fleet_sensor import NodeEntry, StakingProviderEntry
+from .fleet_sensor import NodeEntry
 from .learner import Learner
 from .verification import VerifiedUrsulaInfo
 

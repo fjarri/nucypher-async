@@ -2,18 +2,20 @@ from typing import Optional, Iterable, Tuple, List, Set, Dict
 
 import trio
 
-from nucypher_core import MetadataRequest, ReencryptionRequest, ReencryptionResponse
+from nucypher_core import TreasureMap
+from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
+from ..characters.pre import DelegatorCard, RecipientCard
 from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
-from ..drivers.peer import Contact, PeerClient, SecureContact
+from ..drivers.peer import Contact, PeerClient
 from ..drivers.time import SystemClock
 from ..domain import Domain
 from ..storage import InMemoryStorage, BaseStorage
 from ..utils.logging import NULL_LOGGER, Logger
 from .ursula import UrsulaInfo, UrsulaClient
-from .verification import VerifiedUrsulaInfo, verify_staking_remote, PeerVerificationError
+from .verification import VerifiedUrsulaInfo, verify_staking_remote
 from .fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry, FleetSensorSnapshot
 from .fleet_state import FleetState
 
@@ -90,8 +92,7 @@ class Learner:
 
         # TODO: merge all of it into `public_information()`?
         secure_contact = await self._ursula_client.handshake(contact)
-        metadata = await self._ursula_client.public_information(secure_contact)
-        ursula_info = UrsulaInfo(metadata)
+        ursula_info = await self._ursula_client.public_information(secure_contact)
 
         async with self._identity_client.session() as session:
             staking_provider_address = ursula_info.staking_provider_address
@@ -114,20 +115,13 @@ class Learner:
         )
 
         if self._this_node:
-            request = MetadataRequest(self.fleet_state.checksum, [self._this_node.metadata])
-            metadata_response = await self._ursula_client.node_metadata_post(
-                node.secure_contact, request
+            ursulas_info = await self._ursula_client.exchange_ursulas_info(
+                node, self.fleet_state.checksum, self._this_node
             )
         else:
-            metadata_response = await self._ursula_client.node_metadata_get(node.secure_contact)
+            ursulas_info = await self._ursula_client.get_ursulas_info(node)
 
-        try:
-            payload = metadata_response.verify(node.verifying_key)
-        except Exception as exc:  # TODO: can we narrow it down?
-            # TODO: should it be a separate error class?
-            raise PeerVerificationError("Failed to verify MetadataResponse") from exc
-
-        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+        return ursulas_info
 
     async def learn_from_node_and_report(self, node: VerifiedUrsulaInfo) -> None:
         with self._fleet_sensor.try_lock_contact_for_learning(node.contact) as (
@@ -263,9 +257,20 @@ class Learner:
                 nursery.start_soon(self.learn_from_node_and_report, node)
 
     async def reencrypt(
-        self, secure_contact: SecureContact, request: ReencryptionRequest
-    ) -> ReencryptionResponse:
-        return await self._ursula_client.reencrypt(secure_contact, request)
+        self,
+        ursula: VerifiedUrsulaInfo,
+        capsules: List[Capsule],
+        treasure_map: TreasureMap,
+        delegator_card: DelegatorCard,
+        recipient_card: RecipientCard,
+    ) -> List[VerifiedCapsuleFrag]:
+        return await self._ursula_client.reencrypt(
+            ursula=ursula,
+            capsules=capsules,
+            treasure_map=treasure_map,
+            delegator_card=delegator_card,
+            recipient_card=recipient_card,
+        )
 
     def next_verification_in(self) -> float:
         return self._fleet_sensor.next_verification_in()

@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import TypeVar, Type, Protocol
+from typing import TypeVar, Type, Protocol, List
 
 import arrow
 from nucypher_core import (
@@ -9,11 +9,15 @@ from nucypher_core import (
     ReencryptionRequest,
     ReencryptionResponse,
     NodeMetadataPayload,
+    FleetStateChecksum,
+    TreasureMap,
+    Address,
 )
-from nucypher_core.umbral import PublicKey
+from nucypher_core.umbral import PublicKey, Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import InvalidMessage
 from ..base.ursula import UrsulaRoutes
+from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.peer import Contact, SecureContact, PeerPublicKey, PeerClient
 from ..drivers.identity import IdentityAddress
@@ -109,33 +113,95 @@ class UrsulaClient:
         except UnicodeDecodeError as exc:
             raise InvalidMessage.for_message(str, exc)
 
-    async def node_metadata_get(self, secure_contact: SecureContact) -> MetadataResponse:
+    async def get_ursulas_info(
+        self,
+        ursula: UrsulaInfo,
+    ) -> List[UrsulaInfo]:
         response_bytes = await self._peer_client.communicate(
-            secure_contact, UrsulaRoutes.NODE_METADATA
+            ursula.secure_contact, UrsulaRoutes.NODE_METADATA
         )
-        return unwrap_bytes(response_bytes, MetadataResponse)
+        response = unwrap_bytes(response_bytes, MetadataResponse)
 
-    async def node_metadata_post(
-        self, secure_contact: SecureContact, metadata_request: MetadataRequest
-    ) -> MetadataResponse:
+        try:
+            payload = response.verify(ursula.verifying_key)
+        except Exception as exc:  # TODO: can we narrow it down?
+            # TODO: should it be a separate error class?
+            raise InvalidMessage(MetadataResponse, exc) from exc
+
+        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+
+    async def exchange_ursulas_info(
+        self,
+        ursula: UrsulaInfo,
+        fleet_state_checksum: FleetStateChecksum,
+        this_ursula: UrsulaInfo,
+    ) -> List[UrsulaInfo]:
+        # TODO: should `this_ursula` be narrowed down to VerifiedUrsulaInfo?
+        request = MetadataRequest(fleet_state_checksum, [this_ursula.metadata])
         response_bytes = await self._peer_client.communicate(
-            secure_contact, UrsulaRoutes.NODE_METADATA, bytes(metadata_request)
+            ursula.secure_contact, UrsulaRoutes.NODE_METADATA, bytes(request)
         )
-        return unwrap_bytes(response_bytes, MetadataResponse)
+        response = unwrap_bytes(response_bytes, MetadataResponse)
 
-    async def public_information(self, secure_contact: SecureContact) -> NodeMetadata:
+        try:
+            payload = response.verify(ursula.verifying_key)
+        except Exception as exc:  # TODO: can we narrow it down?
+            # TODO: should it be a separate error class?
+            raise InvalidMessage(MetadataResponse, exc) from exc
+
+        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+
+    async def public_information(self, secure_contact: SecureContact) -> UrsulaInfo:
         response_bytes = await self._peer_client.communicate(
             secure_contact, UrsulaRoutes.PUBLIC_INFORMATION
         )
-        return unwrap_bytes(response_bytes, NodeMetadata)
+        metadata = unwrap_bytes(response_bytes, NodeMetadata)
+        return UrsulaInfo(metadata)
 
     async def reencrypt(
-        self, secure_contact: SecureContact, reencryption_request: ReencryptionRequest
-    ) -> ReencryptionResponse:
-        response_bytes = await self._peer_client.communicate(
-            secure_contact, UrsulaRoutes.REENCRYPT, bytes(reencryption_request)
+        self,
+        ursula: UrsulaInfo,
+        capsules: List[Capsule],
+        treasure_map: TreasureMap,
+        delegator_card: DelegatorCard,
+        recipient_card: RecipientCard,
+    ) -> List[VerifiedCapsuleFrag]:
+        # TODO: should we narrow down `ursula` to `VerifiedUrsulaInfo`?
+        try:
+            ekfrag = treasure_map.destinations[Address(bytes(ursula.staking_provider_address))]
+        except KeyError as exc:
+            raise ValueError(
+                f"The provided treasure map does not list Ursula {ursula.staking_provider_address}"
+            )
+
+        request = ReencryptionRequest(
+            capsules=capsules,
+            hrac=treasure_map.hrac,
+            encrypted_kfrag=ekfrag,
+            publisher_verifying_key=treasure_map.publisher_verifying_key,
+            bob_verifying_key=recipient_card.verifying_key,
+            conditions=None,
+            context=None,
         )
-        return unwrap_bytes(response_bytes, ReencryptionResponse)
+        response_bytes = await self._peer_client.communicate(
+            ursula.secure_contact, UrsulaRoutes.REENCRYPT, bytes(request)
+        )
+
+        response = unwrap_bytes(response_bytes, ReencryptionResponse)
+
+        try:
+            verified_cfrags = response.verify(
+                capsules=capsules,
+                alice_verifying_key=delegator_card.verifying_key,
+                ursula_verifying_key=ursula.verifying_key,
+                policy_encrypting_key=treasure_map.policy_encrypting_key,
+                bob_encrypting_key=recipient_card.encrypting_key,
+            )
+        except Exception as exc:  # TODO: can we narrow it down?
+            # TODO: should it be a separate error class?
+            raise InvalidMessage(ReencryptionResponse, exc) from exc
+
+        return verified_cfrags
 
     async def status(self, secure_contact: SecureContact) -> str:
         response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.STATUS)

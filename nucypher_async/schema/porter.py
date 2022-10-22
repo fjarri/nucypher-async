@@ -6,7 +6,7 @@ from nucypher_core.umbral import PublicKey, CapsuleFrag, VerifiedCapsuleFrag
 
 from ..base.types import JSON
 from ..drivers.identity import IdentityAddress
-from .base import ValidationError, from_json
+from .base import from_json
 
 
 @frozen

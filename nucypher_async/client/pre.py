@@ -8,9 +8,7 @@ from nucypher_core import (
     Address,
     TreasureMap,
     MessageKit,
-    ReencryptionRequest,
     EncryptedTreasureMap,
-    EncryptedKeyFrag,
     RetrievalKit,
 )
 from nucypher_core.umbral import (
@@ -131,25 +129,13 @@ async def retrieve(
 
     responses: Dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
-    async def reencrypt(
-        nursery: trio.Nursery, node: VerifiedUrsulaInfo, ekfrag: EncryptedKeyFrag
-    ) -> None:
-        request = ReencryptionRequest(
+    async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
+        verified_cfrags = await learner.reencrypt(
+            ursula=node,
             capsules=[capsule],
-            hrac=treasure_map.hrac,
-            encrypted_kfrag=ekfrag,
-            publisher_verifying_key=treasure_map.publisher_verifying_key,
-            bob_verifying_key=recipient_card.verifying_key,
-            conditions=None,
-            context=None,
-        )
-        response = await learner.reencrypt(node.secure_contact, request)
-        verified_cfrags = response.verify(
-            capsules=request.capsules,
-            alice_verifying_key=delegator_card.verifying_key,
-            ursula_verifying_key=node.verifying_key,
-            policy_encrypting_key=treasure_map.policy_encrypting_key,
-            bob_encrypting_key=recipient_card.encrypting_key,
+            treasure_map=treasure_map,
+            delegator_card=delegator_card,
+            recipient_card=recipient_card,
         )
         responses[node.staking_provider_address] = verified_cfrags[0]
         if len(responses) == treasure_map.threshold:
@@ -162,12 +148,7 @@ async def retrieve(
     async with trio.open_nursery() as nursery:
         async with verified_nodes_iter(learner, destinations) as node_iter:
             async for node in node_iter:
-                nursery.start_soon(
-                    reencrypt,
-                    nursery,
-                    node,
-                    destinations[node.staking_provider_address],
-                )
+                nursery.start_soon(reencrypt, nursery, node)
     return responses
 
 

@@ -1,10 +1,9 @@
-import attrs
 import httpx
 import json
 from typing import List, Optional, Dict, Iterable, Tuple
 
 from nucypher_core import TreasureMap, RetrievalKit, Context
-from nucypher_core.umbral import PublicKey, CapsuleFrag, VerifiedCapsuleFrag
+from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from ..drivers.identity import IdentityAddress
 from ..characters.pre import DelegatorCard, RecipientCard
