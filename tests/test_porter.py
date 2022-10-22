@@ -27,7 +27,7 @@ async def test_get_ursulas(
 ) -> None:
     mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
     http_client = mock_client.as_httpx_async_client()
-    porter_client = PorterClient(http_client, "127.0.0.1", 9000)
+    porter_client = PorterClient("127.0.0.1", 9000, http_client)
 
     some_ursulas = [
         fully_learned_ursulas[3]._node.staking_provider_address,
@@ -52,7 +52,7 @@ async def test_retrieve_cfrags(
 ) -> None:
     mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
     http_client = mock_client.as_httpx_async_client()
-    porter_client = PorterClient(http_client, "127.0.0.1", 9000)
+    porter_client = PorterClient("127.0.0.1", 9000, http_client)
 
     alice = Delegator.random()
     publisher = Publisher.random()
