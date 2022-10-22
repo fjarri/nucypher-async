@@ -198,6 +198,8 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             publisher_card=PublisherCard(request.publisher_verifying_key),
         )
 
+        # TODO: check conditions here
+
         # TODO: catch reencryption errors (if any) and raise RPC error here
         vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=request.capsules)
 

@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import TypeVar, Type, Protocol, List
+from typing import TypeVar, Type, Protocol, List, Optional
 
 import arrow
 from nucypher_core import (
@@ -12,6 +12,8 @@ from nucypher_core import (
     FleetStateChecksum,
     TreasureMap,
     Address,
+    Conditions,
+    Context,
 )
 from nucypher_core.umbral import PublicKey, Capsule, VerifiedCapsuleFrag
 
@@ -165,6 +167,8 @@ class UrsulaClient:
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
+        conditions: Optional[Conditions] = None,
+        context: Optional[Context] = None,
     ) -> List[VerifiedCapsuleFrag]:
         # TODO: should we narrow down `ursula` to `VerifiedUrsulaInfo`?
         try:
@@ -180,8 +184,8 @@ class UrsulaClient:
             encrypted_kfrag=ekfrag,
             publisher_verifying_key=treasure_map.publisher_verifying_key,
             bob_verifying_key=recipient_card.verifying_key,
-            conditions=None,
-            context=None,
+            conditions=conditions,
+            context=context,
         )
         response_bytes = await self._peer_client.communicate(
             ursula.secure_contact, UrsulaRoutes.REENCRYPT, bytes(request)

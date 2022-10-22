@@ -10,6 +10,8 @@ from nucypher_core import (
     MessageKit,
     EncryptedTreasureMap,
     RetrievalKit,
+    Conditions,
+    Context,
 )
 from nucypher_core.umbral import (
     PublicKey,
@@ -121,10 +123,11 @@ class RetrievalState:
 
 async def retrieve(
     learner: Learner,
-    capsule: Capsule,
+    retrieval_kit: RetrievalKit,
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
+    context: Optional[Context] = None,
 ) -> Dict[IdentityAddress, VerifiedCapsuleFrag]:
 
     responses: Dict[IdentityAddress, VerifiedCapsuleFrag] = {}
@@ -132,10 +135,12 @@ async def retrieve(
     async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
         verified_cfrags = await learner.reencrypt(
             ursula=node,
-            capsules=[capsule],
+            capsules=[retrieval_kit.capsule],
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient_card,
+            conditions=retrieval_kit.conditions,
+            context=context,
         )
         responses[node.staking_provider_address] = verified_cfrags[0]
         if len(responses) == treasure_map.threshold:
@@ -158,6 +163,7 @@ async def retrieve_via_learner(
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
+    context: Optional[Context] = None,
 ) -> List[RetrievalState]:
     # TODO: the simlpest implementation
     # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
@@ -165,10 +171,11 @@ async def retrieve_via_learner(
     for state in retrieval_states:
         vcfrags = await retrieve(
             learner=learner,
-            capsule=state.retrieval_kit.capsule,
+            retrieval_kit=state.retrieval_kit,
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient_card,
+            context=context,
         )
         new_states.append(state.with_vcfrags(vcfrags))
     return new_states
@@ -180,6 +187,7 @@ async def retrieve_via_porter(
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
+    context: Optional[Context] = None,
 ) -> List[RetrievalState]:
 
     retrieval_kits = [state.retrieval_kit for state in retrieval_states]
@@ -188,7 +196,7 @@ async def retrieve_via_porter(
         retrieval_kits=retrieval_kits,
         delegator_card=delegator_card,
         recipient_card=recipient_card,
-        context=None,
+        context=context,
     )
 
     return [
@@ -203,6 +211,7 @@ async def retrieve_and_decrypt(
     delegator_card: DelegatorCard,
     recipient: Recipient,
     publisher_card: PublisherCard,
+    context: Optional[Context] = None,
 ) -> List[bytes]:
 
     treasure_map = recipient.decrypt_treasure_map(
@@ -221,6 +230,7 @@ async def retrieve_and_decrypt(
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient.card(),
+            context=context,
         )
     else:
         retrieval_states = await retrieve_via_porter(
@@ -229,6 +239,7 @@ async def retrieve_and_decrypt(
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient.card(),
+            context=context,
         )
 
     # TODO: check that we have enough vcfrags

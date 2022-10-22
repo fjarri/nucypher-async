@@ -2,7 +2,7 @@ from typing import Optional, Iterable, Tuple, List, Set, Dict
 
 import trio
 
-from nucypher_core import TreasureMap
+from nucypher_core import TreasureMap, Conditions, Context
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
@@ -263,6 +263,8 @@ class Learner:
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
+        conditions: Optional[Conditions] = None,
+        context: Optional[Context] = None,
     ) -> List[VerifiedCapsuleFrag]:
         return await self._ursula_client.reencrypt(
             ursula=ursula,
@@ -270,6 +272,8 @@ class Learner:
             treasure_map=treasure_map,
             delegator_card=delegator_card,
             recipient_card=recipient_card,
+            conditions=conditions,
+            context=context,
         )
 
     def next_verification_in(self) -> float:
