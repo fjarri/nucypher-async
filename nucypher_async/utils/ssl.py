@@ -1,9 +1,13 @@
 from ipaddress import ip_address
-from typing import Optional, Any, cast
+from typing import Optional, Any, cast, get_args
 import ssl
 
 import arrow
 from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric.types import (
+    CERTIFICATE_PRIVATE_KEY_TYPES,
+    CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES,
+)
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
@@ -19,7 +23,7 @@ class SSLPrivateKey:
         private_key = ec.derive_private_key(private_value=private_bn, curve=ec.SECP384R1())
         return cls(private_key)
 
-    def __init__(self, private_key: ec.EllipticCurvePrivateKey):
+    def __init__(self, private_key: CERTIFICATE_PRIVATE_KEY_TYPES):
         self._private_key = private_key
 
     def public_key(self) -> "SSLPublicKey":
@@ -28,9 +32,16 @@ class SSLPrivateKey:
     @classmethod
     def from_pem_bytes(cls, data: bytes, password: Optional[bytes] = None) -> "SSLPrivateKey":
         private_key = load_pem_private_key(data, password=password)
-        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
-            raise ValueError("`SSLPrivateKey` can only be deserialized from an EC private key")
-        return cls(private_key)
+        # Not everything that `load_pem_private_key()` can load
+        # can serve as a certificate private key.
+        key_types = get_args(CERTIFICATE_PRIVATE_KEY_TYPES)
+        if not isinstance(private_key, key_types):
+            raise ValueError(
+                f"`SSLPrivateKey` can only be deserialized from {key_types}, "
+                f"got {type(private_key)}"
+            )
+        # mypy can't understand it, but we just checked it above
+        return cls(cast(CERTIFICATE_PRIVATE_KEY_TYPES, private_key))
 
     def to_pem_bytes(self, password: bytes) -> bytes:
         return self._private_key.private_bytes(
@@ -41,20 +52,18 @@ class SSLPrivateKey:
 
 
 class SSLPublicKey:
-    def __init__(self, public_key: ec.EllipticCurvePublicKey):
+    def __init__(self, public_key: CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES):
         self._public_key = public_key
 
     def __bytes__(self) -> bytes:
         return self._public_key.public_bytes(
-            encoding=serialization.Encoding.X962,
-            format=serialization.PublicFormat.CompressedPoint,
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
 
-    def __str__(self) -> str:
-        return "0x" + bytes(self).hex()
-
     def __eq__(self, other: Any) -> bool:
-        return isinstance(other, SSLPublicKey) and self._public_key == other._public_key
+        # Comparing byte representations since equality is not defined for RSAPublicKey
+        return isinstance(other, SSLPublicKey) and bytes(self) == bytes(other)
 
 
 class InvalidCertificate(Exception):
@@ -121,10 +130,16 @@ class SSLCertificate:
         return cls(x509.load_der_x509_certificate(data))
 
     def public_key(self) -> SSLPublicKey:
-        # It will have this type by construction
-        # (stemming from `SSLPrivateKey` using SECP384R1)
-        backend_public_key = cast(ec.EllipticCurvePublicKey, self._certificate.public_key())
-        return SSLPublicKey(backend_public_key)
+        public_key = self._certificate.public_key()
+        # We need these to match the supported types in SSLPrivateKey
+        key_types = get_args(CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES)
+        if not isinstance(public_key, key_types):
+            raise ValueError(
+                f"Certificates can only have public keys of type {key_types}, "
+                f"got {type(public_key)}"
+            )
+        # mypy can't understand it, but we just checked it above
+        return SSLPublicKey(cast(CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES, public_key))
 
     @property
     def declared_host(self) -> str:
