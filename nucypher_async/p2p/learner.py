@@ -140,7 +140,7 @@ class Learner:
                     message = "timed out"
                 else:
                     message = str(exc)
-                self._logger.debug(
+                self._logger.error(
                     "Error when trying to learn from {} ({}): {}",
                     node.contact,
                     node.staking_provider_address.checksum,
@@ -175,11 +175,10 @@ class Learner:
                     message = "timed out"
                 else:
                     message = str(exc)
-                self._logger.debug(
+                self._logger.error(
                     "Error when trying to verify {}: {}",
                     contact,
                     message,
-                    exc_info=True,
                 )
                 self._fleet_sensor.report_bad_contact(contact)
                 self.fleet_state.remove_contact(contact)
