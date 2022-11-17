@@ -169,7 +169,7 @@ async def bob_decrypts(
 async def main(mocked: bool = True) -> None:
 
     logger = Logger(handlers=[ConsoleHandler(level=Level.INFO)])
-    domain = Domain.IBEX
+    domain = Domain.TAPIR
 
     if mocked:
         context = Context(
@@ -183,8 +183,8 @@ async def main(mocked: bool = True) -> None:
         context = Context(
             logger=logger,
             domain=domain,
-            identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.IBEX),
-            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.IBEX),
+            identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.TAPIR),
+            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.TAPIR),
             clock=SystemClock(),
         )
 
@@ -195,7 +195,7 @@ async def main(mocked: bool = True) -> None:
             # Wait for all the nodes to learn about each other
             await trio.sleep(3600)
         else:
-            seed_contact = Contact("ibex.nucypher.network", 9151)
+            seed_contact = Contact("tapir.nucypher.network", 9151)
 
         bob_keys = MasterKey.random()
         bob = Recipient(bob_keys)

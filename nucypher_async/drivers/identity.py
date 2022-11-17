@@ -76,22 +76,22 @@ class BaseContracts:
     PRE_APPLICATION: IdentityAddress
 
 
-class IbexContracts(BaseContracts):
+class LynxContracts(BaseContracts):
     """
-    Registry for Rinkeby.
-    """
-
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0xaE0d9D8edec5567BBFA8B5cbCD6705a13491Ca35")
-
-
-class OryxContracts(BaseContracts):
-    """
-    Registry for Ropsten.
+    Registry for Lynx on Goerli.
     """
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0xb6f98dA65174CE8F50eA0ea4350D96B2d3eFde9a")
+    PRE_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
+
+
+class TapirContracts(BaseContracts):
+    """
+    Registry for Tapir on Goerli.
+    """
+
+    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
+    PRE_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
 
 
 class MainnetContracts(BaseContracts):
@@ -147,10 +147,10 @@ class IdentityClient:
         registry: Type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
-        elif domain == Domain.IBEX:
-            registry = IbexContracts
-        elif domain == Domain.ORYX:
-            registry = OryxContracts
+        elif domain == Domain.LYNX:
+            registry = LynxContracts
+        elif domain == Domain.TAPIR:
+            registry = TapirContracts
         else:
             raise ValueError(f"Unknown domain: {domain}")
 

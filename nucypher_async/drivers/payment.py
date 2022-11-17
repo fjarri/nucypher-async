@@ -74,7 +74,7 @@ class BaseContracts:
     SUBSCRIPTION_MANAGER: PaymentAddress
 
 
-class IbexContracts(BaseContracts):
+class LynxContracts(BaseContracts):
     """
     Registry for Polygon-Mumbai.
     """
@@ -83,7 +83,7 @@ class IbexContracts(BaseContracts):
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
-class OryxContracts(BaseContracts):
+class TapirContracts(BaseContracts):
     """
     Registry for Polygon-Mumbai.
     """
@@ -139,10 +139,10 @@ class PaymentClient:
         registry: Type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
-        elif domain == Domain.IBEX:
-            registry = IbexContracts
-        elif domain == Domain.ORYX:
-            registry = OryxContracts
+        elif domain == Domain.LYNX:
+            registry = LynxContracts
+        elif domain == Domain.TAPIR:
+            registry = TapirContracts
         else:
             raise ValueError(f"Unknown domain: {domain}")
 

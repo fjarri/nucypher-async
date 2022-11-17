@@ -18,10 +18,10 @@ from ..utils.logging import Logger, Level, Handler, ConsoleHandler, RotatingFile
 def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
     if domain == Domain.MAINNET:
         return [Contact("mainnet.nucypher.network", 9151)]
-    if domain == Domain.IBEX:
-        return [Contact("ibex.nucypher.network", 9151)]
-    if domain == Domain.ORYX:
-        return [Contact("oryx.nucypher.network", 9151)]
+    if domain == Domain.TAPIR:
+        return [Contact("tapir.nucypher.network", 9151)]
+    if domain == Domain.LYNX:
+        return [Contact("lynx.nucypher.network", 9151)]
 
     return []
 
