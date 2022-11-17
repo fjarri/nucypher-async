@@ -44,6 +44,7 @@ async def make_ursula_server(
         log_to_console=True,
         log_to_file=True,
         persistent_storage=True,
+        debug=config.get("debug", False),
     )
 
     server = await UrsulaServer.async_init(ursula=local_ursula, config=config)
@@ -63,6 +64,7 @@ def make_porter_server(config_path: str) -> PorterServer:
         ssl_certificate_path=config["ssl_certificate"],
         ssl_private_key_path=config["ssl_private_key"],
         ssl_ca_chain_path=config.get("ssl_ca_chain", None),
+        debug=config.get("debug", False),
     )
 
     return PorterServer(config)

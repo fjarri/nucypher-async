@@ -12,7 +12,7 @@ from ..drivers.payment import PaymentClient
 from ..drivers.peer import PeerClient, Contact
 from ..domain import Domain
 from ..storage import BaseStorage, InMemoryStorage, FileSystemStorage
-from ..utils.logging import Logger, Handler, ConsoleHandler, RotatingFileHandler
+from ..utils.logging import Logger, Level, Handler, ConsoleHandler, RotatingFileHandler
 
 
 def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
@@ -40,7 +40,11 @@ def app_dirs(profile_name: str) -> Directories:
 
 
 def make_logger(
-    profile_name: str, log_name: str, log_to_console: bool = True, log_to_file: bool = True
+    profile_name: str,
+    log_name: str,
+    log_to_console: bool = True,
+    log_to_file: bool = True,
+    debug: bool = True,
 ) -> Logger:
     dirs = app_dirs(profile_name)
     log_handlers: List[Handler] = []
@@ -48,7 +52,7 @@ def make_logger(
         log_handlers.append(ConsoleHandler())
     if log_to_file:
         log_handlers.append(RotatingFileHandler(log_file=dirs.log_dir / (log_name + ".log")))
-    return Logger(handlers=log_handlers)
+    return Logger(level=Level.DEBUG if debug else Level.INFO, handlers=log_handlers)
 
 
 def make_storage(profile_name: str, persistent_storage: bool = True) -> BaseStorage:
@@ -83,6 +87,7 @@ class UrsulaServerConfig:
         log_to_console: bool = True,
         log_to_file: bool = True,
         persistent_storage: bool = True,
+        debug: bool = False,
         profile_name: str = "ursula",
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
@@ -101,6 +106,7 @@ class UrsulaServerConfig:
             "ursula",
             log_to_console=log_to_console,
             log_to_file=log_to_file,
+            debug=debug,
         )
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
@@ -143,6 +149,7 @@ class PorterServerConfig:
         ssl_certificate_path: Union[str, Path],
         ssl_private_key_path: Union[str, Path],
         ssl_ca_chain_path: Optional[Union[str, Path]] = None,
+        debug: bool = False,
         profile_name: str = "porter",
         domain: str = "mainnet",
         log_to_console: bool = True,
@@ -162,6 +169,7 @@ class PorterServerConfig:
             "porter",
             log_to_console=log_to_console,
             log_to_file=log_to_file,
+            debug=debug,
         )
         storage = make_storage(profile_name, persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
