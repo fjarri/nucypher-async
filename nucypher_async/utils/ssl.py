@@ -176,8 +176,15 @@ async def fetch_certificate(host: str, port: int) -> SSLCertificate:
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
-    stream = await trio.open_ssl_over_tcp_stream(host, port, ssl_context=context)
-    await stream.do_handshake()
-    # Casting because we're explicitly requesting bytes
-    certificate_der = cast(bytes, stream.getpeercert(binary_form=True))
-    return SSLCertificate.from_der_bytes(certificate_der)
+    try:
+        stream = await trio.open_ssl_over_tcp_stream(host, port, ssl_context=context)
+        await stream.do_handshake()
+        # Casting because we're explicitly requesting bytes
+        certificate_der = cast(bytes, stream.getpeercert(binary_form=True))
+    except (OSError, trio.BrokenResourceError) as exc:
+        raise RuntimeError(str(exc) or repr(exc)) from exc
+
+    try:
+        return SSLCertificate.from_der_bytes(certificate_der)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc

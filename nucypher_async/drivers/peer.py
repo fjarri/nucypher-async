@@ -181,9 +181,7 @@ class PeerClient:
             async with httpx.AsyncClient(verify=str(filename), timeout=None) as client:
                 try:
                     yield client
-                except httpx.HTTPError as exc:
-                    raise PeerConnectionError(str(exc)) from exc
-                except OSError as exc:
+                except (OSError, httpx.HTTPError) as exc:
                     raise PeerConnectionError(str(exc)) from exc
 
     async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
@@ -193,7 +191,7 @@ class PeerClient:
         """
         try:
             return await fetch_certificate(contact.host, contact.port)
-        except OSError as exc:
+        except RuntimeError as exc:
             raise PeerConnectionError(str(exc)) from exc
 
     async def handshake(self, contact: Contact) -> SecureContact:
