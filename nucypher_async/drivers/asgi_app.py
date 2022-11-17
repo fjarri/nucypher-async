@@ -62,17 +62,28 @@ async def binary_api_call(logger: Logger, endpoint_future: Awaitable[bytes]) -> 
     return Response(result_bytes)
 
 
-async def rest_api_call(logger: Logger, endpoint_future: Awaitable[JSON]) -> Response:
+async def html_call(logger: Logger, endpoint_future: Awaitable[str]) -> Response:
     try:
         result = await endpoint_future
-        response = JSONResponse(result)
     except HTTPError as exc:
         return Response(exc.message, status_code=exc.status_code)
     except Exception as exc:
         # A catch-all for any unexpected errors
         logger.error("Uncaught exception:", exc_info=True)
         return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
-    return response
+    return Response(result)
+
+
+async def rest_api_call(logger: Logger, endpoint_future: Awaitable[JSON]) -> Response:
+    try:
+        result = await endpoint_future
+    except HTTPError as exc:
+        return Response(exc.message, status_code=exc.status_code)
+    except Exception as exc:
+        # A catch-all for any unexpected errors
+        logger.error("Uncaught exception:", exc_info=True)
+        return Response(str(exc), status_code=http.HTTPStatus.INTERNAL_SERVER_ERROR)
+    return JSONResponse(result)
 
 
 def make_lifespan(
@@ -124,7 +135,7 @@ def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
 
     async def status(request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
-        return await rest_api_call(logger, ursula_server.endpoint_status())
+        return await html_call(logger, ursula_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
         await ursula_server.start(nursery)
@@ -166,7 +177,7 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
         return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(request_body))
 
     async def status(request: Request) -> Response:
-        return await rest_api_call(logger, porter_server.endpoint_status())
+        return await html_call(logger, porter_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
         await porter_server.start(nursery)
