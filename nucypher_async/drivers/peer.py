@@ -9,10 +9,12 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import cached_property
 import http
+from ipaddress import ip_address
 from typing import Tuple, AsyncIterator, Any, Optional, List
 
 import arrow
 import httpx
+import trio
 
 from ..base.http_server import BaseHTTPServer, ASGIFramework
 from ..base.peer_error import PeerError
@@ -104,6 +106,35 @@ class PeerPublicKey:
     @classmethod
     def from_bytes(cls, data: bytes) -> "PeerPublicKey":
         return cls(SSLCertificate.from_der_bytes(data))
+
+
+async def get_alternative_contact(contact: Contact) -> Optional[Contact]:
+    """
+    Returns an alternative contact, if one exists.
+    """
+
+    # TODO: this is a temporary workaround for seed nodes whose contacts have domain names,
+    # but certificates are issued for IPs.
+
+    try:
+        ip_address(contact.host)
+    except ValueError:
+        pass
+    else:
+        # The host is already and IP address, nothing to do.
+        return None
+
+    # TODO: what does it raise? Intercept and re-raise ConnectionError
+    addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+
+    # TODO: or should we select a specific entry?
+    family, type_, proto, canonname, sockaddr = addrinfo[0]
+    ip_addr, port = sockaddr
+
+    # Sanity check. When would it not be the case?
+    assert port == contact.port
+
+    return Contact(ip_addr, port)
 
 
 class SecureContact:

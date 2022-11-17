@@ -9,7 +9,7 @@ from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
-from ..drivers.peer import Contact, PeerClient
+from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
 from ..domain import Domain
 from ..storage import InMemoryStorage, BaseStorage
@@ -221,6 +221,16 @@ class Learner:
 
         for contact in self._seed_contacts:
             node = await self.verify_contact_and_report(contact)
+            if node:
+                await self.learn_from_node_and_report(node)
+                return
+
+            # A seed node contact can be provided with a domain name,
+            # but its certificate is issued for an IP, so the call above will fail.
+            alt_contact = await get_alternative_contact(contact)
+            if alt_contact is None:
+                continue
+            node = await self.verify_contact_and_report(alt_contact)
             if node:
                 await self.learn_from_node_and_report(node)
                 return

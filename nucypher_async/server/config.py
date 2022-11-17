@@ -17,11 +17,7 @@ from ..utils.logging import Logger, Handler, ConsoleHandler, RotatingFileHandler
 
 def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
     if domain == Domain.MAINNET:
-        return [
-            Contact("closest-seed.nucypher.network", 9151),
-            Contact("seeds.nucypher.network", 9151),
-            Contact("mainnet.nucypher.network", 9151),
-        ]
+        return [Contact("mainnet.nucypher.network", 9151)]
     if domain == Domain.IBEX:
         return [Contact("ibex.nucypher.network", 9151)]
     if domain == Domain.ORYX:
