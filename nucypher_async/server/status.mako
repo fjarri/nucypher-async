@@ -1,4 +1,4 @@
-<%def name="main(snapshot, node, started_at, code_info)">
+<%def name="main(snapshot, node, domain, started_at, code_info)">
 <!DOCTYPE html>
 <html>
 <head>
@@ -113,7 +113,7 @@
         %endif
         <tr>
             <td><i>Domain:</i></td>
-            <td><span class="monospace">${ node.domain.value }</span></td>
+            <td><span class="monospace">${ domain.value }</span></td>
         </tr>
         %if node:
         <tr>
@@ -146,7 +146,7 @@
             %>
             <tr>
                 <td><span class="monospace">
-                <a href="${node.secure_contact.uri}/status">${node.staking_provider_address}</a>
+                <a href="${node.secure_contact._uri}/status">${node.staking_provider_address}</a>
                 </span></td>
                 <td>${humanize.number.intword(int(node_entry.staked_amount.as_ether()))} T</td>
                 <td>${node.timestamp.humanize(now)}</td>

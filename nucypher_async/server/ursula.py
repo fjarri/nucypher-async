@@ -217,4 +217,5 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             clock=self._clock,
             snapshot=self.learner.get_snapshot(),
             started_at=self._started_at,
+            domain=self._node.domain,
         )

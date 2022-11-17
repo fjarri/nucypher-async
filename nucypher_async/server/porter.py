@@ -50,6 +50,8 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             storage=config.storage,
         )
 
+        self._domain = config.domain
+
         async def _verification_task(stop_event: trio.Event) -> None:
             await verification_task(stop_event, self.learner)
 
@@ -193,4 +195,5 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             clock=self._clock,
             snapshot=self.learner.get_snapshot(),
             started_at=self._started_at,
+            domain=self._domain,
         )

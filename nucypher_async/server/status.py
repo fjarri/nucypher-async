@@ -7,6 +7,7 @@ import humanize
 from mako import exceptions as mako_exceptions
 from mako.template import Template
 
+from ..domain import Domain
 from ..base.time import BaseClock
 from ..p2p.fleet_sensor import FleetSensorSnapshot
 from ..p2p.verification import VerifiedUrsulaInfo
@@ -24,6 +25,7 @@ def render_status(
     clock: BaseClock,
     snapshot: FleetSensorSnapshot,
     started_at: arrow.Arrow,
+    domain: Domain,
     node: Optional[VerifiedUrsulaInfo] = None,
 ) -> str:
 
@@ -33,6 +35,7 @@ def render_status(
         return STATUS_TEMPLATE.render(
             snapshot,
             node,
+            domain,
             started_at,
             code_info,
             arrow=arrow,
