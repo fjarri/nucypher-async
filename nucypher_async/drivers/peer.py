@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from functools import cached_property
 import http
-from typing import Tuple, AsyncIterator, Any, Optional
+from typing import Tuple, AsyncIterator, Any, Optional, List
 
 import arrow
 import httpx
@@ -223,6 +223,9 @@ class UrsulaHTTPServer(BaseHTTPServer):
 
     def ssl_private_key(self) -> SSLPrivateKey:
         return self.server.peer_private_key()._as_ssl_private_key()
+
+    def ssl_ca_chain(self) -> Optional[List[SSLCertificate]]:
+        return None
 
     def into_asgi_app(self) -> ASGIFramework:
         return make_ursula_asgi_app(self.server)

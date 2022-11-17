@@ -4,7 +4,7 @@ This module encapsulates a specific HTTP server running our ASGI app (currently 
 
 import os
 from ssl import SSLContext
-from typing import Optional
+from typing import Optional, List
 
 from hypercorn.config import Config
 from hypercorn.trio import serve
@@ -23,9 +23,15 @@ class InMemoryCertificateConfig(Config):
     (see https://bugs.python.org/issue16487), we do this somewhat hacky workaround.
     """
 
-    def __init__(self, ssl_certificate: SSLCertificate, ssl_private_key: SSLPrivateKey):
+    def __init__(
+        self,
+        ssl_certificate: SSLCertificate,
+        ssl_private_key: SSLPrivateKey,
+        ssl_ca_chain: Optional[List[SSLCertificate]],
+    ):
         super().__init__()
         self.__ssl_certificate = ssl_certificate
+        self.__ssl_ca_chain = ssl_ca_chain
 
         # Have to keep the unencrypted private key in memory,
         # but at least we're not leaking it in the filesystem.
@@ -35,7 +41,7 @@ class InMemoryCertificateConfig(Config):
     def create_ssl_context(self) -> Optional[SSLContext]:
 
         # sanity check
-        if self.certfile or self.keyfile:
+        if self.certfile or self.keyfile or self.ca_certs:
             raise RuntimeError(
                 "Certificate/keyfile must be passed to the constructor in the serialized form"
             )
@@ -48,6 +54,10 @@ class InMemoryCertificateConfig(Config):
 
         # Encrypt the temporary file we create with an emphemeral password.
         keyfile_password = os.urandom(32)
+
+        if self.__ssl_ca_chain:
+            chain_data = b"\n".join(cert.to_pem_bytes() for cert in self.__ssl_ca_chain).decode()
+            context.load_verify_locations(cadata=chain_data)
 
         with temp_file(self.__ssl_certificate.to_pem_bytes()) as certfile:
             with temp_file(self.__ssl_private_key.to_pem_bytes(keyfile_password)) as keyfile:
@@ -67,6 +77,7 @@ def make_config(server: BaseHTTPServer) -> InMemoryCertificateConfig:
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
         ssl_private_key=server.ssl_private_key(),
+        ssl_ca_chain=server.ssl_ca_chain(),
     )
 
     host, port = server.host_and_port()

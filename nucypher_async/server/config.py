@@ -1,4 +1,4 @@
-from typing import List, Callable, Union
+from typing import List, Callable, Union, Optional
 from pathlib import Path
 
 from attrs import frozen
@@ -131,6 +131,7 @@ class PorterServerConfig:
     port: int
     ssl_certificate: SSLCertificate
     ssl_private_key: SSLPrivateKey
+    ssl_ca_chain: Optional[List[SSLCertificate]]
     identity_client: IdentityClient
     peer_client: PeerClient
     parent_logger: Logger
@@ -145,6 +146,7 @@ class PorterServerConfig:
         identity_endpoint: str,
         ssl_certificate_path: Union[str, Path],
         ssl_private_key_path: Union[str, Path],
+        ssl_ca_chain_path: Optional[Union[str, Path]] = None,
         profile_name: str = "porter",
         domain: str = "mainnet",
         log_to_console: bool = True,
@@ -175,12 +177,20 @@ class PorterServerConfig:
         with open(ssl_private_key_path, "rb") as pk_file:
             ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
 
+        if ssl_ca_chain_path:
+            with open(ssl_ca_chain_path, "rb") as chain_file:
+                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
+                # TODO: check that they are in the correct order? (root certificate last)
+        else:
+            ssl_ca_chain = None
+
         return cls(
             domain=domain_,
             host=host,
             port=port,
             ssl_certificate=ssl_certificate,
             ssl_private_key=ssl_private_key,
+            ssl_ca_chain=ssl_ca_chain,
             identity_client=identity_client,
             peer_client=peer_client,
             parent_logger=logger,

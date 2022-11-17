@@ -62,6 +62,7 @@ def make_porter_server(config_path: str) -> PorterServer:
         identity_endpoint=config["eth_provider_uri"],
         ssl_certificate_path=config["ssl_certificate"],
         ssl_private_key_path=config["ssl_private_key"],
+        ssl_ca_chain_path=config.get("ssl_ca_chain", None),
     )
 
     return PorterServer(config)

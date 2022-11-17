@@ -157,6 +157,7 @@ async def porter_server(
         port=port,
         ssl_private_key=ssl_private_key,
         ssl_certificate=ssl_certificate,
+        ssl_ca_chain=None,
         identity_client=mock_identity_client,
         peer_client=MockPeerClient(mock_network, host),
         parent_logger=logger,

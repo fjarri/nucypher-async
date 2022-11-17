@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Optional, List
 
 from hypercorn.typing import ASGIFramework
 
@@ -18,6 +18,10 @@ class BaseHTTPServer(ABC):
 
     @abstractmethod
     def ssl_certificate(self) -> SSLCertificate:
+        ...
+
+    @abstractmethod
+    def ssl_ca_chain(self) -> Optional[List[SSLCertificate]]:
         ...
 
     @abstractmethod

@@ -1,5 +1,5 @@
 import http
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 
 import attrs
 import trio
@@ -72,6 +72,9 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
     def ssl_certificate(self) -> SSLCertificate:
         return self._config.ssl_certificate
+
+    def ssl_ca_chain(self) -> Optional[List[SSLCertificate]]:
+        return self._config.ssl_ca_chain
 
     def ssl_private_key(self) -> SSLPrivateKey:
         return self._config.ssl_private_key

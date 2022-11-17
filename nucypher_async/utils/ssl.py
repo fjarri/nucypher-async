@@ -1,5 +1,5 @@
 from ipaddress import ip_address
-from typing import Optional, Any, cast, get_args
+from typing import Optional, Any, List, cast, get_args
 import ssl
 
 import arrow
@@ -124,6 +124,15 @@ class SSLCertificate:
     @classmethod
     def from_pem_bytes(cls, data: bytes) -> "SSLCertificate":
         return cls(x509.load_pem_x509_certificate(data))
+
+    @classmethod
+    def list_from_pem_bytes(cls, data: bytes) -> List["SSLCertificate"]:
+        start_line = b"-----BEGIN CERTIFICATE-----"
+        certs_bytes = data.split(start_line)
+        certs = []
+        for cert_bytes in certs_bytes[1:]:
+            certs.append(cls.from_pem_bytes(start_line + cert_bytes))
+        return certs
 
     @classmethod
     def from_der_bytes(cls, data: bytes) -> "SSLCertificate":
