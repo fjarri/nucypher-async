@@ -1,3 +1,4 @@
+from getpass import getpass
 import json
 
 import trio
@@ -6,7 +7,7 @@ import click
 from .drivers.http_server import HTTPServerHandle
 from .drivers.peer import UrsulaHTTPServer
 from .drivers.identity import IdentityAccount
-from .master_key import EncryptedMasterKey
+from .master_key import MasterKey, EncryptedMasterKey
 from .characters.pre import Ursula
 from .server import UrsulaServerConfig, PorterServerConfig, UrsulaServer, PorterServer
 
@@ -91,3 +92,17 @@ def porter(config_path: str) -> None:
     server = make_porter_server(config_path)
     handle = HTTPServerHandle(server)
     trio.run(handle.startup)
+
+
+@main.command()
+@click.argument("output_name")
+def keygen(output_name: str) -> None:
+    words, mk = MasterKey.random_mnemonic()
+    password = getpass("Keysore password: ")
+    emk = mk.encrypt(password)
+
+    with open(output_name, "w") as f:
+        f.write(json.dumps(emk.to_payload(), indent=4))
+
+    print(f"Keystore saved to {output_name}")
+    print(f"Mnemonic: {words}")
