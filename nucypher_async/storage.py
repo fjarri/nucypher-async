@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from pathlib import Path
 
-from nucypher_core import NodeMetadata
-
 from .p2p.ursula import UrsulaInfo
 
 
@@ -44,7 +42,7 @@ class FileSystemStorage(BaseStorage):
         with open(ursula_info_path, "rb") as file:
             ursula_info = file.read()
 
-        return UrsulaInfo(NodeMetadata.from_bytes(ursula_info))
+        return UrsulaInfo.from_bytes(ursula_info)
 
     def set_my_ursula_info(self, ursula_info: UrsulaInfo) -> None:
         ursula_info_path = self._my_ursula_info_path()
