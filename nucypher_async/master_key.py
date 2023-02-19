@@ -80,6 +80,7 @@ class MasterKey:
         return cls(secret)
 
     def __init__(self, secret: bytes):
+        self.__secret = secret
         self.__skf = SecretKeyFactory.from_secure_randomness(secret)
 
     def encrypt(self, password: str) -> EncryptedMasterKey:
@@ -90,15 +91,15 @@ class MasterKey:
 
         wrapper_salt = token_bytes(16)
         encrypted_key = secret_box_encrypt(
-            plaintext=self.__skf.to_secret_bytes(),
+            plaintext=self.__secret,
             key_material=key_material,
             salt=wrapper_salt,
         )
         return EncryptedMasterKey(encrypted_key, password_salt, wrapper_salt)
 
     def make_peer_private_key(self) -> PeerPrivateKey:
-        secret_key = self.__skf.make_key(b"NuCypher/tls")
-        return PeerPrivateKey.from_seed(secret_key.to_secret_bytes())
+        secret = self.__skf.make_secret(b"NuCypher/tls")
+        return PeerPrivateKey.from_seed(secret)
 
     def make_signer(self) -> Signer:
         return Signer(self.__skf.make_key(b"NuCypher/signing"))

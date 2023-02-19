@@ -145,7 +145,6 @@ async def porter_server(
     mock_clock: MockClock,
     autojump_clock: trio.testing.MockClock,
 ) -> AsyncIterator[PorterServer]:
-
     host = "127.0.0.1"
     port = 9000
     ssl_private_key = SSLPrivateKey.from_seed(b"1231234")

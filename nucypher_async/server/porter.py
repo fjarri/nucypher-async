@@ -111,7 +111,6 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
     async def endpoint_get_ursulas(
         self, request_params: Dict[str, str], request_body: Optional[JSON]
     ) -> JSON:
-
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
         except schema.ValidationError as exc:

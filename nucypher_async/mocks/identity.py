@@ -51,7 +51,6 @@ class SimplePREApplication(MockContract):
         operator_address: Address,
         amount_t: Amount,
     ) -> None:
-
         # Approve stake
         assert staking_provider_address not in self._approved_staking_providers
         self._approved_staking_providers[staking_provider_address] = amount_t

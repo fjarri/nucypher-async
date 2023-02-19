@@ -109,6 +109,9 @@ class MockHTTPClient:
         assert url_parts.port is not None, "Port is missing from the url"
         certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
         assert self._certificate == certificate
-        transport = httpx.ASGITransport(app=manager.app, client=(self._host, 9999))
+        # Unfortunately there are no unified types for hypercorn and httpx,
+        # so we have to cast manually.
+        app = cast(httpx._transports.asgi._ASGIApp, manager.app)
+        transport = httpx.ASGITransport(app=app, client=(self._host, 9999))
         async with httpx.AsyncClient(transport=transport) as client:
             return await client.request(method, url, *args, **kwargs)

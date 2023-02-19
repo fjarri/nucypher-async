@@ -11,7 +11,6 @@ async def test_learning(
     autojump_clock: trio.testing.MockClock,
     chain_seeded_ursulas: List[UrsulaServer],
 ) -> None:
-
     while True:
         # Wait multiple learning cycles
         # TODO: find a way to wait until the learning is done, and measure how much time has passed

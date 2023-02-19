@@ -28,7 +28,6 @@ def render_status(
     domain: Domain,
     node: Optional[VerifiedUrsulaInfo] = None,
 ) -> str:
-
     code_info = CodeInfo.collect()
 
     try:

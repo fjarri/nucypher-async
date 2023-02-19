@@ -41,7 +41,6 @@ class Learner:
         storage: Optional[BaseStorage] = None,
         clock: Optional[BaseClock] = None,
     ):
-
         if peer_client is None:
             peer_client = PeerClient()
 
@@ -195,7 +194,6 @@ class Learner:
         return node
 
     def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[UrsulaInfo]) -> None:
-
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
         self._logger.debug("Passive learning from {}", sender_host or "unknown host")

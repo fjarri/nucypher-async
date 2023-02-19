@@ -26,7 +26,6 @@ class PorterClient:
         include_ursulas: Optional[Iterable[IdentityAddress]] = None,
         exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
     ) -> Dict[IdentityAddress, Tuple[str, PublicKey]]:
-
         include_ursulas = list(include_ursulas) if include_ursulas else []
         exclude_ursulas = list(exclude_ursulas) if exclude_ursulas else []
 
@@ -60,7 +59,6 @@ class PorterClient:
         recipient_card: RecipientCard,
         context: Optional[Context] = None,
     ) -> List[Dict[IdentityAddress, VerifiedCapsuleFrag]]:
-
         request = RetrieveCFragsRequest(
             treasure_map=treasure_map,
             retrieval_kits=list(retrieval_kits),

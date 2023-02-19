@@ -16,6 +16,7 @@ from nucypher_core.umbral import (
     Capsule,
     VerifiedKeyFrag,
     VerifiedCapsuleFrag,
+    RecoverableSignature,
     reencrypt,
 )
 
@@ -50,7 +51,6 @@ class Delegator:
     def make_policy(
         self, recipient_card: "RecipientCard", label: bytes, threshold: int, shares: int
     ) -> Policy:
-
         policy_sk = self._delegating_skf.make_key(label)
 
         hrac = HRAC(
@@ -163,7 +163,6 @@ class Ursula:
         master_key: Optional[MasterKey] = None,
         identity_account: Optional[IdentityAccount] = None,
     ):
-
         self.__master_key = master_key or MasterKey.random()
         identity_account_ = identity_account or IdentityAccount.random()
 
@@ -172,7 +171,9 @@ class Ursula:
         self.encrypting_key = self._decrypting_key.public_key()
 
         self.operator_address = identity_account_.address
-        self.operator_signature = identity_account_.sign_message(bytes(self.signer.verifying_key()))
+        self.operator_signature = RecoverableSignature.from_be_bytes(
+            identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
+        )
 
     def peer_private_key(self) -> PeerPrivateKey:
         return self.__master_key.make_peer_private_key()

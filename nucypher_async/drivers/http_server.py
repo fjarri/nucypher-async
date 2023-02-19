@@ -39,7 +39,6 @@ class InMemoryCertificateConfig(Config):
         self.__ssl_private_key = ssl_private_key
 
     def create_ssl_context(self) -> Optional[SSLContext]:
-
         # sanity check
         if self.certfile or self.keyfile or self.ca_certs:
             raise RuntimeError(
@@ -73,7 +72,6 @@ class InMemoryCertificateConfig(Config):
 
 
 def make_config(server: BaseHTTPServer) -> InMemoryCertificateConfig:
-
     config = InMemoryCertificateConfig(
         ssl_certificate=server.ssl_certificate(),
         ssl_private_key=server.ssl_private_key(),

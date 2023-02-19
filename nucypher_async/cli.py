@@ -15,7 +15,6 @@ from .server import UrsulaServerConfig, PorterServerConfig, UrsulaServer, Porter
 async def make_ursula_server(
     config_path: str, nucypher_password: str, geth_password: str
 ) -> UrsulaServer:
-
     with open(config_path, encoding="utf-8") as file:
         config = json.load(file)
 
@@ -54,7 +53,6 @@ async def make_ursula_server(
 
 
 def make_porter_server(config_path: str) -> PorterServer:
-
     with open(config_path, encoding="utf-8") as file:
         config = json.load(file)
 

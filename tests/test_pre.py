@@ -22,7 +22,6 @@ async def test_verified_nodes_iter(
     mock_identity_client: MockIdentityClient,
     logger: Logger,
 ) -> None:
-
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
     learner = Learner(
         domain=Domain.MAINNET,
@@ -51,7 +50,6 @@ async def test_granting(
     mock_identity_client: MockIdentityClient,
     mock_payment_client: MockPaymentClient,
 ) -> None:
-
     alice = Delegator.random()
     publisher = Publisher.random()
     bob = Recipient.random()

@@ -31,7 +31,6 @@ from .config import UrsulaServerConfig
 class UrsulaServer(BasePeerAndUrsulaServer):
     @classmethod
     async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig) -> "UrsulaServer":
-
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(session, ursula.operator_address)
 
@@ -47,7 +46,6 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         config: UrsulaServerConfig,
         staking_provider_address: IdentityAddress,
     ):
-
         self.ursula = ursula
 
         self._clock = config.clock
@@ -163,7 +161,6 @@ class UrsulaServer(BasePeerAndUrsulaServer):
     async def node_metadata_post(
         self, remote_host: Optional[str], request: MetadataRequest
     ) -> MetadataResponse:
-
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(
@@ -183,7 +180,6 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         return self._node.metadata
 
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
-
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked

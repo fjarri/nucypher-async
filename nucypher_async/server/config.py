@@ -64,7 +64,6 @@ def make_storage(profile_name: str, persistent_storage: bool = True) -> BaseStor
 
 @frozen
 class UrsulaServerConfig:
-
     domain: Domain
     contact: Contact
     identity_client: IdentityClient
@@ -96,7 +95,6 @@ class UrsulaServerConfig:
             [str, Domain], PaymentClient
         ] = PaymentClient.from_endpoint,
     ) -> "UrsulaServerConfig":
-
         domain_ = Domain.from_string(domain)
         contact = Contact(host, port)
         identity_client = identity_client_factory(identity_endpoint, domain_)
@@ -127,7 +125,6 @@ class UrsulaServerConfig:
 
 @frozen
 class PorterServerConfig:
-
     domain: Domain
     host: str
     port: int
@@ -161,7 +158,6 @@ class PorterServerConfig:
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
     ) -> "PorterServerConfig":
-
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
         logger = make_logger(

@@ -36,11 +36,11 @@ def unstructure_identity_address(val: IdentityAddress) -> str:
 
 
 def structure_public_key(val: str, cls: Type[PublicKey]) -> PublicKey:
-    return cls.from_bytes(bytes.fromhex(val))
+    return cls.from_compressed_bytes(bytes.fromhex(val))
 
 
 def unstructure_public_key(val: PublicKey) -> str:
-    return bytes(val).hex()
+    return val.to_compressed_bytes().hex()
 
 
 def structure_treasure_map(val: str, cls: Type[TreasureMap]) -> TreasureMap:

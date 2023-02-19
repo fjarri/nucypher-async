@@ -230,7 +230,6 @@ def _next_verification_time_may_change(
     def wrapped(
         fleet_sensor: "FleetSensor", /, *args: Param.args, **kwargs: Param.kwargs
     ) -> RetVal:
-
         contacts_present_before = not fleet_sensor._contacts_db.is_empty()
         next_verification_before = fleet_sensor._verified_nodes_db.next_verification_at(
             exclude=fleet_sensor._locked_contacts_for_verification.keys()
@@ -268,7 +267,6 @@ class FleetSensor:
         clock: BaseClock,
         this_node: Optional[VerifiedUrsulaInfo],
     ):
-
         self._clock = clock
 
         self._my_staking_provider_address = (
@@ -295,7 +293,6 @@ class FleetSensor:
         verified_at: arrow.Arrow,
         previously_verified_at: Optional[arrow.Arrow] = None,
     ) -> arrow.Arrow:
-
         if previously_verified_at:
             assert verified_at > previously_verified_at
             verify_at = (
@@ -322,7 +319,6 @@ class FleetSensor:
 
     @_next_verification_time_may_change
     def report_verified_node(self, node: VerifiedUrsulaInfo, staked_amount: AmountT) -> None:
-
         if (
             self._my_staking_provider_address
             and node.staking_provider_address == self._my_staking_provider_address
@@ -375,7 +371,6 @@ class FleetSensor:
     def report_passive_learning_results(
         self, sender_host: Optional[str], metadatas: Iterable[UrsulaInfo]
     ) -> None:
-
         # Filter out only the contact(s) with `remote_address`.
         # We're not going to trust all this metadata anyway.
         sender_metadatas = [
@@ -424,7 +419,6 @@ class FleetSensor:
         return self._contacts_db.is_empty() and self._verified_nodes_db.is_empty()
 
     def next_verification_in(self) -> float:
-
         if self._contacts_db.is_empty() and self._verified_nodes_db.is_empty():
             return datetime.timedelta.max.total_seconds()
 

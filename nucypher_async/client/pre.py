@@ -51,7 +51,6 @@ async def grant(
     payment_client: PaymentClient,
     handpicked_addresses: Optional[Iterable[IdentityAddress]] = None,
 ) -> EnactedPolicy:
-
     async with payment_client.session() as session:
         if await session.is_policy_active(policy.hrac):
             raise RuntimeError(f"Policy {policy.hrac} is already active")
@@ -129,7 +128,6 @@ async def retrieve(
     recipient_card: RecipientCard,
     context: Optional[Context] = None,
 ) -> Dict[IdentityAddress, VerifiedCapsuleFrag]:
-
     responses: Dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
     async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
@@ -189,7 +187,6 @@ async def retrieve_via_porter(
     recipient_card: RecipientCard,
     context: Optional[Context] = None,
 ) -> List[RetrievalState]:
-
     retrieval_kits = [state.retrieval_kit for state in retrieval_states]
     response = await porter_client.retrieve_cfrags(
         treasure_map=treasure_map,
@@ -213,7 +210,6 @@ async def retrieve_and_decrypt(
     publisher_card: PublisherCard,
     context: Optional[Context] = None,
 ) -> List[bytes]:
-
     treasure_map = recipient.decrypt_treasure_map(
         enacted_policy.encrypted_treasure_map, publisher_card
     )

@@ -1,5 +1,5 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
-from nucypher_core.umbral import Signer, PublicKey
+from nucypher_core.umbral import Signer, PublicKey, RecoverableSignature
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, IdentityClientSession
@@ -54,7 +54,6 @@ def _verify_peer_shared(
     expected_domain: Domain,
     expected_operator_address: IdentityAddress,
 ) -> None:
-
     if ursula_info.contact != expected_contact:
         raise PeerVerificationError(
             f"Contact info mismatch: expected {expected_contact}, "
@@ -93,7 +92,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         peer_private_key: PeerPrivateKey,
         signer: Signer,
         encrypting_key: PublicKey,
-        operator_signature: bytes,
+        operator_signature: RecoverableSignature,
         clock: BaseClock,
         staking_provider_address: IdentityAddress,
         contact: Contact,
@@ -126,7 +125,6 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         operator_address: IdentityAddress,
         domain: Domain,
     ) -> "VerifiedUrsulaInfo":
-
         _verify_peer_shared(
             clock=clock,
             ursula_info=ursula_info,
@@ -153,7 +151,6 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         contact: Contact,
         domain: Domain,
     ) -> "VerifiedUrsulaInfo":
-
         _verify_peer_shared(
             clock=clock,
             ursula_info=ursula_info,

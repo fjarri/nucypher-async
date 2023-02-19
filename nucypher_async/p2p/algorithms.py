@@ -110,7 +110,6 @@ async def verified_nodes_iter(
     addresses: Iterable[IdentityAddress],
     verified_within: Optional[float] = None,
 ) -> None:
-
     if learner.is_empty():
         await learner.seed_round()
 
@@ -119,7 +118,6 @@ async def verified_nodes_iter(
 
     async with trio.open_nursery() as nursery:
         while True:
-
             new_verified_nodes_event = learner.get_new_verified_nodes_event()
             node_entries = learner.get_verified_node_entries()
 
@@ -148,7 +146,6 @@ async def verified_nodes_iter(
             # There has been some `awaits`, so new nodes could have been verified
             # If not, force run verification/learning of random nodes
             while not new_verified_nodes_event.is_set():
-
                 new_verified_nodes_event = learner.get_new_verified_nodes_event()
 
                 # TODO: we can run several instances here,
@@ -166,7 +163,6 @@ async def random_verified_nodes_iter(
     verified_within: Optional[float] = None,
     exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
 ) -> None:
-
     if learner.is_empty():
         await learner.seed_round()
 
@@ -200,7 +196,6 @@ async def random_verified_nodes_iter(
 
     async with trio.open_nursery() as nursery:
         while True:
-
             node_entries = learner.get_verified_node_entries()
 
             while drawn < amount + failed + overhead and reservoir:

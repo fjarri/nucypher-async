@@ -19,8 +19,9 @@ import trio
 class SSLPrivateKey:
     @classmethod
     def from_seed(cls, seed: bytes) -> "SSLPrivateKey":
-        private_bn = int.from_bytes(seed, "big")
-        private_key = ec.derive_private_key(private_value=private_bn, curve=ec.SECP384R1())
+        curve = ec.SECP384R1()
+        private_bn = int.from_bytes(seed[: curve.key_size // 8], "big")
+        private_key = ec.derive_private_key(private_value=private_bn, curve=curve)
         return cls(private_key)
 
     def __init__(self, private_key: CERTIFICATE_PRIVATE_KEY_TYPES):
@@ -170,7 +171,6 @@ class SSLCertificate:
 
 
 async def fetch_certificate(host: str, port: int) -> SSLCertificate:
-
     # Do not verify the certificate, it is self-signed
     context = ssl.create_default_context()
     context.check_hostname = False

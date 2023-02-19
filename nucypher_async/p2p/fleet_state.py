@@ -57,7 +57,8 @@ class FleetState:
     def checksum(self) -> FleetStateChecksum:
         if not self._checksum:
             self._checksum = FleetStateChecksum(
-                self._my_metadata, [m.metadata for m in self._metadatas.values()]
+                [m.metadata for m in self._metadatas.values()],
+                self._my_metadata,
             )
             self.timestamp_epoch = int(self._clock.utcnow().timestamp())
         return self._checksum

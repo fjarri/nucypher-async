@@ -58,7 +58,6 @@ class Context(NamedTuple):
 async def run_local_ursula_fleet(
     context: Context, nursery: trio.Nursery
 ) -> Tuple[List[HTTPServerHandle], Contact]:
-
     handles = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
@@ -107,7 +106,6 @@ async def alice_grants(
     publisher: Publisher,
     recipient_card: RecipientCard,
 ) -> EnactedPolicy:
-
     learner = Learner(
         identity_client=context.identity_client,
         domain=context.domain,
@@ -145,7 +143,6 @@ async def bob_decrypts(
     enacted_policy: EnactedPolicy,
     message_kit: MessageKit,
 ) -> bytes:
-
     learner = Learner(
         identity_client=context.identity_client,
         domain=context.domain,
@@ -167,7 +164,6 @@ async def bob_decrypts(
 
 
 async def main(mocked: bool = True) -> None:
-
     logger = Logger(handlers=[ConsoleHandler(level=Level.INFO)])
     domain = Domain.TAPIR
 
