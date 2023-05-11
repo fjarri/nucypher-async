@@ -92,6 +92,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         peer_private_key: PeerPrivateKey,
         signer: Signer,
         encrypting_key: PublicKey,
+        dkg_key: PublicKey,
         operator_signature: RecoverableSignature,
         clock: BaseClock,
         staking_provider_address: IdentityAddress,
@@ -107,6 +108,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
             operator_signature=operator_signature,
             verifying_key=signer.verifying_key(),
             encrypting_key=encrypting_key,
+            ferveo_public_key=dkg_key.to_compressed_bytes(),
             # Abstraction leak here, ideally NodeMetadata should
             # have a field like `peer_public_key`.
             certificate_der=bytes(public_key),

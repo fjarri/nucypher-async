@@ -79,6 +79,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
                 signer=self.ursula.signer,
                 operator_signature=self.ursula.operator_signature,
                 encrypting_key=self.ursula.encrypting_key,
+                dkg_key=self.ursula.dkg_key,
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain,

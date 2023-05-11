@@ -109,3 +109,6 @@ class MasterKey:
 
     def make_delegating_key_factory(self) -> SecretKeyFactory:
         return self.__skf.make_factory(b"NuCypher/delegating")
+
+    def make_dkg_key(self) -> SecretKey:
+        return self.__skf.make_key(b"NuCypher/ritualistic")
