@@ -128,8 +128,9 @@ async def get_alternative_contact(contact: Contact) -> Optional[Contact]:
     addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
 
     # TODO: or should we select a specific entry?
-    family, type_, proto, canonname, sockaddr = addrinfo[0]
-    ip_addr, port = sockaddr
+    _family, _type, _proto, _canonname, sockaddr = addrinfo[0]
+    # Can have 2 additional components for IPv6, but we're not interested in those.
+    ip_addr, port, *_ = sockaddr
 
     # Sanity check. When would it not be the case?
     assert port == contact.port
