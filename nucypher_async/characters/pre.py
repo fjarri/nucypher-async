@@ -170,8 +170,8 @@ class Ursula:
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        self._dkg_key = self.__master_key.make_dkg_key()
-        self.dkg_key = self._dkg_key.public_key()
+        self._dkg_keypair = self.__master_key.make_dkg_keypair()
+        self.dkg_key = self._dkg_keypair.public_key()
 
         self.operator_address = identity_account_.address
         self.operator_signature = RecoverableSignature.from_be_bytes(

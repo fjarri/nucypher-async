@@ -4,6 +4,7 @@ from typing import TypedDict, Tuple
 import arrow
 from mnemonic.mnemonic import Mnemonic
 from nucypher_core.umbral import SecretKeyFactory, SecretKey, Signer
+from nucypher_core.ferveo import Keypair as FerveoKeypair
 
 from .drivers.peer import PeerPrivateKey
 from .utils.passwords import (
@@ -110,5 +111,7 @@ class MasterKey:
     def make_delegating_key_factory(self) -> SecretKeyFactory:
         return self.__skf.make_factory(b"NuCypher/delegating")
 
-    def make_dkg_key(self) -> SecretKey:
-        return self.__skf.make_key(b"NuCypher/ritualistic")
+    def make_dkg_keypair(self) -> FerveoKeypair:
+        size = FerveoKeypair.secure_randomness_size()
+        randomness = self.__skf.make_secret(b"NuCypher/ritualistic")[:size]
+        return FerveoKeypair.from_secure_randomness(randomness)

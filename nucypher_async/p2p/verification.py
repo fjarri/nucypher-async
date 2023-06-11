@@ -1,5 +1,6 @@
 from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
 from nucypher_core.umbral import Signer, PublicKey, RecoverableSignature
+from nucypher_core.ferveo import FerveoPublicKey
 
 from ..base.time import BaseClock
 from ..drivers.identity import IdentityAddress, IdentityClientSession
@@ -92,7 +93,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         peer_private_key: PeerPrivateKey,
         signer: Signer,
         encrypting_key: PublicKey,
-        dkg_key: PublicKey,
+        dkg_key: FerveoPublicKey,
         operator_signature: RecoverableSignature,
         clock: BaseClock,
         staking_provider_address: IdentityAddress,
@@ -108,7 +109,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
             operator_signature=operator_signature,
             verifying_key=signer.verifying_key(),
             encrypting_key=encrypting_key,
-            ferveo_public_key=dkg_key.to_compressed_bytes(),
+            ferveo_public_key=dkg_key,
             # Abstraction leak here, ideally NodeMetadata should
             # have a field like `peer_public_key`.
             certificate_der=bytes(public_key),
