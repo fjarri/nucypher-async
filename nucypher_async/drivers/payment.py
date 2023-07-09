@@ -23,8 +23,8 @@ from pons import (
     DeployedContract,
     Signer,
     AccountSigner,
-    ReadMethod,
-    WriteMethod,
+    Method,
+    Mutability,
     Address,
     Amount,
     abi,
@@ -35,14 +35,16 @@ from ..domain import Domain
 
 
 _SUBSCRIPTION_MANAGER_ABI = ContractABI(
-    read=[
-        ReadMethod(
+    methods=[
+        Method(
             name="isPolicyActive",
+            mutability=Mutability.VIEW,
             inputs=dict(_policyID=abi.bytes(16)),
             outputs=abi.bool,
         ),
-        ReadMethod(
+        Method(
             name="getPolicyCost",
+            mutability=Mutability.VIEW,
             inputs=dict(
                 _size=abi.uint(16),
                 _startTimestamp=abi.uint(32),
@@ -50,10 +52,9 @@ _SUBSCRIPTION_MANAGER_ABI = ContractABI(
             ),
             outputs=abi.uint(256),
         ),
-    ],
-    write=[
-        WriteMethod(
+        Method(
             name="createPolicy",
+            mutability=Mutability.PAYABLE,
             inputs=dict(
                 _policyId=abi.bytes(16),
                 _policyOwner=abi.address,
@@ -61,7 +62,7 @@ _SUBSCRIPTION_MANAGER_ABI = ContractABI(
                 _startTimestamp=abi.uint(32),
                 _endTimestamp=abi.uint(32),
             ),
-        )
+        ),
     ],
 )
 
@@ -164,14 +165,14 @@ class PaymentClientSession:
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
         is_active = await self._backend_session.eth_call(
-            self._manager.read.isPolicyActive(bytes(hrac))
+            self._manager.method.isPolicyActive(bytes(hrac))
         )
         # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast(bool, is_active)
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
         amount = await self._backend_session.eth_call(
-            self._manager.read.getPolicyCost(shares, policy_start, policy_end)
+            self._manager.method.getPolicyCost(shares, policy_start, policy_end)
         )
         return AmountMATIC.wei(amount)
 
@@ -184,7 +185,7 @@ class PaymentClientSession:
         policy_end: int,
     ) -> None:
         amount = await self.get_policy_cost(shares, policy_start, policy_end)
-        call = self._manager.write.createPolicy(
+        call = self._manager.method.createPolicy(
             bytes(hrac), signer.address, shares, policy_start, policy_end
         )
         await self._backend_session.transact(signer, call, amount=amount)

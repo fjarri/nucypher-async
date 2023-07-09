@@ -24,7 +24,8 @@ from pons import (
     DeployedContract,
     Address,
     Amount,
-    ReadMethod,
+    Method,
+    Mutability,
     abi,
 )
 from pons._client import ClientSession
@@ -33,34 +34,40 @@ from ..domain import Domain
 
 
 _PRE_APP_ABI = ContractABI(
-    read=[
-        ReadMethod(
+    methods=[
+        Method(
             name="authorizedStake",
+            mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.uint(96),
         ),
-        ReadMethod(
+        Method(
             name="stakingProviderFromOperator",
+            mutability=Mutability.VIEW,
             inputs=dict(_operator=abi.address),
             outputs=abi.address,
         ),
-        ReadMethod(
+        Method(
             name="getOperatorFromStakingProvider",
+            mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.address,
         ),
-        ReadMethod(
+        Method(
             name="isAuthorized",
+            mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.bool,
         ),
-        ReadMethod(
+        Method(
             name="isOperatorConfirmed",
+            mutability=Mutability.VIEW,
             inputs=dict(_operator=abi.address),
             outputs=abi.bool,
         ),
-        ReadMethod(
+        Method(
             name="getActiveStakingProviders",
+            mutability=Mutability.VIEW,
             inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
             outputs=[abi.uint(256), abi.uint(256)[2][...]],
         ),
@@ -170,7 +177,7 @@ class IdentityClientSession:
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.eth_call(
-            self._pre_application.read.authorizedStake(staking_provider_address)
+            self._pre_application.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
 
@@ -178,7 +185,7 @@ class IdentityClientSession:
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._pre_application.read.stakingProviderFromOperator(operator_address)
+            self._pre_application.method.stakingProviderFromOperator(operator_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -186,7 +193,7 @@ class IdentityClientSession:
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._pre_application.read.getOperatorFromStakingProvider(staking_provider_address)
+            self._pre_application.method.getOperatorFromStakingProvider(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -197,7 +204,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._pre_application.read.isAuthorized(staking_provider_address)
+                self._pre_application.method.isAuthorized(staking_provider_address)
             ),
         )
 
@@ -206,7 +213,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._pre_application.read.isOperatorConfirmed(operator_address)
+                self._pre_application.method.isOperatorConfirmed(operator_address)
             ),
         )
 
@@ -218,7 +225,9 @@ class IdentityClientSession:
         self, start_index: int = 0, max_staking_providers: int = 0
     ) -> Dict[IdentityAddress, AmountT]:
         _total_staked, staking_providers_data = await self._backend_session.eth_call(
-            self._pre_application.read.getActiveStakingProviders(start_index, max_staking_providers)
+            self._pre_application.method.getActiveStakingProviders(
+                start_index, max_staking_providers
+            )
         )
         staking_providers = {
             IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
