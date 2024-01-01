@@ -10,28 +10,26 @@ TODO:
 """
 
 from contextlib import asynccontextmanager
-from typing import Dict, Type, AsyncIterator, cast
+from typing import AsyncIterator, Dict, Type, cast
 
 from eth_account import Account
+from eth_account._utils.signing import to_standard_signature_bytes
 from eth_account.messages import encode_defunct
 from eth_account.signers.base import BaseAccount
-from eth_account._utils.signing import to_standard_signature_bytes
-
 from pons import (
-    HTTPProvider,
+    Address,
+    Amount,
     Client,
     ClientSession,
     ContractABI,
     DeployedContract,
-    Address,
-    Amount,
+    HTTPProvider,
     Method,
     Mutability,
     abi,
 )
 
 from ..domain import Domain
-
 
 _PRE_APP_ABI = ContractABI(
     methods=[

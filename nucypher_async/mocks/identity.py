@@ -1,9 +1,9 @@
-from typing import Dict, Set, Tuple, List, cast
+from typing import Dict, List, Set, Tuple, cast
 
-from pons import Address, Amount, ContractABI, Client
+from pons import Address, Amount, Client, ContractABI
 
 from ..domain import Domain
-from ..drivers.identity import IdentityClient, IdentityAddress, AmountT
+from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from .eth import MockBackend, MockContract
 
 

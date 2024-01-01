@@ -1,10 +1,10 @@
 from typing import Dict, cast
 
 from attrs import frozen
-from pons import Amount, Address, ContractABI, Client
+from pons import Address, Amount, Client, ContractABI
 
 from ..domain import Domain
-from ..drivers.payment import PaymentClient, PaymentAddress, AmountMATIC
+from ..drivers.payment import AmountMATIC, PaymentAddress, PaymentClient
 from .eth import MockBackend, MockContract
 
 

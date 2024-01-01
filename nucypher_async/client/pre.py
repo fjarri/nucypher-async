@@ -1,36 +1,31 @@
-from typing import Optional, Iterable, Union, Dict, List, Mapping
+from typing import Dict, Iterable, List, Mapping, Optional, Union
 
-from attrs import frozen
 import arrow
 import trio
-
+from attrs import frozen
 from nucypher_core import (
     Address,
-    TreasureMap,
-    MessageKit,
-    EncryptedTreasureMap,
-    RetrievalKit,
     Conditions,
     Context,
+    EncryptedTreasureMap,
+    MessageKit,
+    RetrievalKit,
+    TreasureMap,
 )
-from nucypher_core.umbral import (
-    PublicKey,
-    Capsule,
-    VerifiedCapsuleFrag,
-)
+from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
-from ..drivers.payment import PaymentClient
 from ..characters.pre import (
-    Policy,
-    RecipientCard,
-    Publisher,
     DelegatorCard,
+    Policy,
+    Publisher,
     PublisherCard,
     Recipient,
+    RecipientCard,
 )
+from ..drivers.identity import IdentityAddress
+from ..drivers.payment import PaymentClient
+from ..p2p.algorithms import get_ursulas, verified_nodes_iter
 from ..p2p.learner import Learner
-from ..p2p.algorithms import verified_nodes_iter, get_ursulas
 from ..p2p.verification import VerifiedUrsulaInfo
 from .porter import PorterClient
 

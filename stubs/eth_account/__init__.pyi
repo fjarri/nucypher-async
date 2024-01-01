@@ -1,4 +1,4 @@
-from typing import Union, TypeVar, Dict, Any
+from typing import Any, Dict, TypeVar, Union
 
 from eth_account.signers.local import LocalAccount
 from hexbytes import HexBytes

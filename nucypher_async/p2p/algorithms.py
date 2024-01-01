@@ -1,17 +1,17 @@
-from bisect import bisect_right
-from itertools import accumulate
 import datetime
 import random
+from bisect import bisect_right
+from itertools import accumulate
 from typing import (
-    TypeVar,
-    Generic,
-    Sequence,
-    Callable,
     Awaitable,
+    Callable,
+    Generic,
     Iterable,
-    Optional,
-    Mapping,
     List,
+    Mapping,
+    Optional,
+    Sequence,
+    TypeVar,
 )
 
 import trio
@@ -23,7 +23,6 @@ from ..utils.producer import producer
 from .fleet_sensor import NodeEntry
 from .learner import Learner
 from .verification import VerifiedUrsulaInfo
-
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
 

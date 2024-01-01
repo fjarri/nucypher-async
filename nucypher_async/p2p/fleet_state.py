@@ -1,4 +1,4 @@
-from typing import Iterable, Dict, Optional
+from typing import Dict, Iterable, Optional
 
 from nucypher_core import FleetStateChecksum
 

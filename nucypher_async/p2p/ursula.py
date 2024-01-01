@@ -1,31 +1,31 @@
 from functools import cached_property
-from typing import TypeVar, Type, Protocol, List, Optional
+from typing import List, Optional, Protocol, Type, TypeVar
 
 import arrow
 from nucypher_core import (
-    NodeMetadata,
-    MetadataRequest,
-    MetadataResponse,
-    ReencryptionRequest,
-    ReencryptionResponse,
-    NodeMetadataPayload,
-    FleetStateChecksum,
-    TreasureMap,
     Address,
     Conditions,
     Context,
     EncryptedThresholdDecryptionRequest,
     EncryptedThresholdDecryptionResponse,
+    FleetStateChecksum,
+    MetadataRequest,
+    MetadataResponse,
+    NodeMetadata,
+    NodeMetadataPayload,
+    ReencryptionRequest,
+    ReencryptionResponse,
+    TreasureMap,
 )
-from nucypher_core.umbral import PublicKey, Capsule, VerifiedCapsuleFrag
 from nucypher_core.ferveo import FerveoPublicKey
+from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
 from ..base.peer_error import InvalidMessage
 from ..base.ursula import UrsulaRoutes
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
-from ..drivers.peer import Contact, SecureContact, PeerPublicKey, PeerClient
 from ..drivers.identity import IdentityAddress
+from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
 
 
 class UrsulaInfo:

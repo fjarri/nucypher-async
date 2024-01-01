@@ -1,8 +1,8 @@
 from cryptography.exceptions import InternalError
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from cryptography.hazmat.primitives import hashes
 from nacl.exceptions import CryptoError
 from nacl.secret import SecretBox
 

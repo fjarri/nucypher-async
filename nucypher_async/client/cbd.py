@@ -1,18 +1,22 @@
-from typing import Dict, Sequence, List, cast
+from typing import Dict, List, Sequence, cast
 
 import trio
-from nucypher_core import ThresholdMessageKit, ThresholdDecryptionRequest, SessionStaticSecret
+from nucypher_core import (
+    SessionStaticSecret,
+    ThresholdDecryptionRequest,
+    ThresholdMessageKit,
+)
 from nucypher_core.ferveo import (
-    combine_decryption_shares_simple,
+    DecryptionShareSimple,
     FerveoVariant,
     SharedSecret,
-    DecryptionShareSimple,
+    combine_decryption_shares_simple,
 )
 
-from ..p2p.algorithms import verified_nodes_iter, get_ursulas
-from ..p2p.verification import VerifiedUrsulaInfo
-from ..p2p.learner import Learner
 from ..drivers.payment import PaymentClient, Ritual
+from ..p2p.algorithms import get_ursulas, verified_nodes_iter
+from ..p2p.learner import Learner
+from ..p2p.verification import VerifiedUrsulaInfo
 
 
 async def initiate_ritual(

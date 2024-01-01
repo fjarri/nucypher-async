@@ -1,19 +1,18 @@
-from ipaddress import ip_address
-from typing import Optional, Any, List, cast, get_args
 import ssl
+from ipaddress import ip_address
+from typing import Any, List, Optional, cast, get_args
 
 import arrow
+import trio
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric.types import (
-    CERTIFICATE_PRIVATE_KEY_TYPES,
-    CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES,
-)
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.types import (
+    CERTIFICATE_ISSUER_PUBLIC_KEY_TYPES,
+    CERTIFICATE_PRIVATE_KEY_TYPES,
+)
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509.oid import NameOID
-import trio
 
 
 class SSLPrivateKey:

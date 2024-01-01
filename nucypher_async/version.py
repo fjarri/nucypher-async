@@ -1,9 +1,9 @@
-from pathlib import Path
 import subprocess
-from typing import Optional, List, Sequence
+from pathlib import Path
+from typing import List, Optional, Sequence
 
-from attrs import frozen
 import pkg_resources
+from attrs import frozen
 
 
 def _run_in_project_dir(cmd: Sequence[str]) -> str:

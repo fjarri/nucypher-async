@@ -1,23 +1,23 @@
 from secrets import token_bytes
-from typing import TypedDict, Tuple
+from typing import Tuple, TypedDict
 
 import arrow
 from mnemonic.mnemonic import Mnemonic
 from nucypher_core import (
     SessionSecretFactory,
+    SessionSharedSecret,
     SessionStaticKey,
     SessionStaticSecret,
-    SessionSharedSecret,
 )
-from nucypher_core.umbral import SecretKeyFactory, SecretKey, Signer
 from nucypher_core.ferveo import Keypair as FerveoKeypair
+from nucypher_core.umbral import SecretKey, SecretKeyFactory, Signer
 
 from .drivers.peer import PeerPrivateKey
 from .utils.passwords import (
+    SecretBoxAuthenticationError,
     derive_key_material_from_password,
     secret_box_decrypt,
     secret_box_encrypt,
-    SecretBoxAuthenticationError,
 )
 
 

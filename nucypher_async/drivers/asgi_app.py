@@ -10,23 +10,22 @@ This is a thin layer that serves the following purposes:
 Nothing else should be happening here, the bulk of the server logic is located in server objects.
 """
 
-from contextlib import asynccontextmanager
 import http
-from typing import Callable, Awaitable, AsyncIterator, AsyncContextManager, cast
+from contextlib import asynccontextmanager
+from typing import AsyncContextManager, AsyncIterator, Awaitable, Callable, cast
 
+import trio
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-import trio
 
-from ..base.types import JSON
 from ..base.http_server import ASGIFramework
-from ..base.peer_error import ServerSidePeerError, InactivePolicy
-from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
+from ..base.peer_error import InactivePolicy, ServerSidePeerError
 from ..base.porter import BasePorterServer, PorterRoutes
+from ..base.types import JSON
+from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
 from ..utils.logging import Logger
-
 
 # HTTP status codes don't need to be unique or exhaustive, it's just an additional way
 # to convey information to the user.

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
 
 from hypercorn.typing import ASGIFramework
 

@@ -1,7 +1,7 @@
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-import tempfile
-from typing import Iterator, Iterable, Callable, Awaitable
+from typing import Awaitable, Callable, Iterable, Iterator
 
 import trio
 

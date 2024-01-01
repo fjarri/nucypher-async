@@ -3,8 +3,8 @@ from typing import AsyncIterator
 
 import httpx
 
-from ..utils.ssl import SSLCertificate
 from ..drivers.peer import Contact, PeerClient, PeerPublicKey
+from ..utils.ssl import SSLCertificate
 from .asgi import MockHTTPClient, MockNetwork
 
 

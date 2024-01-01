@@ -1,14 +1,18 @@
-import httpx
 import json
-from typing import List, Optional, Dict, Iterable, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
-from nucypher_core import TreasureMap, RetrievalKit, Context
+import httpx
+from nucypher_core import Context, RetrievalKit, TreasureMap
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
-from ..characters.pre import DelegatorCard, RecipientCard
 from .. import schema
-from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
+from ..characters.pre import DelegatorCard, RecipientCard
+from ..drivers.identity import IdentityAddress
+from ..schema.porter import (
+    ClientRetrieveCFragsResponse,
+    GetUrsulasResponse,
+    RetrieveCFragsRequest,
+)
 
 
 class PorterClient:

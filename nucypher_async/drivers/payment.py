@@ -10,35 +10,33 @@ TODO:
 """
 
 from contextlib import asynccontextmanager
-from typing import Type, AsyncIterator, List, Optional, Sequence, cast
 from enum import Enum
+from typing import AsyncIterator, List, Optional, Sequence, Type, cast
 
 import arrow
 from attrs import frozen
 from eth_account import Account
 from eth_account.signers.base import BaseAccount
-
 from nucypher_core import HRAC, SessionStaticKey
-from nucypher_core.ferveo import DkgPublicKey, AggregatedTranscript, Transcript
+from nucypher_core.ferveo import AggregatedTranscript, DkgPublicKey, Transcript
 from pons import (
-    HTTPProvider,
+    AccountSigner,
+    Address,
+    Amount,
     Client,
     ClientSession,
     ContractABI,
     DeployedContract,
-    Signer,
-    AccountSigner,
+    Event,
+    HTTPProvider,
     Method,
     Mutability,
-    Address,
-    Amount,
-    Event,
+    Signer,
     abi,
 )
 
 from ..domain import Domain
 from .identity import IdentityAddress
-
 
 _SUBSCRIPTION_MANAGER_ABI = ContractABI(
     methods=[

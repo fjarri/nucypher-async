@@ -4,11 +4,11 @@ This module encapsulates a specific HTTP server running our ASGI app (currently 
 
 import os
 from ssl import SSLContext
-from typing import Optional, List
+from typing import List, Optional
 
+import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
-import trio
 from trio_typing import TaskStatus
 
 from ..base.http_server import BaseHTTPServer

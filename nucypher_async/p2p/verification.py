@@ -1,18 +1,18 @@
-from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
-from nucypher_core.umbral import Signer, PublicKey, RecoverableSignature
+from nucypher_core import Address, NodeMetadata, NodeMetadataPayload
 from nucypher_core.ferveo import FerveoPublicKey
+from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
+from ..characters.pre import Ursula
+from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import (
     Contact,
-    SecureContact,
     PeerError,
     PeerPrivateKey,
     PeerPublicKey,
+    SecureContact,
 )
-from ..domain import Domain
-from ..characters.pre import Ursula
 from .ursula import UrsulaInfo
 
 

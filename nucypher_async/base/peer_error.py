@@ -3,10 +3,10 @@ A peer interface is intentionally distantiated from an HTTP server,
 to illustrate that it does not necessarily need to work via HTTP.
 """
 
+import json
 from abc import ABC, abstractmethod
 from enum import Enum, unique
-import json
-from typing import Type, Dict, Callable, Any
+from typing import Any, Callable, Dict, Type
 
 from .types import JSON
 

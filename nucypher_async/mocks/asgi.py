@@ -1,18 +1,17 @@
-from typing import Dict, Tuple, Any, cast
+from typing import Any, Dict, Tuple, cast
 from urllib.parse import urlparse
 
 import httpx
 import trio
-
 from hypercorn.typing import (
+    ASGIReceiveEvent,
+    ASGISendEvent,
     LifespanScope,
     LifespanShutdownEvent,
     LifespanStartupEvent,
-    ASGIReceiveEvent,
-    ASGISendEvent,
 )
 
-from ..base.http_server import BaseHTTPServer, ASGIFramework
+from ..base.http_server import ASGIFramework, BaseHTTPServer
 from ..utils.ssl import SSLCertificate
 
 

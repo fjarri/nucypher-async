@@ -1,18 +1,18 @@
-from typing import List, Callable, Union, Optional
 from pathlib import Path
+from typing import Callable, List, Optional, Union
 
 from attrs import frozen
 from platformdirs import PlatformDirs
 
 from ..base.time import BaseClock
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from ..drivers.time import SystemClock
+from ..domain import Domain
 from ..drivers.identity import IdentityClient
 from ..drivers.payment import PaymentClient
-from ..drivers.peer import PeerClient, Contact
-from ..domain import Domain
-from ..storage import BaseStorage, InMemoryStorage, FileSystemStorage
-from ..utils.logging import Logger, Level, Handler, ConsoleHandler, RotatingFileHandler
+from ..drivers.peer import Contact, PeerClient
+from ..drivers.time import SystemClock
+from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
+from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 def seed_contacts_for_domain(domain: Domain) -> List[Contact]:

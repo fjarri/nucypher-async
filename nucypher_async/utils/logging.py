@@ -6,18 +6,18 @@ Why not use standard library `logging`: it is stateful, and we want different be
 depening on the environment (testing/usage as a library/running a server).
 """
 
-from abc import ABC, abstractmethod
-from enum import IntEnum
 import io
+import sys
 import time
 import traceback
-from typing import Any, Tuple, Optional, Type, Union, Iterable
-from types import TracebackType
+from abc import ABC, abstractmethod
+from enum import IntEnum
 from pathlib import Path
-import sys
+from types import TracebackType
+from typing import Any, Iterable, Optional, Tuple, Type, Union
 
-from attr import frozen
 import trio
+from attr import frozen
 
 
 class Level(IntEnum):

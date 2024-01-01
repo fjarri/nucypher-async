@@ -1,7 +1,11 @@
-from nucypher_core import encrypt_for_dkg, ThresholdMessageKit, Conditions, AccessControlPolicy
-from nucypher_core.ferveo import DkgPublicKey
-
 from eth_hash.auto import keccak
+from nucypher_core import (
+    AccessControlPolicy,
+    Conditions,
+    ThresholdMessageKit,
+    encrypt_for_dkg,
+)
+from nucypher_core.ferveo import DkgPublicKey
 
 from ..master_key import MasterKey
 

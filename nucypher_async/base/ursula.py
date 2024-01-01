@@ -1,19 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
-    EncryptedThresholdDecryptionRequest,
-    EncryptedThresholdDecryptionResponse,
 )
-import trio
 
-from .peer_error import InvalidMessage
 from ..utils.logging import Logger
+from .peer_error import InvalidMessage
 
 
 class UrsulaRoutes:

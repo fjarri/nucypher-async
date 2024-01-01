@@ -3,14 +3,14 @@
 # These are technically stricter than what the library accepts.
 
 from typing import (
-    Callable,
     Any,
+    Callable,
     Generic,
-    TypeVar,
-    Sequence,
-    MutableSequence,
     Iterable,
+    MutableSequence,
     Protocol,
+    Sequence,
+    TypeVar,
     overload,
 )
 

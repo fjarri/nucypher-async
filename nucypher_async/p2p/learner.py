@@ -1,29 +1,33 @@
-from typing import Optional, Iterable, Tuple, List, Set, Dict
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import trio
-
 from nucypher_core import (
-    TreasureMap,
     Conditions,
     Context,
     EncryptedThresholdDecryptionRequest,
     EncryptedThresholdDecryptionResponse,
+    TreasureMap,
 )
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
+from ..domain import Domain
+from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
-from ..domain import Domain
-from ..storage import InMemoryStorage, BaseStorage
+from ..storage import BaseStorage, InMemoryStorage
 from ..utils.logging import NULL_LOGGER, Logger
-from .ursula import UrsulaInfo, UrsulaClient
-from .verification import VerifiedUrsulaInfo, verify_staking_remote
-from .fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry, FleetSensorSnapshot
+from .fleet_sensor import (
+    FleetSensor,
+    FleetSensorSnapshot,
+    NodeEntry,
+    StakingProviderEntry,
+)
 from .fleet_state import FleetState
+from .ursula import UrsulaClient, UrsulaInfo
+from .verification import VerifiedUrsulaInfo, verify_staking_remote
 
 
 class Learner:

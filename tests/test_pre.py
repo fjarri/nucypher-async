@@ -3,14 +3,19 @@ from typing import List
 import trio
 import trio.testing
 
-from nucypher_async.drivers.payment import AmountMATIC
+from nucypher_async.characters.pre import Delegator, Publisher, Recipient
+from nucypher_async.client.pre import encrypt, grant, retrieve_and_decrypt
 from nucypher_async.domain import Domain
-from nucypher_async.server import UrsulaServer
-from nucypher_async.characters.pre import Delegator, Recipient, Publisher
-from nucypher_async.client.pre import grant, retrieve_and_decrypt, encrypt
-from nucypher_async.p2p.learner import Learner
+from nucypher_async.drivers.payment import AmountMATIC
+from nucypher_async.mocks import (
+    MockIdentityClient,
+    MockNetwork,
+    MockPaymentClient,
+    MockPeerClient,
+)
 from nucypher_async.p2p.algorithms import verified_nodes_iter
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
+from nucypher_async.p2p.learner import Learner
+from nucypher_async.server import UrsulaServer
 from nucypher_async.utils.logging import Logger
 
 

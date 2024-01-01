@@ -1,41 +1,38 @@
 from http import HTTPStatus
-from typing import Optional, List, Tuple, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 import trio
 from nucypher_core import (
-    NodeMetadata,
-    MetadataRequest,
-    MetadataResponsePayload,
-    MetadataResponse,
-    ReencryptionRequest,
-    ReencryptionResponse,
     EncryptedThresholdDecryptionRequest,
     EncryptedThresholdDecryptionResponse,
+    MetadataRequest,
+    MetadataResponse,
+    MetadataResponsePayload,
+    NodeMetadata,
+    ReencryptionRequest,
+    ReencryptionResponse,
     ThresholdDecryptionResponse,
 )
-from nucypher_core.ferveo import (
-    Validator,
-    Transcript,
-)
+from nucypher_core.ferveo import Transcript, Validator
 
-from ..base.peer_error import InactivePolicy, GenericPeerError
+from ..base.peer_error import GenericPeerError, InactivePolicy
+from ..characters.pre import PublisherCard, Ursula
 from ..drivers.asgi_app import HTTPError
 from ..drivers.identity import IdentityAddress
 from ..drivers.payment import Ritual
-from ..drivers.peer import (
-    BasePeerAndUrsulaServer,
-    SecureContact,
-    PeerPrivateKey,
+from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
+from ..p2p.algorithms import learning_task, verification_task, verified_nodes_iter
+from ..p2p.learner import Learner
+from ..p2p.ursula import UrsulaInfo
+from ..p2p.verification import (
+    PeerVerificationError,
+    VerifiedUrsulaInfo,
+    verify_staking_local,
 )
-from ..characters.pre import Ursula, PublisherCard
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from ..p2p.ursula import UrsulaInfo
-from ..p2p.learner import Learner
-from ..p2p.algorithms import verification_task, learning_task, verified_nodes_iter
-from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
-from .status import render_status
 from .config import UrsulaServerConfig
+from .status import render_status
 
 
 class UrsulaServer(BasePeerAndUrsulaServer):

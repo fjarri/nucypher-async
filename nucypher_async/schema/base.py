@@ -17,14 +17,14 @@ TODO: an ideal schema library would support all that, and:
 """
 
 import base64
-from typing import Type, TypeVar, cast, Any
+from typing import Any, Type, TypeVar, cast
 
 import cattrs
-from nucypher_core import TreasureMap, Context, RetrievalKit
-from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag, CapsuleFrag
+from nucypher_core import Context, RetrievalKit, TreasureMap
+from nucypher_core.umbral import CapsuleFrag, PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
 from ..base.types import JSON
+from ..drivers.identity import IdentityAddress
 
 
 def structure_identity_address(val: str, cls: Type[IdentityAddress]) -> IdentityAddress:

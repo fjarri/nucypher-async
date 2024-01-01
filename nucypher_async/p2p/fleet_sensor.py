@@ -1,32 +1,32 @@
-from collections import defaultdict
-from contextlib import contextmanager
 import datetime
 import io
 import random
+from collections import defaultdict
+from contextlib import contextmanager
 from functools import wraps
 from typing import (
-    Dict,
-    List,
     AbstractSet,
-    Tuple,
-    Set,
-    Iterable,
-    Optional,
-    TypeVar,
-    Generic,
     Callable,
+    Dict,
+    Generic,
+    Iterable,
     Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
     cast,
 )
 
-from attrs import frozen, evolve
 import arrow
-from sortedcontainers import SortedKeyList
 import trio
-from typing_extensions import ParamSpec, Concatenate
+from attrs import evolve, frozen
+from sortedcontainers import SortedKeyList
+from typing_extensions import Concatenate, ParamSpec
 
 from ..base.time import BaseClock
-from ..drivers.identity import IdentityAddress, AmountT
+from ..drivers.identity import AmountT, IdentityAddress
 from ..drivers.peer import Contact
 from .ursula import UrsulaInfo
 from .verification import VerifiedUrsulaInfo

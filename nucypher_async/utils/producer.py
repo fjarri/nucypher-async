@@ -1,22 +1,21 @@
 import sys
 from contextlib import asynccontextmanager
 from functools import wraps
+from types import TracebackType
 from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Awaitable,
     Callable,
-    TypeVar,
-    Union,
     Tuple,
     Type,
-    AsyncIterator,
-    Any,
-    Awaitable,
-    AsyncContextManager,
+    TypeVar,
+    Union,
 )
-from types import TracebackType
 
-from typing_extensions import ParamSpec, Concatenate
 import trio
-
+from typing_extensions import Concatenate, ParamSpec
 
 Param = ParamSpec("Param")
 RetType = TypeVar("RetType")
