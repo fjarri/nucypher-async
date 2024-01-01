@@ -20,6 +20,7 @@ from eth_account._utils.signing import to_standard_signature_bytes
 from pons import (
     HTTPProvider,
     Client,
+    ClientSession,
     ContractABI,
     DeployedContract,
     Address,
@@ -28,7 +29,6 @@ from pons import (
     Mutability,
     abi,
 )
-from pons._client import ClientSession
 
 from ..domain import Domain
 

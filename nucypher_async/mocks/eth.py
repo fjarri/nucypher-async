@@ -2,11 +2,17 @@ from contextlib import asynccontextmanager
 from collections import defaultdict
 from typing import Tuple, Union, Dict, Optional, AsyncIterator, Any, cast
 
-from pons import Amount, Address, Signer, Method, Mutability, ContractABI
-from pons._client import ClientSession
-from pons._contract import (
+from pons import (
+    Amount,
+    Address,
     BoundMethodCall,
-)  # TODO: expose as the public API in pons
+    ClientSession,
+    Signer,
+    Method,
+    Mutability,
+    ContractABI,
+    MultiMethod,
+)
 
 
 class MockContract:
@@ -15,7 +21,11 @@ class MockContract:
 
     def _method_by_selector(self, selector: bytes) -> Method:
         for method in self._abi.method:
-            if method.selector == selector:
+            if isinstance(method, MultiMethod):
+                for method in method.methods.values():
+                    if method.selector == selector:
+                        return method
+            elif method.selector == selector:
                 return method
         raise ValueError(f"Could not find a method with selector {selector!r}")
 

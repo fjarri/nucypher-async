@@ -14,8 +14,11 @@ from nucypher_core import (
     Address,
     Conditions,
     Context,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
 )
 from nucypher_core.umbral import PublicKey, Capsule, VerifiedCapsuleFrag
+from nucypher_core.ferveo import FerveoPublicKey
 
 from ..base.peer_error import InvalidMessage
 from ..base.ursula import UrsulaRoutes
@@ -55,6 +58,10 @@ class UrsulaInfo:
     @cached_property
     def public_key(self) -> PeerPublicKey:
         return PeerPublicKey.from_bytes(self._metadata_payload.certificate_der)
+
+    @cached_property
+    def dkg_key(self) -> FerveoPublicKey:
+        return self._metadata_payload.ferveo_public_key
 
     @cached_property
     def domain(self) -> Domain:
@@ -206,6 +213,16 @@ class UrsulaClient:
             raise InvalidMessage(ReencryptionResponse, exc) from exc
 
         return verified_cfrags
+
+    async def decrypt(
+        self,
+        ursula: UrsulaInfo,
+        request: EncryptedThresholdDecryptionRequest,
+    ) -> EncryptedThresholdDecryptionResponse:
+        response_bytes = await self._peer_client.communicate(
+            ursula.secure_contact, UrsulaRoutes.DECRYPT, bytes(request)
+        )
+        return unwrap_bytes(response_bytes, EncryptedThresholdDecryptionResponse)
 
     async def status(self, secure_contact: SecureContact) -> str:
         response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.STATUS)

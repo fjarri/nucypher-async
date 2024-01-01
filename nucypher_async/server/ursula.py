@@ -1,4 +1,5 @@
-from typing import Optional
+from http import HTTPStatus
+from typing import Optional, List, Tuple, Sequence
 
 import trio
 from nucypher_core import (
@@ -8,10 +9,19 @@ from nucypher_core import (
     MetadataResponse,
     ReencryptionRequest,
     ReencryptionResponse,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
+    ThresholdDecryptionResponse,
+)
+from nucypher_core.ferveo import (
+    Validator,
+    Transcript,
 )
 
 from ..base.peer_error import InactivePolicy, GenericPeerError
+from ..drivers.asgi_app import HTTPError
 from ..drivers.identity import IdentityAddress
+from ..drivers.payment import Ritual
 from ..drivers.peer import (
     BasePeerAndUrsulaServer,
     SecureContact,
@@ -22,7 +32,7 @@ from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..p2p.ursula import UrsulaInfo
 from ..p2p.learner import Learner
-from ..p2p.algorithms import verification_task, learning_task
+from ..p2p.algorithms import verification_task, learning_task, verified_nodes_iter
 from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
 from .status import render_status
 from .config import UrsulaServerConfig
@@ -100,6 +110,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         )
 
         self._payment_client = config.payment_client
+        self._identity_client = config.identity_client
 
         self._started_at = self._clock.utcnow()
 
@@ -179,6 +190,74 @@ class UrsulaServer(BasePeerAndUrsulaServer):
     async def public_information(self) -> NodeMetadata:
         # TODO: can we just return UrsulaInfo?
         return self._node.metadata
+
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse:
+        decryption_request = self.ursula.decrypt_threshold_decryption_request(request)
+        self._logger.info(
+            f"Threshold decryption request for ritual ID #{decryption_request.ritual_id}"
+        )
+
+        # TODO: check that Enrico is authorized
+        # TODO: evaluate and check conditions here
+
+        # TODO: can be cached?
+        async with self._payment_client.session() as session:
+            ritual = await session.get_ritual(decryption_request.ritual_id)
+            participants = await session.get_participants(ritual.id)
+            state = await session.get_ritual_state(ritual.id)
+
+        if state != Ritual.State.FINALIZED:
+            raise Exception(f"ritual #{ritual.id} is not finalized.")
+
+        if not all(p.transcript for p in participants):
+            raise Exception(f"ritual #{ritual.id} is missing transcripts")
+
+        validators = await self._resolve_validators(ritual, participants)
+
+        # derive the decryption share
+        decryption_share = self.ursula.derive_decryption_share(
+            ritual=ritual,
+            staking_provider_address=self._node.staking_provider_address,
+            validators=validators,
+            ciphertext_header=decryption_request.ciphertext_header,
+            aad=decryption_request.acp.aad(),
+            variant=decryption_request.variant,
+        )
+
+        # return the decryption share
+        decryption_response = ThresholdDecryptionResponse(
+            ritual_id=ritual.id,
+            decryption_share=bytes(decryption_share),
+        )
+        return self.ursula.encrypt_threshold_decryption_response(
+            response=decryption_response,
+            requester_public_key=request.requester_public_key,
+        )
+
+    async def _resolve_validators(
+        self, ritual: Ritual, participants: Sequence[Ritual.Participant]
+    ) -> List[Validator]:
+        # enforces that the node is part of the ritual
+        if self._node.staking_provider_address not in [p.provider for p in participants]:
+            raise HTTPError(
+                f"Node not part of ritual {ritual.id}",
+                HTTPStatus.FORBIDDEN,
+            )
+
+        validators = [Validator(self._node.staking_provider_address.checksum, self.ursula.dkg_key)]
+
+        addresses = [p.provider for p in participants]
+        async with verified_nodes_iter(self.learner, addresses) as node_iter:
+            async for node in node_iter:
+                validators.append(
+                    Validator(
+                        address=node.staking_provider_address.checksum, public_key=node.dkg_key
+                    )
+                )
+
+        return list(sorted(validators, key=lambda x: x.address))
 
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
         hrac = request.hrac

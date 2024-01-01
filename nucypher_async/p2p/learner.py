@@ -2,7 +2,13 @@ from typing import Optional, Iterable, Tuple, List, Set, Dict
 
 import trio
 
-from nucypher_core import TreasureMap, Conditions, Context
+from nucypher_core import (
+    TreasureMap,
+    Conditions,
+    Context,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
+)
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
@@ -282,6 +288,13 @@ class Learner:
             conditions=conditions,
             context=context,
         )
+
+    async def decrypt(
+        self,
+        ursula: VerifiedUrsulaInfo,
+        request: EncryptedThresholdDecryptionRequest,
+    ) -> EncryptedThresholdDecryptionResponse:
+        return await self._ursula_client.decrypt(ursula=ursula, request=request)
 
     def next_verification_in(self) -> float:
         return self._fleet_sensor.next_verification_in()

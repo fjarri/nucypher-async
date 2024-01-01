@@ -7,6 +7,8 @@ from nucypher_core import (
     NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
 )
 import trio
 
@@ -20,6 +22,7 @@ class UrsulaRoutes:
     PING = "ping"
     REENCRYPT = "reencrypt"
     STATUS = "status"
+    DECRYPT = "decrypt"
 
 
 class BaseUrsulaServer(ABC):
@@ -48,6 +51,8 @@ class BaseUrsulaServer(ABC):
     ) -> MetadataResponse:
         ...
 
+    # TODO: why do we need this separation between typed and untyped methods?
+    # Can't we do serialization/deserialization in the same method?
     async def endpoint_node_metadata_post(
         self, remote_host: Optional[str], request_bytes: bytes
     ) -> bytes:
@@ -82,6 +87,20 @@ class BaseUrsulaServer(ABC):
     # should be available at the same port as the rest of the API, so it has to stay here.
     @abstractmethod
     async def endpoint_status(self) -> str:
+        ...
+
+    async def endpoint_decrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = EncryptedThresholdDecryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise InvalidMessage.for_message(EncryptedThresholdDecryptionRequest, exc) from exc
+
+        return bytes(await self.decrypt(request))
+
+    @abstractmethod
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse:
         ...
 
     @abstractmethod

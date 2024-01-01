@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, List, Mapping, Tuple
+from typing import Optional, Iterable, List, Mapping, Tuple, Sequence, Union
 
 from attrs import frozen
 
@@ -9,6 +9,11 @@ from nucypher_core import (
     HRAC,
     EncryptedTreasureMap,
     EncryptedKeyFrag,
+    EncryptedThresholdDecryptionRequest,
+    ThresholdDecryptionRequest,
+    ThresholdDecryptionResponse,
+    SessionStaticKey,
+    EncryptedThresholdDecryptionResponse,
 )
 from nucypher_core.umbral import (
     generate_kfrags,
@@ -19,10 +24,20 @@ from nucypher_core.umbral import (
     RecoverableSignature,
     reencrypt,
 )
+from nucypher_core.ferveo import (
+    AggregatedTranscript,
+    CiphertextHeader,
+    DecryptionSharePrecomputed,
+    DecryptionShareSimple,
+    Dkg,
+    FerveoVariant,
+    Validator,
+    ValidatorMessage,
+)
 
 from ..drivers.peer import PeerPrivateKey
-from ..drivers.identity import IdentityAccount
-from ..drivers.payment import PaymentAccount, PaymentAccountSigner
+from ..drivers.identity import IdentityAccount, IdentityAddress
+from ..drivers.payment import PaymentAccount, PaymentAccountSigner, Ritual
 from ..master_key import MasterKey
 
 
@@ -170,6 +185,7 @@ class Ursula:
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
+        # TODO: make a separate character for DKG
         self._dkg_keypair = self.__master_key.make_dkg_keypair()
         self.dkg_key = self._dkg_keypair.public_key()
 
@@ -189,10 +205,64 @@ class Ursula:
     ) -> VerifiedKeyFrag:
         return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_card.verifying_key)
 
+    def decrypt_threshold_decryption_request(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> ThresholdDecryptionRequest:
+        shared_secret = self.__master_key.make_shared_secret(
+            request.ritual_id, request.requester_public_key
+        )
+        return request.decrypt(shared_secret)
+
+    def encrypt_threshold_decryption_response(
+        self,
+        response: ThresholdDecryptionResponse,
+        requester_public_key: SessionStaticKey,
+    ) -> EncryptedThresholdDecryptionResponse:
+        shared_secret = self.__master_key.make_shared_secret(
+            response.ritual_id, requester_public_key
+        )
+        return response.encrypt(shared_secret)
+
     def reencrypt(
         self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
     ) -> List[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
+
+    def derive_decryption_share(
+        self,
+        ritual: Ritual,
+        staking_provider_address: IdentityAddress,
+        validators: Sequence[Validator],
+        ciphertext_header: CiphertextHeader,
+        aad: bytes,
+        variant: FerveoVariant,
+    ) -> Union[DecryptionShareSimple, DecryptionSharePrecomputed]:
+        me = Validator(address=staking_provider_address.checksum, public_key=self.dkg_key)
+        dkg = Dkg(
+            tau=ritual.id,
+            # CHECK: is this always equal to the number of participants?
+            shares_num=ritual.dkg_size,
+            security_threshold=ritual.threshold,
+            validators=validators,
+            me=me,
+        )
+
+        if variant == FerveoVariant.Simple:
+            return ritual.aggregated_transcript.create_decryption_share_simple(
+                dkg=dkg,
+                ciphertext_header=ciphertext_header,
+                aad=aad,
+                validator_keypair=self._dkg_keypair,
+            )
+        elif variant == FerveoVariant.Precomputed:
+            return ritual.aggregated_transcript.create_decryption_share_precomputed(
+                dkg=dkg,
+                ciphertext_header=ciphertext_header,
+                aad=aad,
+                validator_keypair=self._dkg_keypair,
+            )
+        else:
+            raise NotImplementedError
 
     def __str__(self) -> str:
         operator_short = self.operator_address.checksum[:10]
