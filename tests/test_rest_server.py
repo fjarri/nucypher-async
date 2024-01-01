@@ -9,7 +9,7 @@ from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
 from nucypher_async.drivers.time import SystemClock
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
+from nucypher_async.mocks import MockIdentityClient, MockPREClient
 from nucypher_async.p2p.ursula import UrsulaClient
 from nucypher_async.server import UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
@@ -22,7 +22,7 @@ def ursula_server() -> UrsulaServer:
         domain=Domain.MAINNET,
         contact=Contact("127.0.0.1", 9151),
         identity_client=MockIdentityClient(),
-        payment_client=MockPaymentClient(),
+        pre_client=MockPREClient(),
         peer_client=PeerClient(),
         parent_logger=NULL_LOGGER,
         storage=InMemoryStorage(),

@@ -31,7 +31,8 @@ from pons import (
 
 from ..domain import Domain
 
-_PRE_APP_ABI = ContractABI(
+# nucypher_contracts::TACoApplication.sol
+_TACO_APP_ABI = ContractABI(
     methods=[
         Method(
             name="authorizedStake",
@@ -40,13 +41,13 @@ _PRE_APP_ABI = ContractABI(
             outputs=abi.uint(96),
         ),
         Method(
-            name="stakingProviderFromOperator",
+            name="operatorToStakingProvider",
             mutability=Mutability.VIEW,
             inputs=dict(_operator=abi.address),
             outputs=abi.address,
         ),
         Method(
-            name="getOperatorFromStakingProvider",
+            name="stakingProviderToOperator",
             mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.address,
@@ -78,7 +79,7 @@ class IdentityAddress(Address):
 
 
 class BaseContracts:
-    PRE_APPLICATION: IdentityAddress
+    TACO_APPLICATION: IdentityAddress
 
 
 class LynxContracts(BaseContracts):
@@ -86,8 +87,7 @@ class LynxContracts(BaseContracts):
     Registry for Lynx on Goerli.
     """
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class TapirContracts(BaseContracts):
@@ -95,8 +95,7 @@ class TapirContracts(BaseContracts):
     Registry for Tapir on Goerli.
     """
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class MainnetContracts(BaseContracts):
@@ -104,8 +103,7 @@ class MainnetContracts(BaseContracts):
     Registry for mainnet.
     """
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class IdentityAccount:
@@ -159,7 +157,7 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        self._pre_application = DeployedContract(address=registry.PRE_APPLICATION, abi=_PRE_APP_ABI)
+        self._contract = DeployedContract(address=registry.TACO_APPLICATION, abi=_TACO_APP_ABI)
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator["IdentityClientSession"]:
@@ -168,14 +166,14 @@ class IdentityClient:
 
 
 class IdentityClientSession:
-    def __init__(self, identity_client: IdentityClient, backend_session: ClientSession):
-        self._identity_client = identity_client
+    def __init__(self, client: IdentityClient, backend_session: ClientSession):
+        self._client = client
         self._backend_session = backend_session
-        self._pre_application = identity_client._pre_application
+        self._contract = client._contract
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.eth_call(
-            self._pre_application.method.authorizedStake(staking_provider_address)
+            self._contract.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
 
@@ -183,7 +181,7 @@ class IdentityClientSession:
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._pre_application.method.stakingProviderFromOperator(operator_address)
+            self._contract.method.operatorToStakingProvider(operator_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -191,7 +189,7 @@ class IdentityClientSession:
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._pre_application.method.getOperatorFromStakingProvider(staking_provider_address)
+            self._contract.method.stakingProviderToOperator(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -202,7 +200,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._pre_application.method.isAuthorized(staking_provider_address)
+                self._contract.method.isAuthorized(staking_provider_address)
             ),
         )
 
@@ -211,7 +209,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._pre_application.method.isOperatorConfirmed(operator_address)
+                self._contract.method.isOperatorConfirmed(operator_address)
             ),
         )
 
@@ -222,10 +220,9 @@ class IdentityClientSession:
     async def get_active_staking_providers(
         self, start_index: int = 0, max_staking_providers: int = 0
     ) -> Dict[IdentityAddress, AmountT]:
+        # TODO: implement pagination
         _total_staked, staking_providers_data = await self._backend_session.eth_call(
-            self._pre_application.method.getActiveStakingProviders(
-                start_index, max_staking_providers
-            )
+            self._contract.method.getActiveStakingProviders(start_index, max_staking_providers)
         )
         staking_providers = {
             IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)

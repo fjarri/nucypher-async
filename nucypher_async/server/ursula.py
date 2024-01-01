@@ -18,8 +18,8 @@ from nucypher_core.ferveo import Transcript, Validator
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..characters.pre import PublisherCard, Ursula
 from ..drivers.asgi_app import HTTPError
+from ..drivers.cbd import Ritual
 from ..drivers.identity import IdentityAddress
-from ..drivers.payment import Ritual
 from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task, verified_nodes_iter
 from ..p2p.learner import Learner
@@ -106,7 +106,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             clock=self._clock,
         )
 
-        self._payment_client = config.payment_client
+        self._pre_client = config.pre_client
         self._identity_client = config.identity_client
 
         self._started_at = self._clock.utcnow()
@@ -200,7 +200,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         # TODO: evaluate and check conditions here
 
         # TODO: can be cached?
-        async with self._payment_client.session() as session:
+        async with self._pre_client.session() as session:
             ritual = await session.get_ritual(decryption_request.ritual_id)
             participants = await session.get_participants(ritual.id)
             state = await session.get_ritual_state(ritual.id)
@@ -260,7 +260,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
-        async with self._payment_client.session() as session:
+        async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
                 raise InactivePolicy(f"Policy {hrac} is not active")
 

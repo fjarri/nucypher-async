@@ -13,7 +13,7 @@ from nucypher_core.ferveo import (
     combine_decryption_shares_simple,
 )
 
-from ..drivers.payment import PaymentClient, Ritual
+from ..drivers.pre import PREClient, Ritual
 from ..p2p.algorithms import get_ursulas, verified_nodes_iter
 from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedUrsulaInfo
@@ -21,12 +21,12 @@ from ..p2p.verification import VerifiedUrsulaInfo
 
 async def initiate_ritual(
     learner: Learner,
-    payment_client: PaymentClient,
+    pre_client: PREClient,
     shares: int,
 ) -> Ritual:
     nodes = await get_ursulas(learner=learner, quantity=shares)
 
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         ritual_id = await session.initiate_ritual()
         ritual = await session.get_ritual(ritual_id)
 
@@ -34,9 +34,9 @@ async def initiate_ritual(
 
 
 async def cbd_decrypt(
-    learner: Learner, payment_client: PaymentClient, message_kit: ThresholdMessageKit
+    learner: Learner, pre_client: PREClient, message_kit: ThresholdMessageKit
 ) -> bytes:
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         ritual_id = await session.get_ritual_id_from_public_key(message_kit.acp.public_key)
         ritual = await session.get_ritual(ritual_id)
         participants = await session.get_participants(ritual_id)

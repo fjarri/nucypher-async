@@ -7,7 +7,7 @@ from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from .eth import MockBackend, MockContract
 
 
-class SimplePREApplication(MockContract):
+class TacoApplication(MockContract):
     def __init__(self, abi: ContractABI):
         super().__init__(abi)
         self._min_stake = Amount.ether(40000)
@@ -20,10 +20,10 @@ class SimplePREApplication(MockContract):
     def authorizedStake(self, staking_provider_address: Address) -> int:
         return self._stakes[staking_provider_address].as_wei()
 
-    def stakingProviderFromOperator(self, operator_address: Address) -> Address:
+    def operatorToStakingProvider(self, operator_address: Address) -> Address:
         return self._operator_to_staking_provider[operator_address]
 
-    def getOperatorFromStakingProvider(self, staking_provider_address: Address) -> Address:
+    def stakingProviderToOperator(self, staking_provider_address: Address) -> Address:
         return self._staking_provider_to_operator[staking_provider_address]
 
     def isAuthorized(self, staking_provider_address: Address) -> bool:
@@ -79,10 +79,8 @@ class MockIdentityClient(IdentityClient):
 
         self._mock_backend = mock_backend
 
-        self._mock_pre_application = SimplePREApplication(self._pre_application.abi)
-        mock_backend.mock_register_contract(
-            self._pre_application.address, self._mock_pre_application
-        )
+        self._mock_contract = TacoApplication(self._contract.abi)
+        mock_backend.mock_register_contract(self._contract.address, self._mock_contract)
 
     def mock_set_up(
         self,
@@ -105,6 +103,4 @@ class MockIdentityClient(IdentityClient):
         operator_address_ = Address(bytes(operator_address))
         amount_t_ = Amount.wei(amount_t.as_wei())
 
-        self._mock_pre_application.mock_set_up(
-            staking_provider_address_, operator_address_, amount_t_
-        )
+        self._mock_contract.mock_set_up(staking_provider_address_, operator_address_, amount_t_)

@@ -13,11 +13,11 @@ from nucypher_async.client.cbd import ThresholdMessageKit, cbd_decrypt, initiate
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.payment import PaymentAccount, PaymentClient
 from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.pre import PREAccount, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
-from nucypher_async.mocks import MockClock, MockIdentityClient, MockPaymentClient
+from nucypher_async.mocks import MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
@@ -36,7 +36,7 @@ class Context(NamedTuple):
     logger: Logger
     domain: Domain
     identity_client: IdentityClient
-    payment_client: PaymentClient
+    pre_client: PREClient
     clock: BaseClock
 
 
@@ -68,7 +68,7 @@ async def run_local_ursula_fleet(
             domain=context.domain,
             contact=Contact(LOCALHOST, PORT_BASE + i),
             identity_client=context.identity_client,
-            payment_client=context.payment_client,
+            pre_client=context.pre_client,
             peer_client=PeerClient(),
             parent_logger=context.logger.get_child(f"Ursula{i+1}"),
             storage=InMemoryStorage(),
@@ -98,7 +98,7 @@ async def bob_decrypts(
     )
 
     decrypted = await cbd_decrypt(
-        learner=learner, message_kit=message_kit, payment_client=context.payment_client
+        learner=learner, message_kit=message_kit, pre_client=context.pre_client
     )
 
     return decrypted
@@ -113,7 +113,7 @@ async def main(mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=MockIdentityClient(),
-            payment_client=MockPaymentClient(),
+            pre_client=MockPREClient(),
             clock=MockClock(),
         )
     else:
@@ -121,7 +121,7 @@ async def main(mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=IdentityClient.from_endpoint(GOERLI_ENDPOINT, domain),
-            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, domain),
+            pre_client=PREClient.from_endpoint(MUMBAI_ENDPOINT, domain),
             clock=SystemClock(),
         )
 
@@ -144,7 +144,7 @@ async def main(mocked: bool = True) -> None:
             seed_contacts=[seed_contact],
             clock=context.clock,
         )
-        ritual = await initiate_ritual(learner, context.payment_client, 3)
+        ritual = await initiate_ritual(learner, context.pre_client, 3)
 
         context.logger.info("Alice encrypts")
         message = b"a secret message"

@@ -27,11 +27,11 @@ from nucypher_async.client.pre import (
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.payment import PaymentAccount, PaymentClient
 from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.pre import PREAccount, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
-from nucypher_async.mocks import MockClock, MockIdentityClient, MockPaymentClient
+from nucypher_async.mocks import MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
@@ -50,7 +50,7 @@ class Context(NamedTuple):
     logger: Logger
     domain: Domain
     identity_client: IdentityClient
-    payment_client: PaymentClient
+    pre_client: PREClient
     clock: BaseClock
 
 
@@ -82,7 +82,7 @@ async def run_local_ursula_fleet(
             domain=context.domain,
             contact=Contact(LOCALHOST, PORT_BASE + i),
             identity_client=context.identity_client,
-            payment_client=context.payment_client,
+            pre_client=context.pre_client,
             peer_client=PeerClient(),
             parent_logger=context.logger.get_child(f"Ursula{i+1}"),
             storage=InMemoryStorage(),
@@ -129,7 +129,7 @@ async def alice_grants(
         recipient_card=recipient_card,
         publisher=publisher,
         learner=learner,
-        payment_client=context.payment_client,
+        pre_client=context.pre_client,
     )
 
 
@@ -171,7 +171,7 @@ async def main(mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=MockIdentityClient(),
-            payment_client=MockPaymentClient(),
+            pre_client=MockPREClient(),
             clock=MockClock(),
         )
     else:
@@ -179,7 +179,7 @@ async def main(mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.TAPIR),
-            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.TAPIR),
+            pre_client=PREClient.from_endpoint(MUMBAI_ENDPOINT, Domain.TAPIR),
             clock=SystemClock(),
         )
 
@@ -196,7 +196,7 @@ async def main(mocked: bool = True) -> None:
         bob = Recipient(bob_keys)
 
         if mocked:
-            payment_account = PaymentAccount.random()
+            pre_account = PREAccount.random()
         else:
             # TODO: don't expose eth_account.Account
             acc = Account.from_key(
@@ -204,12 +204,12 @@ async def main(mocked: bool = True) -> None:
                     b"$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an"
                 )
             )
-            payment_account = PaymentAccount(acc)
+            pre_account = PREAccount(acc)
 
         alice_keys = MasterKey.random()
         alice = Delegator(alice_keys)
         publisher_keys = MasterKey.random()
-        publisher = Publisher(publisher_keys, payment_account)
+        publisher = Publisher(publisher_keys, pre_account)
 
         context.logger.info("Alice grants")
         policy = await alice_grants(context, seed_contact, alice, publisher, bob.card())
