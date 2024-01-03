@@ -23,9 +23,12 @@ from pons import (
     ClientSession,
     ContractABI,
     DeployedContract,
+    Error,
     HTTPProvider,
     Method,
     Mutability,
+    Provider,
+    Signer,
     abi,
 )
 
@@ -69,6 +72,41 @@ _TACO_APP_ABI = ContractABI(
             mutability=Mutability.VIEW,
             inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
             outputs=[abi.uint(256), abi.uint(256)[2][...]],
+        ),
+        Method(
+            name="bondOperator",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_stakingProvider=abi.address, _operator=abi.address),
+        ),
+    ],
+    errors=[Error(name="MyError", fields=dict(_stakingProvider=abi.address, sender=abi.address))],
+)
+
+_STAKING_ABI = ContractABI(
+    methods=[
+        Method(
+            name="setRoles",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_stakingProvider=abi.address),
+        ),
+        Method(
+            name="setStakes",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _stakingProvider=abi.address,
+                _tStake=abi.uint(96),
+                _keepInTStake=abi.uint(96),
+                _nuInTStake=abi.uint(96),
+            ),
+        ),
+        Method(
+            name="authorizationIncreased",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _stakingProvider=abi.address,
+                _fromAmount=abi.uint(96),
+                _toAmount=abi.uint(96),
+            ),
         ),
     ]
 )
@@ -141,11 +179,6 @@ class IdentityClient:
     def from_endpoint(cls, url: str, domain: Domain) -> "IdentityClient":
         assert url.startswith("https://")
         provider = HTTPProvider(url)
-        client = Client(provider)
-        return cls(client, domain)
-
-    def __init__(self, backend_client: Client, domain: Domain):
-        self._client = backend_client
 
         registry: Type[BaseContracts]
         if domain == Domain.MAINNET:
@@ -157,7 +190,16 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        self._contract = DeployedContract(address=registry.TACO_APPLICATION, abi=_TACO_APP_ABI)
+        return cls(provider, registry.TACO_APPLICATION, registry.TACO_APPLICATION)
+
+    def __init__(
+        self, provider: Provider, taco_application_address: Address, staking_address: Address
+    ):
+        # TODO: or should we take `DeployedContract`
+        # and assert that _TACO_APP_ABI is compatible with it?
+        self._client = Client(provider)
+        self._app = DeployedContract(address=taco_application_address, abi=_TACO_APP_ABI)
+        self._staking = DeployedContract(address=staking_address, abi=_STAKING_ABI)
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator["IdentityClientSession"]:
@@ -169,11 +211,12 @@ class IdentityClientSession:
     def __init__(self, client: IdentityClient, backend_session: ClientSession):
         self._client = client
         self._backend_session = backend_session
-        self._contract = client._contract
+        self._app = client._app
+        self._staking = client._staking
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.eth_call(
-            self._contract.method.authorizedStake(staking_provider_address)
+            self._app.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
 
@@ -181,7 +224,7 @@ class IdentityClientSession:
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._contract.method.operatorToStakingProvider(operator_address)
+            self._app.method.operatorToStakingProvider(operator_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -189,7 +232,7 @@ class IdentityClientSession:
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.eth_call(
-            self._contract.method.stakingProviderToOperator(staking_provider_address)
+            self._app.method.stakingProviderToOperator(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -200,7 +243,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._contract.method.isAuthorized(staking_provider_address)
+                self._app.method.isAuthorized(staking_provider_address)
             ),
         )
 
@@ -209,7 +252,7 @@ class IdentityClientSession:
         return cast(
             bool,
             await self._backend_session.eth_call(
-                self._contract.method.isOperatorConfirmed(operator_address)
+                self._app.method.isOperatorConfirmed(operator_address)
             ),
         )
 
@@ -222,7 +265,7 @@ class IdentityClientSession:
     ) -> Dict[IdentityAddress, AmountT]:
         # TODO: implement pagination
         _total_staked, staking_providers_data = await self._backend_session.eth_call(
-            self._contract.method.getActiveStakingProviders(start_index, max_staking_providers)
+            self._app.method.getActiveStakingProviders(start_index, max_staking_providers)
         )
         staking_providers = {
             IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
@@ -230,3 +273,38 @@ class IdentityClientSession:
         }
 
         return staking_providers
+
+    async def add_staking_provider(
+        self,
+        owner_signer: Signer,
+        staking_provider_signer: Signer,
+        operator_address: IdentityAddress,
+        stake: AmountT,
+    ):
+        staking_provider_address = staking_provider_signer.address
+
+        # TODO: this only applies to testnet staking. How do we make it general? Or move it to tests?
+        await self._backend_session.transact(
+            owner_signer, self._staking.method.setRoles(_stakingProvider=staking_provider_address)
+        )
+        await self._backend_session.transact(
+            owner_signer,
+            self._staking.method.setStakes(
+                _stakingProvider=staking_provider_address,
+                _tStake=stake.as_wei(),
+                _keepInTStake=0,
+                _nuInTStake=0,
+            ),
+        )
+        await self._backend_session.transact(
+            owner_signer,
+            self._staking.method.authorizationIncreased(
+                _stakingProvider=staking_provider_address, _fromAmount=0, _toAmount=stake.as_wei()
+            ),
+        )
+        await self._backend_session.transact(
+            staking_provider_signer,
+            self._app.method.bondOperator(
+                _stakingProvider=staking_provider_address, _operator=operator_address
+            ),
+        )

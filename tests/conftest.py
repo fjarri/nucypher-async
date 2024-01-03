@@ -2,10 +2,12 @@ import os
 from pathlib import Path
 from typing import AsyncIterator, Iterator, List, Tuple
 
+import arrow
 import attrs
 import pytest
 import trio
 from pons import (
+    AccountSigner,
     Amount,
     Client,
     DeployedContract,
@@ -17,7 +19,7 @@ from pons import (
 import nucypher_async.utils.logging as logging
 from nucypher_async.characters.pre import Ursula
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.identity import AmountT, IdentityAddress
+from nucypher_async.drivers.identity import AmountT, IdentityAddress, IdentityClient
 from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
 from nucypher_async.mocks import (
     MockClock,
@@ -48,21 +50,17 @@ async def mock_clock() -> MockClock:
     return MockClock()
 
 
-@pytest.fixture
-def local_provider():
-    return LocalProvider(root_balance=Amount.ether(100))
-
-
 @attrs.frozen
 class LocalContracts:
-    snapshot: SnapshotID
+    provider: LocalProvider
+    snapshot_clean: SnapshotID
     ritual_token: DeployedContract
     t_staking: DeployedContract
     taco_app: DeployedContract
 
 
 @pytest.fixture(scope="session")
-async def local_contracts(local_provider):
+def local_contracts():
     RITUAL_TOKEN_SUPPLY = Amount.ether(10_000_000_000)
     MIN_AUTHORIZATION = Amount.ether(40_000)
     MIN_OPERATOR_SECONDS = 60 * 60 * 24  # one day in seconds
@@ -72,13 +70,23 @@ async def local_contracts(local_provider):
     COMMITMENT_DURATION_2 = 2 * COMMITMENT_DURATION_1  # 365 days in seconds
     COMMITMENT_DEADLINE = 60 * 60 * 24 * 100  # 100 days after deploymwent
 
-    contract_path = Path("/Users/bogdan/wb/github/nucypher-async-contracts")
+    contract_path = Path(__file__).parent.parent / "contracts"
 
     IMPORT_REMAPPINGS = {
         "@openzeppelin": contract_path / "openzeppelin-contracts",
         "@openzeppelin-upgradeable": contract_path / "openzeppelin-contracts-upgradeable",
         "@threshold": contract_path / "solidity-contracts",
     }
+
+    PROXY = compile_contract_file(
+        contract_path
+        / "openzeppelin-contracts"
+        / "contracts"
+        / "proxy"
+        / "transparent"
+        / "TransparentUpgradeableProxy.sol",
+        optimize=True,
+    )["TransparentUpgradeableProxy"]
 
     RITUAL_TOKEN = compile_contract_file(
         contract_path / "RitualToken.sol", import_remappings=IMPORT_REMAPPINGS
@@ -90,38 +98,131 @@ async def local_contracts(local_provider):
         optimize=True,
     )["TACoApplication"]
 
-    MOCK_T_STAKING = compile_contract_file(
-        contract_path / "nucypher-contracts" / "contracts" / "test" / "TACoApplicationTestSet.sol",
+    TACO_CHILD_APP = compile_contract_file(
+        contract_path
+        / "nucypher-contracts"
+        / "contracts"
+        / "contracts"
+        / "coordination"
+        / "TACoChildApplication.sol",
         import_remappings=IMPORT_REMAPPINGS,
         optimize=True,
-    )["ThresholdStakingForTACoApplicationMock"]
+    )["TACoChildApplication"]
 
-    client = Client(local_provider)
-    async with client.session() as session:
-        ritual_token = await session.deploy(
-            root, RITUAL_TOKEN.constructor(RITUAL_TOKEN_SUPPLY.as_wei())
+    MOCK_T_STAKING = compile_contract_file(
+        contract_path
+        / "nucypher-contracts"
+        / "contracts"
+        / "contracts"
+        / "TestnetThresholdStaking.sol",
+        import_remappings=IMPORT_REMAPPINGS,
+        optimize=True,
+    )["TestnetThresholdStaking"]
+
+    provider = LocalProvider(root_balance=Amount.ether(100))
+    root = provider.root
+    client = Client(provider)
+
+    # Currently Client only has async API, and async fixtures can only be function-scoped.
+    # So we need to run the async part manually.
+    contracts = None
+
+    async def deploy_contracts():
+        nonlocal contracts
+
+        staking_provider = AccountSigner.create()
+
+        async with client.session() as session:
+            ritual_token = await session.deploy(
+                root, RITUAL_TOKEN.constructor(RITUAL_TOKEN_SUPPLY.as_wei())
+            )
+
+            t_staking = await session.deploy(root, MOCK_T_STAKING.constructor())
+
+            taco_app_logic = await session.deploy(
+                root,
+                TACO_APP.constructor(
+                    _token=ritual_token.address,
+                    _tStaking=t_staking.address,
+                    _minimumAuthorization=MIN_AUTHORIZATION.as_wei(),
+                    _minOperatorSeconds=MIN_OPERATOR_SECONDS,
+                    _rewardDuration=REWARD_DURATION,
+                    _deauthorizationDuration=DEAUTHORIZATION_DURATION,
+                    _commitmentDurationOptions=[COMMITMENT_DURATION_1, COMMITMENT_DURATION_2],
+                    _commitmentDeadline=arrow.now().int_timestamp + COMMITMENT_DEADLINE,
+                ),
+            )
+
+            taco_app_proxy = await session.deploy(
+                root,
+                PROXY.constructor(
+                    _logic=taco_app_logic.address, initialOwner=root.address, _data=b""
+                ),
+            )
+
+            taco_app = DeployedContract(taco_app_logic.abi, taco_app_proxy.address)
+
+            taco_child_app_logic = await session.deploy(
+                root,
+                TACO_CHILD_APP.constructor(
+                    _rootApplication=taco_app.address,
+                    _minimumAuthorization=MIN_AUTHORIZATION.as_wei(),
+                ),
+            )
+
+            taco_child_app_proxy = await session.deploy(
+                root,
+                PROXY.constructor(
+                    _logic=taco_child_app_logic.address, initialOwner=root.address, _data=b""
+                ),
+            )
+
+            taco_child_app = DeployedContract(
+                taco_child_app_logic.abi, taco_child_app_proxy.address
+            )
+
+            await session.transact(root, taco_app.method.initialize())
+
+            await session.transact(
+                root,
+                t_staking.method.setApplication(
+                    _application=taco_app.address,
+                ),
+            )
+
+            await session.transact(
+                root,
+                taco_app.method.setChildApplication(
+                    _childApplication=taco_child_app.address,
+                ),
+            )
+
+        snapshot = provider.take_snapshot()
+        contracts = LocalContracts(
+            provider=provider,
+            snapshot_clean=snapshot,
+            ritual_token=ritual_token,
+            t_staking=t_staking,
+            taco_app=taco_app,
         )
 
-        t_staking = await session.deploy(root, MOCK_T_STAKING.constructor())
+    trio.run(deploy_contracts)
 
-        taco_app = await session.deploy(
-            root,
-            TACO_APP.constructor(
-                _token=ritual_token.address,
-                _tStaking=t_staking.address,
-                _minimumAuthorization=MIN_AUTHORIZATION.as_wei(),
-                _minOperatorSeconds=MIN_OPERATOR_SECONDS,
-                _rewardDuration=REWARD_DURATION,
-                _deauthorizationDuration=DEAUTHORIZATION_DURATION,
-                _commitmentDurationOptions=[COMMITMENT_DURATION_1, COMMITMENT_DURATION_2],
-                _commitmentDeadline=arrow.now().int_timestamp + COMMITMENT_DEADLINE,
-            ),
-        )
+    return contracts
 
-    snapshot = local_provider.take_snapshot()
 
-    return LocalContracts(
-        snapshot=snapshot, ritual_token=ritual_token, t_staking=t_staking, taco_app=taco_app
+@pytest.fixture
+def clean_local_contracts(local_contracts):
+    local_contracts.provider.revert_to_snapshot(local_contracts.snapshot_clean)
+    return local_contracts
+
+
+@pytest.fixture
+def local_identity_client(local_contracts):
+    return IdentityClient(
+        local_contracts.provider,
+        local_contracts.taco_app.address,
+        local_contracts.t_staking.address,
     )
 
 
@@ -148,7 +249,9 @@ def mock_pre_client() -> Iterator[MockPREClient]:
 @pytest.fixture
 async def lonely_ursulas(
     mock_network: MockNetwork,
-    mock_identity_client: MockIdentityClient,
+    local_contracts,
+    local_identity_client,
+    # mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     ursulas: List[Ursula],
     logger: logging.Logger,
@@ -157,17 +260,26 @@ async def lonely_ursulas(
     servers = []
 
     for i in range(10):
-        staking_provider_address = IdentityAddress(os.urandom(20))
+        staking_provider = AccountSigner.create()
 
-        mock_identity_client.mock_set_up(
-            staking_provider_address, ursulas[i].operator_address, AmountT.ether(40000)
-        )
+        async with Client(local_contracts.provider).session() as session:
+            await session.transfer(
+                local_contracts.provider.root, staking_provider.address, Amount.ether(1)
+            )
+
+        async with local_identity_client.session() as session:
+            await session.add_staking_provider(
+                owner_signer=local_contracts.provider.root,
+                staking_provider_signer=staking_provider,
+                operator_address=ursulas[i].operator_address,
+                stake=AmountT.ether(40000),
+            )
 
         config = UrsulaServerConfig(
             domain=Domain.MAINNET,
             contact=Contact("127.0.0.1", 9150 + i),
             # TODO: find a way to ensure the client's domains correspond to the domain set above
-            identity_client=mock_identity_client,
+            identity_client=local_identity_client,
             pre_client=mock_pre_client,
             peer_client=MockPeerClient(mock_network, "127.0.0.1"),
             parent_logger=logger.get_child(str(i)),
@@ -204,7 +316,8 @@ async def chain_seeded_ursulas(
 @pytest.fixture
 async def fully_learned_ursulas(
     mock_network: MockNetwork,
-    mock_identity_client: MockIdentityClient,
+    # mock_identity_client: MockIdentityClient,
+    local_identity_client,
     lonely_ursulas: List[Tuple[MockHTTPServerHandle, UrsulaServer]],
 ) -> AsyncIterator[List[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
@@ -215,7 +328,7 @@ async def fully_learned_ursulas(
                 continue
 
             peer_info = other_server._node  # TODO: add a proper method to UrsulaServer
-            async with mock_identity_client.session() as session:
+            async with local_identity_client.session() as session:
                 stake = await session.get_staked_amount(peer_info.staking_provider_address)
             server.learner._test_add_verified_node(peer_info, stake)
 

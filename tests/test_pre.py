@@ -24,14 +24,16 @@ async def test_verified_nodes_iter(
     autojump_clock: trio.testing.MockClock,
     fully_learned_ursulas: List[UrsulaServer],
     mock_network: MockNetwork,
-    mock_identity_client: MockIdentityClient,
+    # mock_identity_client: MockIdentityClient,
     logger: Logger,
+    clean_local_contracts,
+    local_identity_client,
 ) -> None:
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
     learner = Learner(
         domain=Domain.MAINNET,
         peer_client=peer_client,
-        identity_client=mock_identity_client,
+        identity_client=local_identity_client,
         seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
         parent_logger=logger,
     )
@@ -45,6 +47,10 @@ async def test_verified_nodes_iter(
                 nodes.append(node)
 
     assert len(nodes) == 3
+
+
+async def test_node_setup(lonely_ursulas):
+    pass
 
 
 async def test_granting(
