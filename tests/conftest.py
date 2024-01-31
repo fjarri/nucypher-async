@@ -57,6 +57,8 @@ class LocalContracts:
     ritual_token: DeployedContract
     t_staking: DeployedContract
     taco_app: DeployedContract
+    taco_child_app: DeployedContract
+    coordinator: DeployedContract
 
 
 @pytest.fixture(scope="session")
@@ -69,6 +71,10 @@ def local_contracts():
     COMMITMENT_DURATION_1 = 182 * 60 * 24 * 60  # 182 days in seconds
     COMMITMENT_DURATION_2 = 2 * COMMITMENT_DURATION_1  # 365 days in seconds
     COMMITMENT_DEADLINE = 60 * 60 * 24 * 100  # 100 days after deploymwent
+    # Coordinator
+    TIMEOUT = 3600
+    MAX_DKG_SIZE = 8
+    FEE_RATE = 1
 
     contract_path = Path(__file__).parent.parent / "contracts"
 
@@ -118,6 +124,17 @@ def local_contracts():
         import_remappings=IMPORT_REMAPPINGS,
         optimize=True,
     )["TestnetThresholdStaking"]
+
+    COORDINATOR = compile_contract_file(
+        contract_path
+        / "nucypher-contracts"
+        / "contracts"
+        / "contracts"
+        / "coordination"
+        / "Coordinator.sol",
+        import_remappings=IMPORT_REMAPPINGS,
+        optimize=True,
+    )["Coordinator"]
 
     provider = LocalProvider(root_balance=Amount.ether(100))
     root = provider.root
@@ -197,6 +214,37 @@ def local_contracts():
                 ),
             )
 
+            # Deploy Coordinator
+
+            coordinator_logic = await session.deploy(
+                root,
+                COORDINATOR.constructor(
+                    _application=taco_child_app.address,
+                    _currency=ritual_token.address,
+                    _feeRatePerSecond=FEE_RATE,
+                ),
+            )
+
+            encoded_initializer_function = coordinator_logic.method.initialize(
+                _timeout=TIMEOUT, _maxDkgSize=MAX_DKG_SIZE, _admin=root.address
+            ).data_bytes
+
+            coordinator_proxy = await session.deploy(
+                root,
+                PROXY.constructor(
+                    _logic=coordinator_logic.address,
+                    initialOwner=root.address,
+                    _data=encoded_initializer_function,
+                ),
+            )
+
+            coordinator = DeployedContract(coordinator_logic.abi, coordinator_proxy.address)
+
+            await session.transact(root, coordinator.method.makeInitiationPublic())
+            await session.transact(
+                root, taco_child_app.method.initialize(_coordinator=coordinator.address)
+            )
+
         snapshot = provider.take_snapshot()
         contracts = LocalContracts(
             provider=provider,
@@ -204,6 +252,8 @@ def local_contracts():
             ritual_token=ritual_token,
             t_staking=t_staking,
             taco_app=taco_app,
+            taco_child_app=taco_child_app,
+            coordinator=coordinator,
         )
 
     trio.run(deploy_contracts)
@@ -223,6 +273,7 @@ def local_identity_client(local_contracts):
         local_contracts.provider,
         local_contracts.taco_app.address,
         local_contracts.t_staking.address,
+        local_contracts.coordinator.address,
     )
 
 
@@ -266,6 +317,9 @@ async def lonely_ursulas(
             await session.transfer(
                 local_contracts.provider.root, staking_provider.address, Amount.ether(1)
             )
+            await session.transfer(
+                local_contracts.provider.root, ursulas[i].operator_address, Amount.ether(1)
+            )
 
         async with local_identity_client.session() as session:
             await session.add_staking_provider(
@@ -273,6 +327,10 @@ async def lonely_ursulas(
                 staking_provider_signer=staking_provider,
                 operator_address=ursulas[i].operator_address,
                 stake=AmountT.ether(40000),
+            )
+
+            await session.confirm_operator_address(
+                operator_signer=ursulas[i].identity_account.signer, public_key=ursulas[i].dkg_key
             )
 
         config = UrsulaServerConfig(
@@ -344,7 +402,8 @@ async def fully_learned_ursulas(
 @pytest.fixture
 async def porter_server(
     mock_network: MockNetwork,
-    mock_identity_client: MockIdentityClient,
+    local_identity_client,
+    # mock_identity_client: MockIdentityClient,
     fully_learned_ursulas: List[UrsulaServer],
     logger: logging.Logger,
     mock_clock: MockClock,
@@ -362,7 +421,7 @@ async def porter_server(
         ssl_private_key=ssl_private_key,
         ssl_certificate=ssl_certificate,
         ssl_ca_chain=None,
-        identity_client=mock_identity_client,
+        identity_client=local_identity_client,
         peer_client=MockPeerClient(mock_network, host),
         parent_logger=logger,
         storage=InMemoryStorage(),

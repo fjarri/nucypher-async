@@ -18,6 +18,7 @@ from eth_account.messages import encode_defunct
 from eth_account.signers.base import BaseAccount
 from pons import (
     Address,
+    AccountSigner,
     Amount,
     Client,
     ClientSession,
@@ -31,6 +32,7 @@ from pons import (
     Signer,
     abi,
 )
+from nucypher_core.ferveo import FerveoPublicKey
 
 from ..domain import Domain
 
@@ -71,15 +73,30 @@ _TACO_APP_ABI = ContractABI(
             name="getActiveStakingProviders",
             mutability=Mutability.VIEW,
             inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
-            outputs=[abi.uint(256), abi.uint(256)[2][...]],
+            outputs=[abi.uint(256), abi.bytes(32)[...]],
         ),
         Method(
             name="bondOperator",
             mutability=Mutability.NONPAYABLE,
             inputs=dict(_stakingProvider=abi.address, _operator=abi.address),
         ),
+        Method(
+            name="confirmOperatorAddress",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_operator=abi.address),
+        ),
     ],
     errors=[Error(name="MyError", fields=dict(_stakingProvider=abi.address, sender=abi.address))],
+)
+
+_TACO_CHILD_APP_ABI = ContractABI(
+    methods=[
+        Method(
+            name="confirmOperatorAddress",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_operator=abi.address),
+        ),
+    ]
 )
 
 _STAKING_ABI = ContractABI(
@@ -108,6 +125,20 @@ _STAKING_ABI = ContractABI(
                 _toAmount=abi.uint(96),
             ),
         ),
+    ]
+)
+
+G2PointStruct = abi.struct(word0=abi.bytes(32), word1=abi.bytes(32), word2=abi.bytes(32))
+
+_COORDINATOR_ABI = ContractABI(
+    methods=[
+        Method(
+            name="setProviderPublicKey",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _publicKey=G2PointStruct,
+            ),
+        )
     ]
 )
 
@@ -157,6 +188,7 @@ class IdentityAccount:
 
     def __init__(self, account: BaseAccount):
         self._account = account
+        self.signer = AccountSigner(self._account)
         self.address = IdentityAddress.from_hex(account.address)
 
     def sign_message(self, message: bytes) -> bytes:
@@ -190,16 +222,26 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        return cls(provider, registry.TACO_APPLICATION, registry.TACO_APPLICATION)
+        return cls(
+            provider,
+            registry.TACO_APPLICATION,
+            registry.TACO_APPLICATION,
+            registry.TACO_APPLICATION,
+        )
 
     def __init__(
-        self, provider: Provider, taco_application_address: Address, staking_address: Address
+        self,
+        provider: Provider,
+        taco_application_address: Address,
+        staking_address: Address,
+        coordinator_address: Address,
     ):
         # TODO: or should we take `DeployedContract`
         # and assert that _TACO_APP_ABI is compatible with it?
         self._client = Client(provider)
         self._app = DeployedContract(address=taco_application_address, abi=_TACO_APP_ABI)
         self._staking = DeployedContract(address=staking_address, abi=_STAKING_ABI)
+        self._coordinator = DeployedContract(address=coordinator_address, abi=_COORDINATOR_ABI)
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator["IdentityClientSession"]:
@@ -213,6 +255,7 @@ class IdentityClientSession:
         self._backend_session = backend_session
         self._app = client._app
         self._staking = client._staking
+        self._coordinator = client._coordinator
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.eth_call(
@@ -268,8 +311,8 @@ class IdentityClientSession:
             self._app.method.getActiveStakingProviders(start_index, max_staking_providers)
         )
         staking_providers = {
-            IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
-            for address, amount in staking_providers_data
+            IdentityAddress(data[:20]): AmountT.wei(int.from_bytes(data[20:], byteorder="big"))
+            for data in staking_providers_data
         }
 
         return staking_providers
@@ -306,5 +349,22 @@ class IdentityClientSession:
             staking_provider_signer,
             self._app.method.bondOperator(
                 _stakingProvider=staking_provider_address, _operator=operator_address
+            ),
+        )
+
+    async def confirm_operator_address(
+        self,
+        operator_signer: Signer,
+        public_key: FerveoPublicKey,
+    ):
+        key_bytes = bytes(public_key)
+        await self._backend_session.transact(
+            operator_signer,
+            self._coordinator.method.setProviderPublicKey(
+                _publicKey={
+                    "word0": key_bytes[:32],
+                    "word1": key_bytes[32:64],
+                    "word2": key_bytes[64:],
+                }
             ),
         )

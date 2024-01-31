@@ -12,6 +12,7 @@ from nucypher_core import (
     SessionStaticKey,
     ThresholdDecryptionRequest,
     ThresholdDecryptionResponse,
+    ThresholdMessageKit,
     TreasureMap,
 )
 from nucypher_core.ferveo import (
@@ -20,6 +21,7 @@ from nucypher_core.ferveo import (
     DecryptionSharePrecomputed,
     DecryptionShareSimple,
     Dkg,
+    DkgPublicKey,
     FerveoVariant,
     Validator,
     ValidatorMessage,
@@ -179,19 +181,18 @@ class Ursula:
         identity_account: Optional[IdentityAccount] = None,
     ):
         self.__master_key = master_key or MasterKey.random()
-        identity_account_ = identity_account or IdentityAccount.random()
+        self.identity_account = identity_account or IdentityAccount.random()
 
         self.signer = self.__master_key.make_signer()
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        # TODO: make a separate character for DKG
         self._dkg_keypair = self.__master_key.make_dkg_keypair()
         self.dkg_key = self._dkg_keypair.public_key()
 
-        self.operator_address = identity_account_.address
+        self.operator_address = self.identity_account.address
         self.operator_signature = RecoverableSignature.from_be_bytes(
-            identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
+            self.identity_account.sign_message(self.signer.verifying_key().to_compressed_bytes())
         )
 
     def peer_private_key(self) -> PeerPrivateKey:
