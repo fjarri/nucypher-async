@@ -1,15 +1,12 @@
-"""
-This module encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``).
-"""
+"""Encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``)."""
 
 import os
 from ssl import SSLContext
-from typing import Optional, List
+from typing import cast
 
+import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
-import trio
-from trio_typing import TaskStatus
 
 from ..base.http_server import BaseHTTPServer
 from ..utils import temp_file
@@ -27,7 +24,7 @@ class InMemoryCertificateConfig(Config):
         self,
         ssl_certificate: SSLCertificate,
         ssl_private_key: SSLPrivateKey,
-        ssl_ca_chain: Optional[List[SSLCertificate]],
+        ssl_ca_chain: list[SSLCertificate] | None,
     ):
         super().__init__()
         self.__ssl_certificate = ssl_certificate
@@ -38,7 +35,7 @@ class InMemoryCertificateConfig(Config):
         # TODO: Can we do better? Zeroize it on cleanup?
         self.__ssl_private_key = ssl_private_key
 
-    def create_ssl_context(self) -> Optional[SSLContext]:
+    def create_ssl_context(self) -> SSLContext | None:
         # sanity check
         if self.certfile or self.keyfile or self.ca_certs:
             raise RuntimeError(
@@ -58,11 +55,11 @@ class InMemoryCertificateConfig(Config):
             chain_data = b"\n".join(cert.to_pem_bytes() for cert in self.__ssl_ca_chain).decode()
             context.load_verify_locations(cadata=chain_data)
 
-        with temp_file(self.__ssl_certificate.to_pem_bytes()) as certfile:
-            with temp_file(self.__ssl_private_key.to_pem_bytes(keyfile_password)) as keyfile:
-                context.load_cert_chain(
-                    certfile=certfile, keyfile=keyfile, password=keyfile_password
-                )
+        with (
+            temp_file(self.__ssl_certificate.to_pem_bytes()) as certfile,
+            temp_file(self.__ssl_private_key.to_pem_bytes(keyfile_password)) as keyfile,
+        ):
+            context.load_cert_chain(certfile=certfile, keyfile=keyfile, password=keyfile_password)
 
         return context
 
@@ -98,7 +95,9 @@ class HTTPServerHandle:
         self._shutdown_event = trio.Event()
         self._shutdown_finished = trio.Event()
 
-    async def startup(self, *, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED) -> None:
+    async def startup(
+        self, *, task_status: trio.TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
         """
         Starts the server in an external event loop.
         Useful for the cases when it needs to run in parallel with other servers or clients.
@@ -110,7 +109,8 @@ class HTTPServerHandle:
             self.app,
             config,
             shutdown_trigger=self._shutdown_event.wait,
-            task_status=task_status,
+            # That's what hypercorn API declares, but it's the same type as `trio.TaskStatus`
+            task_status=cast("trio._core._run._TaskStatus", task_status),  # noqa: SLF001
         )
         self._shutdown_finished.set()
 

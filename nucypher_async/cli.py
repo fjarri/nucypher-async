@@ -1,33 +1,34 @@
-from getpass import getpass
 import json
+from getpass import getpass
+from pathlib import Path
 
-import trio
 import click
+import trio
 
-from .drivers.http_server import HTTPServerHandle
-from .drivers.peer import UrsulaHTTPServer
-from .drivers.identity import IdentityAccount
-from .master_key import MasterKey, EncryptedMasterKey
 from .characters.pre import Ursula
-from .server import UrsulaServerConfig, PorterServerConfig, UrsulaServer, PorterServer
+from .drivers.http_server import HTTPServerHandle
+from .drivers.identity import IdentityAccount
+from .drivers.peer import UrsulaHTTPServer
+from .master_key import EncryptedMasterKey, MasterKey
+from .server import PorterServer, PorterServerConfig, UrsulaServer, UrsulaServerConfig
 
 
 async def make_ursula_server(
     config_path: str, nucypher_password: str, geth_password: str
 ) -> UrsulaServer:
-    with open(config_path, encoding="utf-8") as file:
-        config = json.load(file)
+    async with await trio.Path(config_path).open(encoding="utf-8") as file:
+        config = json.loads(await file.read())
 
     signer = config["signer_uri"]
     assert signer.startswith("keystore://")
     signer = signer[len("keystore://") :]
-    with open(signer, encoding="utf-8") as file:
-        keyfile = file.read()
+    async with await trio.Path(signer).open(encoding="utf-8") as file:
+        keyfile = await file.read()
 
     acc = IdentityAccount.from_payload(keyfile, geth_password)
 
-    with open(config["keystore_path"], encoding="utf-8") as file:
-        keystore = json.load(file)
+    async with await trio.Path(config["keystore_path"]).open(encoding="utf-8") as file:
+        keystore = json.loads(await file.read())
 
     encrypted_key = EncryptedMasterKey.from_payload(keystore)
     key = encrypted_key.decrypt(nucypher_password)
@@ -47,13 +48,11 @@ async def make_ursula_server(
         debug=config.get("debug", False),
     )
 
-    server = await UrsulaServer.async_init(ursula=local_ursula, config=config)
-
-    return server
+    return await UrsulaServer.async_init(ursula=local_ursula, config=config)
 
 
 def make_porter_server(config_path: str) -> PorterServer:
-    with open(config_path, encoding="utf-8") as file:
+    with Path(config_path).open(encoding="utf-8") as file:
         config = json.load(file)
 
     config = PorterServerConfig.from_config_values(
@@ -99,8 +98,8 @@ def keygen(output_name: str) -> None:
     password = getpass("Keysore password: ")
     emk = mk.encrypt(password)
 
-    with open(output_name, "w") as f:
+    with Path(output_name).open("w") as f:
         f.write(json.dumps(emk.to_payload(), indent=4))
 
-    print(f"Keystore saved to {output_name}")
-    print(f"Mnemonic: {words}")
+    print(f"Keystore saved to {output_name}")  # noqa: T201
+    print(f"Mnemonic: {words}")  # noqa: T201

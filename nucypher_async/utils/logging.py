@@ -1,23 +1,21 @@
 """
-This could be a separate library, but we're keeping it a submodule for now
-for the ease of development.
-
 Why not use standard library `logging`: it is stateful, and we want different behavior
 depening on the environment (testing/usage as a library/running a server).
 """
 
-from abc import ABC, abstractmethod
-from enum import IntEnum
 import io
+import sys
 import time
 import traceback
-from typing import Any, Tuple, Optional, Type, Union, Iterable
-from types import TracebackType
+from abc import ABC, abstractmethod
+from collections.abc import Iterable
+from enum import IntEnum
 from pathlib import Path
-import sys
+from types import TracebackType
+from typing import Any
 
-from attr import frozen
 import trio
+from attr import frozen
 
 
 class Level(IntEnum):
@@ -50,15 +48,18 @@ class LogRecord:
     logger_name: str
     level: Level
     message: str
-    args: Tuple[Any, ...]
-    exc_info: Union[
-        Tuple[Type[BaseException], BaseException, TracebackType], Tuple[None, None, None]
-    ]
-    task_id: Optional[int]
+    args: tuple[Any, ...]
+    exc_info: tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
+    task_id: int | None
 
     @staticmethod
     def make(
-        logger_name: str, level: Level, message: str, args: Tuple[Any, ...], exc_info: bool = False
+        logger_name: str,
+        level: Level,
+        message: str,
+        args: tuple[Any, ...],
+        *,
+        exc_info: bool = False,
     ) -> "LogRecord":
         try:
             task = trio.lowlevel.current_task()
@@ -66,13 +67,10 @@ class LogRecord:
             # Not in trio event loop.
             task = None
 
-        if task is not None:
-            # Generates a number in range 1000-9998,
-            # we won't have that many tasks, so it'll be enough for debugging purposes.
-            # (using 8999 since it's a prime, so the range will be more uniformly covered)
-            task_id = id(task) % 8999 + 1000
-        else:
-            task_id = None
+        # Generates a number in range 1000-9998,
+        # we won't have that many tasks, so it'll be enough for debugging purposes.
+        # (using 8999 since it's a prime, so the range will be more uniformly covered)
+        task_id = (id(task) % 8999 + 1000) if task is not None else None
 
         return LogRecord(
             timestamp=time.time(),  # Note: using the local time here, not UTC
@@ -87,14 +85,12 @@ class LogRecord:
 
 class Formatter(ABC):
     @abstractmethod
-    def format(self, record: LogRecord) -> str:
-        ...
+    def format(self, record: LogRecord) -> str: ...
 
 
 class Handler(ABC):
     @abstractmethod
-    def emit(self, record: LogRecord) -> None:
-        ...
+    def emit(self, record: LogRecord) -> None: ...
 
 
 class Logger:
@@ -102,8 +98,8 @@ class Logger:
         self,
         name: str = "root",
         level: Level = Level.DEBUG,
-        handlers: Optional[Iterable[Handler]] = None,
-        parent: Optional["Logger"] = None,
+        handlers: Iterable[Handler] | None = None,
+        parent: "Logger | None" = None,
     ):
         self.name = name
         self.level = level
@@ -111,7 +107,10 @@ class Logger:
         self.parent = parent
 
     def get_child(
-        self, name: str, level: Optional[Level] = None, handlers: Optional[Iterable[Handler]] = None
+        self,
+        name: str,
+        level: Level | None = None,
+        handlers: Iterable[Handler] | None = None,
     ) -> "Logger":
         return Logger(
             name=self.name + "." + name,
@@ -122,7 +121,7 @@ class Logger:
 
     def _emit(self, record: LogRecord) -> None:
         if self.parent:
-            self.parent._emit(record)
+            self.parent._emit(record)  # noqa: SLF001
 
         if record.level < self.level:
             return
@@ -131,7 +130,7 @@ class Logger:
             handler.emit(record)
 
     def _log(
-        self, level: Level, message: str, args: Tuple[Any, ...], exc_info: bool = False
+        self, level: Level, message: str, args: tuple[Any, ...], *, exc_info: bool = False
     ) -> None:
         self._emit(LogRecord.make(self.name, level, message, args, exc_info=exc_info))
 
@@ -141,7 +140,7 @@ class Logger:
     def info(self, message: str, *args: Any, **kwds: Any) -> None:
         self._log(Level.INFO, message, args, **kwds)
 
-    def warn(self, message: str, *args: Any, **kwds: Any) -> None:
+    def warning(self, message: str, *args: Any, **kwds: Any) -> None:
         self._log(Level.WARNING, message, args, **kwds)
 
     def error(self, message: str, *args: Any, **kwds: Any) -> None:
@@ -187,7 +186,7 @@ class ConsoleHandler(Handler):
         self,
         level: Level = Level.DEBUG,
         formatter: Formatter = DEFAULT_FORMATTER,
-        stderr_at: Optional[Level] = Level.WARNING,
+        stderr_at: Level | None = Level.WARNING,
     ):
         self.level = level
         self.formatter = formatter
@@ -208,7 +207,7 @@ class ConsoleHandler(Handler):
 class RotatingFileHandler(Handler):
     def __init__(
         self,
-        log_file: Union[Path, str],
+        log_file: Path | str,
         max_bytes: int = 1000000,
         backup_count: int = 9,
         formatter: Formatter = DEFAULT_FORMATTER,
@@ -253,5 +252,5 @@ class RotatingFileHandler(Handler):
         ):
             self._rotate()
 
-        with open(self.log_file, "a", encoding="utf-8") as file:
+        with self.log_file.open("a", encoding="utf-8") as file:
             print(message, file=file)

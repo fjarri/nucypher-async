@@ -1,25 +1,31 @@
+import itertools
 import os
-from typing import List, Iterator, AsyncIterator, Tuple
+from collections.abc import AsyncIterator
 
 import pytest
 import trio
 
-import nucypher_async.utils.logging as logging
-from nucypher_async.mocks import (
-    MockIdentityClient,
-    MockPaymentClient,
-    MockClock,
-    MockPeerClient,
-    MockHTTPServerHandle,
-)
 from nucypher_async.characters.pre import Ursula
-from nucypher_async.mocks import MockNetwork
-from nucypher_async.drivers.identity import IdentityAddress, AmountT
 from nucypher_async.domain import Domain
-from nucypher_async.server import UrsulaServerConfig, UrsulaServer, PorterServerConfig, PorterServer
+from nucypher_async.drivers.identity import AmountT, IdentityAddress
 from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
+from nucypher_async.mocks import (
+    MockClock,
+    MockHTTPServerHandle,
+    MockIdentityClient,
+    MockNetwork,
+    MockPaymentClient,
+    MockPeerClient,
+)
+from nucypher_async.server import (
+    PorterServer,
+    PorterServerConfig,
+    UrsulaServer,
+    UrsulaServerConfig,
+)
 from nucypher_async.storage import InMemoryStorage
-from nucypher_async.utils.ssl import SSLPrivateKey, SSLCertificate
+from nucypher_async.utils import logging
+from nucypher_async.utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 @pytest.fixture(scope="session")
@@ -34,23 +40,23 @@ async def mock_clock() -> MockClock:
 
 
 @pytest.fixture
-def ursulas() -> Iterator[List[Ursula]]:
-    yield [Ursula() for i in range(10)]
+def ursulas() -> list[Ursula]:
+    return [Ursula() for i in range(10)]
 
 
 @pytest.fixture
-def mock_network(nursery: trio.Nursery) -> Iterator[MockNetwork]:
-    yield MockNetwork(nursery)
+def mock_network(nursery: trio.Nursery) -> MockNetwork:
+    return MockNetwork(nursery)
 
 
 @pytest.fixture
-def mock_identity_client() -> Iterator[MockIdentityClient]:
-    yield MockIdentityClient()
+def mock_identity_client() -> MockIdentityClient:
+    return MockIdentityClient()
 
 
 @pytest.fixture
-def mock_payment_client() -> Iterator[MockPaymentClient]:
-    yield MockPaymentClient()
+def mock_payment_client() -> MockPaymentClient:
+    return MockPaymentClient()
 
 
 @pytest.fixture
@@ -58,10 +64,10 @@ async def lonely_ursulas(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_payment_client: MockPaymentClient,
-    ursulas: List[Ursula],
+    ursulas: list[Ursula],
     logger: logging.Logger,
     mock_clock: MockClock,
-) -> List[Tuple[MockHTTPServerHandle, UrsulaServer]]:
+) -> list[tuple[MockHTTPServerHandle, UrsulaServer]]:
     servers = []
 
     for i in range(10):
@@ -93,11 +99,11 @@ async def lonely_ursulas(
 
 @pytest.fixture
 async def chain_seeded_ursulas(
-    mock_network: MockNetwork, lonely_ursulas: List[Tuple[MockHTTPServerHandle, UrsulaServer]]
-) -> AsyncIterator[List[UrsulaServer]]:
+    lonely_ursulas: list[tuple[MockHTTPServerHandle, UrsulaServer]],
+) -> AsyncIterator[list[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
     # but the graph is fully connected.
-    for (_handle1, server1), (_handle2, server2) in zip(lonely_ursulas[:-1], lonely_ursulas[1:]):
+    for (_handle1, server1), (_handle2, server2) in itertools.pairwise(lonely_ursulas):
         server2.learner._test_set_seed_contacts([server1.secure_contact().contact])
 
     for handle, _server in lonely_ursulas:
@@ -111,10 +117,9 @@ async def chain_seeded_ursulas(
 
 @pytest.fixture
 async def fully_learned_ursulas(
-    mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    lonely_ursulas: List[Tuple[MockHTTPServerHandle, UrsulaServer]],
-) -> AsyncIterator[List[UrsulaServer]]:
+    lonely_ursulas: list[tuple[MockHTTPServerHandle, UrsulaServer]],
+) -> AsyncIterator[list[UrsulaServer]]:
     # Each Ursula knows only about one other Ursula,
     # but the graph is fully connected.
     for _handle, server in lonely_ursulas:
@@ -140,10 +145,10 @@ async def fully_learned_ursulas(
 async def porter_server(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    fully_learned_ursulas: List[UrsulaServer],
+    fully_learned_ursulas: list[UrsulaServer],
     logger: logging.Logger,
     mock_clock: MockClock,
-    autojump_clock: trio.testing.MockClock,
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> AsyncIterator[PorterServer]:
     host = "127.0.0.1"
     port = 9000

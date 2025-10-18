@@ -1,7 +1,7 @@
+import tempfile
+from collections.abc import Awaitable, Callable, Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-import tempfile
-from typing import Iterator, Iterable, Callable, Awaitable
 
 import trio
 
@@ -16,25 +16,25 @@ def temp_file(contents: bytes) -> Iterator[Path]:
         yield Path(file.name)
 
 
-async def wait_for_any(events: Iterable[trio.Event], timeout: float) -> bool:
+async def wait_for_any(events: Iterable[trio.Event]) -> trio.Event | None:
     stop = trio.Event()
+    fired_event = None
 
     async def wait_for_single(event: trio.Event) -> None:
         await event.wait()
+
+        nonlocal fired_event
+        fired_event = event
+
         stop.set()
 
-    try:
-        with trio.fail_after(timeout):
-            async with trio.open_nursery() as nursery:
-                for event in events:
-                    nursery.start_soon(wait_for_single, event)
-                await stop.wait()
-                nursery.cancel_scope.cancel()
-    except trio.TooSlowError:
-        return True
+    async with trio.open_nursery() as nursery:
+        for event in events:
+            nursery.start_soon(wait_for_single, event)
+        await stop.wait()
+        nursery.cancel_scope.cancel()
 
-    # TODO: or determine which event fired and return that?
-    return False
+    return fired_event
 
 
 class BackgroundTask:
@@ -49,6 +49,7 @@ class BackgroundTask:
             await self._worker(self._stop_event)
         except Exception:
             self._logger.error("Unhandled exception in a BackgroundTask", exc_info=True)
+            raise
         finally:
             self._stop_finished_event.set()
 

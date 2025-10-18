@@ -1,21 +1,21 @@
-from typing import List, Callable, Union, Optional
+from collections.abc import Callable
 from pathlib import Path
 
 from attrs import frozen
 from platformdirs import PlatformDirs
 
 from ..base.time import BaseClock
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from ..drivers.time import SystemClock
+from ..domain import Domain
 from ..drivers.identity import IdentityClient
 from ..drivers.payment import PaymentClient
-from ..drivers.peer import PeerClient, Contact
-from ..domain import Domain
-from ..storage import BaseStorage, InMemoryStorage, FileSystemStorage
-from ..utils.logging import Logger, Level, Handler, ConsoleHandler, RotatingFileHandler
+from ..drivers.peer import Contact, PeerClient
+from ..drivers.time import SystemClock
+from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
+from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
-def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
+def seed_contacts_for_domain(domain: Domain) -> list[Contact]:  # noqa: RET503
     if domain == Domain.MAINNET:
         return [Contact("mainnet.nucypher.network", 9151)]
     if domain == Domain.TAPIR:
@@ -23,7 +23,7 @@ def seed_contacts_for_domain(domain: Domain) -> List[Contact]:
     if domain == Domain.LYNX:
         return [Contact("lynx.nucypher.network", 9151)]
 
-    return []
+    # Unreachable since we handle all the possible enum values above.
 
 
 @frozen
@@ -42,12 +42,13 @@ def app_dirs(profile_name: str) -> Directories:
 def make_logger(
     profile_name: str,
     log_name: str,
+    *,
     log_to_console: bool = True,
     log_to_file: bool = True,
     debug: bool = True,
 ) -> Logger:
     dirs = app_dirs(profile_name)
-    log_handlers: List[Handler] = []
+    log_handlers: list[Handler] = []
     if log_to_console:
         log_handlers.append(ConsoleHandler())
     if log_to_file:
@@ -55,7 +56,7 @@ def make_logger(
     return Logger(level=Level.DEBUG if debug else Level.INFO, handlers=log_handlers)
 
 
-def make_storage(profile_name: str, persistent_storage: bool = True) -> BaseStorage:
+def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseStorage:
     dirs = app_dirs(profile_name)
     if persistent_storage:
         return FileSystemStorage(dirs.data_dir)
@@ -71,7 +72,7 @@ class UrsulaServerConfig:
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
-    seed_contacts: List[Contact]
+    seed_contacts: list[Contact]
     clock: BaseClock
 
     @classmethod
@@ -130,12 +131,12 @@ class PorterServerConfig:
     port: int
     ssl_certificate: SSLCertificate
     ssl_private_key: SSLPrivateKey
-    ssl_ca_chain: Optional[List[SSLCertificate]]
+    ssl_ca_chain: list[SSLCertificate] | None
     identity_client: IdentityClient
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
-    seed_contacts: List[Contact]
+    seed_contacts: list[Contact]
     clock: BaseClock
 
     @classmethod
@@ -143,16 +144,16 @@ class PorterServerConfig:
         cls,
         *,
         identity_endpoint: str,
-        ssl_certificate_path: Union[str, Path],
-        ssl_private_key_path: Union[str, Path],
-        ssl_ca_chain_path: Optional[Union[str, Path]] = None,
+        ssl_certificate_path: str | Path,
+        ssl_private_key_path: str | Path,
+        ssl_ca_chain_path: str | Path | None = None,
         debug: bool = False,
         profile_name: str = "porter",
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
         persistent_storage: bool = True,
-        host: str = "0.0.0.0",
+        host: str = "0.0.0.0",  # noqa: S104
         port: int = 443,
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
@@ -167,18 +168,22 @@ class PorterServerConfig:
             log_to_file=log_to_file,
             debug=debug,
         )
-        storage = make_storage(profile_name, persistent_storage)
+        storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
         peer_client = PeerClient()
 
-        with open(ssl_certificate_path, "rb") as cert_file:
+        ssl_certificate_path = Path(ssl_certificate_path)
+        ssl_private_key_path = Path(ssl_private_key_path)
+
+        with ssl_certificate_path.open("rb") as cert_file:
             ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
 
-        with open(ssl_private_key_path, "rb") as pk_file:
+        with ssl_private_key_path.open("rb") as pk_file:
             ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
 
-        if ssl_ca_chain_path:
-            with open(ssl_ca_chain_path, "rb") as chain_file:
+        if ssl_ca_chain_path is not None:
+            ssl_ca_chain_path = Path(ssl_ca_chain_path)
+            with ssl_ca_chain_path.open("rb") as chain_file:
                 ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
                 # TODO: check that they are in the correct order? (root certificate last)
         else:

@@ -1,5 +1,3 @@
-from typing import List
-
 import trio
 import trio.testing
 
@@ -7,9 +5,8 @@ from nucypher_async.server import UrsulaServer
 
 
 async def test_learning(
-    nursery: trio.Nursery,
-    autojump_clock: trio.testing.MockClock,
-    chain_seeded_ursulas: List[UrsulaServer],
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
+    chain_seeded_ursulas: list[UrsulaServer],
 ) -> None:
     while True:
         # Wait multiple learning cycles

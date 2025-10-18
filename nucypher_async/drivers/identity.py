@@ -1,37 +1,37 @@
 """
 A rough draft of the Eth driver.
-TODO:
+
+Todo:
 - finish up registries properly (include ABIs in the registry class,
   merge ABIs with contract addresses, add registries for different networks)
 - find a way to get ABIs automatically
 - find a way to test transactions
 - set gas value properly (estimate gas, gas strategies)
 - add newtypes for currencies instead of just using wei
+
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Dict, Type, AsyncIterator, cast
+from typing import cast
 
 from eth_account import Account
+from eth_account._utils.signing import to_standard_signature_bytes
 from eth_account.messages import encode_defunct
 from eth_account.signers.base import BaseAccount
-from eth_account._utils.signing import to_standard_signature_bytes
-
+from ethereum_rpc import Address, Amount
 from pons import (
-    HTTPProvider,
     Client,
+    ClientSession,
     ContractABI,
     DeployedContract,
-    Address,
-    Amount,
+    HTTPProvider,
     Method,
     Mutability,
     abi,
 )
-from pons._client import ClientSession
 
 from ..domain import Domain
-
 
 _PRE_APP_ABI = ContractABI(
     methods=[
@@ -84,27 +84,21 @@ class BaseContracts:
 
 
 class LynxContracts(BaseContracts):
-    """
-    Registry for Lynx on Goerli.
-    """
+    """Registry for Lynx on Goerli."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
 
 
 class TapirContracts(BaseContracts):
-    """
-    Registry for Tapir on Goerli.
-    """
+    """Registry for Tapir on Goerli."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
 
 
 class MainnetContracts(BaseContracts):
-    """
-    Registry for mainnet.
-    """
+    """Registry for mainnet."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
     PRE_APPLICATION = IdentityAddress.from_hex("0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd")
@@ -151,7 +145,7 @@ class IdentityClient:
     def __init__(self, backend_client: Client, domain: Domain):
         self._client = backend_client
 
-        registry: Type[BaseContracts]
+        registry: type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
         elif domain == Domain.LYNX:
@@ -173,10 +167,10 @@ class IdentityClientSession:
     def __init__(self, identity_client: IdentityClient, backend_session: ClientSession):
         self._identity_client = identity_client
         self._backend_session = backend_session
-        self._pre_application = identity_client._pre_application
+        self._pre_application = identity_client._pre_application  # noqa: SLF001
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
-        staked_amount = await self._backend_session.eth_call(
+        staked_amount = await self._backend_session.call(
             self._pre_application.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
@@ -184,7 +178,7 @@ class IdentityClientSession:
     async def get_staking_provider_address(
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
-        address = await self._backend_session.eth_call(
+        address = await self._backend_session.call(
             self._pre_application.method.stakingProviderFromOperator(operator_address)
         )
         return IdentityAddress(bytes(address))
@@ -192,7 +186,7 @@ class IdentityClientSession:
     async def get_operator_address(
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
-        address = await self._backend_session.eth_call(
+        address = await self._backend_session.call(
             self._pre_application.method.getOperatorFromStakingProvider(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
@@ -202,8 +196,8 @@ class IdentityClientSession:
     ) -> bool:
         # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast(
-            bool,
-            await self._backend_session.eth_call(
+            "bool",
+            await self._backend_session.call(
                 self._pre_application.method.isAuthorized(staking_provider_address)
             ),
         )
@@ -211,27 +205,25 @@ class IdentityClientSession:
     async def is_operator_confirmed(self, operator_address: IdentityAddress) -> bool:
         # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast(
-            bool,
-            await self._backend_session.eth_call(
+            "bool",
+            await self._backend_session.call(
                 self._pre_application.method.isOperatorConfirmed(operator_address)
             ),
         )
 
     async def get_balance(self, address: IdentityAddress) -> AmountETH:
-        amount = await self._backend_session.eth_get_balance(address)
+        amount = await self._backend_session.get_balance(address)
         return AmountETH.wei(amount.as_wei())
 
     async def get_active_staking_providers(
         self, start_index: int = 0, max_staking_providers: int = 0
-    ) -> Dict[IdentityAddress, AmountT]:
-        _total_staked, staking_providers_data = await self._backend_session.eth_call(
+    ) -> dict[IdentityAddress, AmountT]:
+        _total_staked, staking_providers_data = await self._backend_session.call(
             self._pre_application.method.getActiveStakingProviders(
                 start_index, max_staking_providers
             )
         )
-        staking_providers = {
+        return {
             IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
             for address, amount in staking_providers_data
         }
-
-        return staking_providers

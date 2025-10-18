@@ -1,18 +1,18 @@
 import os
 
-import trio
 import pytest
+import trio
 
-from nucypher_async.drivers.http_server import HTTPServerHandle
-from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.peer import PeerClient, Contact, UrsulaHTTPServer
-from nucypher_async.drivers.time import SystemClock
-from nucypher_async.storage import InMemoryStorage
 from nucypher_async.characters.pre import Ursula
 from nucypher_async.domain import Domain
-from nucypher_async.server import UrsulaServerConfig, UrsulaServer
+from nucypher_async.drivers.http_server import HTTPServerHandle
+from nucypher_async.drivers.identity import IdentityAddress
+from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 from nucypher_async.p2p.ursula import UrsulaClient
+from nucypher_async.server import UrsulaServer, UrsulaServerConfig
+from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
@@ -38,7 +38,9 @@ def ursula_server() -> UrsulaServer:
 
 
 async def test_client_real_server(
-    nursery: trio.Nursery, capsys: pytest.CaptureFixture[str], ursula_server: UrsulaServer
+    nursery: trio.Nursery,
+    capsys: pytest.CaptureFixture[str],
+    ursula_server: UrsulaServer,
 ) -> None:
     handle = HTTPServerHandle(UrsulaHTTPServer(ursula_server))
     await nursery.start(handle.startup)

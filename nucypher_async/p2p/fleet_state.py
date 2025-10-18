@@ -1,12 +1,15 @@
-from typing import Iterable, Dict, Optional
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
-from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact
 from .ursula import UrsulaInfo
 from .verification import VerifiedUrsulaInfo
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..drivers.identity import IdentityAddress
 
 
 class FleetState:
@@ -15,13 +18,13 @@ class FleetState:
     (of questionable usefulness, see https://github.com/nucypher/nucypher/issues/2876).
     """
 
-    def __init__(self, clock: BaseClock, this_node: Optional[VerifiedUrsulaInfo]):
+    def __init__(self, clock: BaseClock, this_node: VerifiedUrsulaInfo | None):
         self._clock = clock
         self._my_address = this_node.staking_provider_address if this_node else None
         self._my_metadata = this_node.metadata if this_node else None
-        self._metadatas: Dict[IdentityAddress, UrsulaInfo] = {}
-        self._contacts: Dict[Contact, IdentityAddress] = {}
-        self._checksum: Optional[FleetStateChecksum] = None
+        self._metadatas: dict[IdentityAddress, UrsulaInfo] = {}
+        self._contacts: dict[Contact, IdentityAddress] = {}
+        self._checksum: FleetStateChecksum | None = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
 
     def _add_metadata(self, metadata: UrsulaInfo) -> None:

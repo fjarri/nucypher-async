@@ -15,22 +15,23 @@ dependencies = [
     "pynacl>=1.5",
     "mnemonic>=0.20",
     "eth-account>=0.6",
-    "pons>=0.7",
+    "pons>=0.10",
+    "ethereum_rpc>=0.1.1",
     "platformdirs>=2",
     "mako>=1",
     "sortedcontainers>=2.4",
     "arrow>=1",
     "humanize>=4.3",
-    "typing-extensions>=4.2",
-    "trio-typing>=0.9",
     "attrs>=22",
     "cattrs>=22",
+    "click>=8",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "GPL-3.0-only"
 
 [project.optional-dependencies]
 tests = [
+    "alysis>=0.6.1",
     "pytest>=6",
     "pytest-trio",
     "pytest-cov",
@@ -41,8 +42,7 @@ docs = [
 ]
 lint = [
     "mypy>=1.4",
-    "trio-typing[mypy]>=0.8",
-    "black>=23",
+    "ruff>=0.2",
     "types-setuptools>=63",
     "types-python-dateutil>=2.8", # otherwise some type derivation for `arrow` types does not work
     "pytest>=6", # for the typing of pytest decorators
@@ -54,12 +54,117 @@ nucypher_async = "nucypher_async.cli:main"
 [project.urls]
 homepage = ""
 
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # It's a stylistic choice. Don't save on matches.
+    "C408",
+    # It's never a problem unless you mutate function arguments (which is rarely a good idea).
+    "B008",
+    # We use `Any` quite a bit because we need to accept a lot of third-party unnormalized input.
+    "ANN401",
+    # The return type of `__init__` is derived automatically.
+    "ANN204",
+    # Doesn't mesh well with the way `black` puts the final parenthesis on a separate line
+    # in functions with one parameter and a long argument.
+    "COM812",
+    # The formatting message is actually useful in a traceback.
+    "EM102",
+    # Could be useful, but triggers on built-in exception classes (e.g. `ValueError`),
+    # which are supposed to be used like that.
+    "TRY003",
+    # Mutually exclusive with D213, which we prefer.
+    "D212",
+    # Mutually exclusive with D211, which we prefer.
+    "D203",
+    # Small project, no need to assign authors in TODOs.
+    "TD002",
+    # A trade-off between traceback noise and code noise. I prefer less code noise.
+    "EM101",
+    # Would be a good rule, but has weird false positives
+    # (it triggers even if it's only one sentence but a long one).
+    "D205",
+    # Not sure on this one. The code has been using third-person form before,
+    # but I can see the potential merit.
+    "D401",
+    # Not helpful. Issues ID should be enough to silence both of these.
+    "TD003",
+    "FIX002",
+    # Too much code noise. A concept of error can be conveyed
+    # without using the word "error" explicitly.
+    "N818",
+    # Too ham-fisted. 5 arguments is too small of a limit.
+    "PLR0913",
+    # Conflicts with the formatter, according to the warning.
+    "ISC001",
+    # Too many false positives, since Ruff cannot tell that the object is immutable.
+    "RUF009",
+    # Way too restrictive. Sometimes it is useful to import types from pytest.
+    "PT013",
+    # We are not using the standard library logger, so the rules don't apply
+    "G201", "PLE1205", "TRY400",
+    # Relative paths look cleaner
+    "TID252",
+    # We are not using templates with external data
+    "S702",
+    # The first line can also end with a colon
+    "D400", "D415",
+    # ruff gives an incorrect advice here,
+    # see https://github.com/astral-sh/ruff/issues/11316
+    "PERF401",
+    # TODO: temporarily disable docstrings, the package is highly experimental
+    "D100", "D101", "D102", "D103", "D104", "D105", "D107",
+    # TODO: we have a lot of asserts in the `mocks` module, which should really be located in tests
+    "S101",
+]
+
+exclude = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pypackages__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    # tests don't need __init__.py
+    "INP001",
+    # assert usage is what we do in tests
+    "S101",
+    # have to access private members sometimes
+    "SLF001",
+    # no docstrings in tests
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D107",
+    # Yeah, that's great if your context manager calls are a few characters long
+    "SIM117",
+    # Too many false positives in the testing context.
+    "PLR2004",
+]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+# otherwise mypy fails to pick up signatures from eth_* packages
+implicit_reexport = true
+mypy_path = "./stubs"
+
+[tool.pytest.ini_options]
+trio_mode = true
+
 [tool]
 [tool.pdm]
-
-[tool.black]
-line-length = 100
-target-version = ['py38']
 
 [build-system]
 requires = ["pdm-pep517"]

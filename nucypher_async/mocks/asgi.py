@@ -1,18 +1,17 @@
-from typing import Dict, Tuple, Any, cast
+from typing import Any, cast
 from urllib.parse import urlparse
 
 import httpx
 import trio
-
 from hypercorn.typing import (
+    ASGIReceiveEvent,
+    ASGISendEvent,
     LifespanScope,
     LifespanShutdownEvent,
     LifespanStartupEvent,
-    ASGIReceiveEvent,
-    ASGISendEvent,
 )
 
-from ..base.http_server import BaseHTTPServer, ASGIFramework
+from ..base.http_server import ASGIFramework, BaseHTTPServer
 from ..utils.ssl import SSLCertificate
 
 
@@ -24,7 +23,7 @@ class LifespanManager:
         self._shutdown_complete = trio.Event()
 
     async def startup(self, nursery: trio.Nursery) -> None:
-        lifespan: LifespanScope = {"type": "lifespan", "asgi": {"version": "3.0"}}
+        lifespan: LifespanScope = {"type": "lifespan", "asgi": {"version": "3.0"}, "state": {}}
         nursery.start_soon(self.app, lifespan, self._receive, self._send)
         event: LifespanStartupEvent = {"type": "lifespan.startup"}
         await self._send_channel.send(event)
@@ -60,7 +59,7 @@ class MockHTTPServerHandle:
 
 class MockNetwork:
     def __init__(self, nursery: trio.Nursery):
-        self._known_servers: Dict[Tuple[str, int], Tuple[SSLCertificate, LifespanManager]] = {}
+        self._known_servers: dict[tuple[str, int], tuple[SSLCertificate, LifespanManager]] = {}
         self._nursery = nursery
 
     def add_server(self, server: BaseHTTPServer) -> MockHTTPServerHandle:
@@ -80,7 +79,7 @@ class MockNetwork:
         _certificate, manager = self._known_servers[(host, port)]
         await manager.startup(self._nursery)
 
-    def get_server(self, host: str, port: int) -> Tuple[SSLCertificate, LifespanManager]:
+    def get_server(self, host: str, port: int) -> tuple[SSLCertificate, LifespanManager]:
         return self._known_servers[(host, port)]
 
 
@@ -95,7 +94,7 @@ class MockHTTPClient:
 
     def as_httpx_async_client(self) -> httpx.AsyncClient:
         # We implement all the methods we need for it to act as one
-        return cast(httpx.AsyncClient, self)
+        return cast("httpx.AsyncClient", self)
 
     async def get(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         return await self._request("get", url, *args, **kwargs)
@@ -111,7 +110,7 @@ class MockHTTPClient:
         assert self._certificate == certificate
         # Unfortunately there are no unified types for hypercorn and httpx,
         # so we have to cast manually.
-        app = cast(httpx._transports.asgi._ASGIApp, manager.app)
+        app = cast("httpx._transports.asgi._ASGIApp", manager.app)  # noqa: SLF001
         transport = httpx.ASGITransport(app=app, client=(self._host, 9999))
         async with httpx.AsyncClient(transport=transport) as client:
             return await client.request(method, url, *args, **kwargs)

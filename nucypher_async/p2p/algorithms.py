@@ -1,18 +1,9 @@
-from bisect import bisect_right
-from itertools import accumulate
 import datetime
-import random
-from typing import (
-    TypeVar,
-    Generic,
-    Sequence,
-    Callable,
-    Awaitable,
-    Iterable,
-    Optional,
-    Mapping,
-    List,
-)
+import secrets
+from bisect import bisect_right
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from itertools import accumulate
+from typing import Generic, TypeVar
 
 import trio
 
@@ -23,7 +14,6 @@ from ..utils.producer import producer
 from .fleet_sensor import NodeEntry
 from .learner import Learner
 from .verification import VerifiedUrsulaInfo
-
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
 
@@ -41,7 +31,7 @@ class WeightedReservoir(Generic[WeightedReservoirT]):
 
     def draw(self) -> WeightedReservoirT:
         # TODO: can we use floats instead, so that we don't have to round the stakes to integer T?
-        position = random.randint(0, self.totals[-1] - 1)
+        position = secrets.randbelow(self.totals[-1])
         idx = bisect_right(self.totals, position)
         sample = self.elements[idx]
 
@@ -68,16 +58,16 @@ async def verification_task(stop_event: trio.Event, learner: Learner) -> None:
             next_event_in = learner.next_verification_in()
             verification_resceduled = learner.get_verification_rescheduling_event()
 
-            timed_out = await wait_for_any(
-                [stop_event, verification_resceduled],
-                next_event_in,
-            )
+            try:
+                with trio.fail_after(next_event_in):
+                    await wait_for_any(
+                        [stop_event, verification_resceduled],
+                    )
+            except trio.TooSlowError:
+                break
 
             if stop_event.is_set():
                 return
-
-            if timed_out:
-                break
 
 
 async def learning_task(stop_event: trio.Event, learner: Learner) -> None:
@@ -89,7 +79,9 @@ async def learning_task(stop_event: trio.Event, learner: Learner) -> None:
 
         next_event_in = learner.next_learning_in()
 
-        await wait_for_any([stop_event], next_event_in)
+        with trio.move_on_after(next_event_in):
+            await stop_event.wait()
+
         if stop_event.is_set():
             return
 
@@ -98,7 +90,9 @@ async def staker_query_task(stop_event: trio.Event, learner: Learner) -> None:
     while True:
         await learner.load_staking_providers_and_report()
 
-        await wait_for_any([stop_event], datetime.timedelta(days=1).total_seconds())
+        with trio.move_on_after(datetime.timedelta(days=1).total_seconds()):
+            await stop_event.wait()
+
         if stop_event.is_set():
             return
 
@@ -108,7 +102,7 @@ async def verified_nodes_iter(
     yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
     learner: Learner,
     addresses: Iterable[IdentityAddress],
-    verified_within: Optional[float] = None,
+    verified_within: float | None = None,
 ) -> None:
     if learner.is_empty():
         await learner.seed_round()
@@ -155,13 +149,13 @@ async def verified_nodes_iter(
 
 
 @producer
-async def random_verified_nodes_iter(
+async def random_verified_nodes_iter(  # noqa: C901
     yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
     overhead: int = 0,
-    verified_within: Optional[float] = None,
-    exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
+    verified_within: float | None = None,
+    exclude_ursulas: Iterable[IdentityAddress] | None = None,
 ) -> None:
     if learner.is_empty():
         await learner.seed_round()
@@ -188,7 +182,7 @@ async def random_verified_nodes_iter(
     drawn = 0
     failed = 0
 
-    send_channel, receive_channel = trio.open_memory_channel[Optional[VerifiedUrsulaInfo]](0)
+    send_channel, receive_channel = trio.open_memory_channel[VerifiedUrsulaInfo | None](0)
 
     async def verify_and_yield(contact: Contact) -> None:
         node = await learner.verify_contact_and_report(contact)
@@ -231,9 +225,9 @@ async def random_verified_nodes_iter(
 async def get_ursulas(
     learner: Learner,
     quantity: int,
-    include_ursulas: Optional[Iterable[IdentityAddress]] = None,
-    exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
-) -> List[VerifiedUrsulaInfo]:
+    include_ursulas: Iterable[IdentityAddress] | None = None,
+    exclude_ursulas: Iterable[IdentityAddress] | None = None,
+) -> list[VerifiedUrsulaInfo]:
     nodes = []
 
     include = set(include_ursulas) if include_ursulas else set()

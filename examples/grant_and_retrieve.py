@@ -1,42 +1,44 @@
+# noqa: INP001
+
+import functools
 import os
-from typing import NamedTuple, Tuple, List
+from typing import NamedTuple
 
 import trio
 import trio.testing
 from eth_account import Account
 from hexbytes import HexBytes
 
-from nucypher_async.master_key import MasterKey
+from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.pre import (
-    Ursula,
     Delegator,
-    Recipient,
     DelegatorCard,
-    RecipientCard,
     Publisher,
     PublisherCard,
-    Policy,
+    Recipient,
+    RecipientCard,
+    Ursula,
 )
-from nucypher_async.server import UrsulaServer, UrsulaServerConfig
-from nucypher_async.p2p.learner import Learner
-from nucypher_async.drivers.identity import IdentityClient, IdentityAccount, AmountT
-from nucypher_async.drivers.payment import PaymentClient, PaymentAccount
-from nucypher_async.drivers.http_server import HTTPServerHandle
-from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
-from nucypher_async.storage import InMemoryStorage
-from nucypher_async.base.time import BaseClock
-from nucypher_async.drivers.time import SystemClock
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockClock
-from nucypher_async.domain import Domain
 from nucypher_async.client.pre import (
+    EnactedPolicy,
+    MessageKit,
     encrypt,
     grant,
     retrieve_and_decrypt,
-    MessageKit,
-    EnactedPolicy,
 )
-from nucypher_async.utils.logging import Logger, ConsoleHandler, Level
-
+from nucypher_async.domain import Domain
+from nucypher_async.drivers.http_server import HTTPServerHandle
+from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
+from nucypher_async.drivers.payment import PaymentAccount, PaymentClient
+from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.time import SystemClock
+from nucypher_async.master_key import MasterKey
+from nucypher_async.mocks import MockClock, MockIdentityClient, MockPaymentClient
+from nucypher_async.p2p.learner import Learner
+from nucypher_async.server import UrsulaServer, UrsulaServerConfig
+from nucypher_async.storage import InMemoryStorage
+from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
+from nucypher_async.utils.ssl import fetch_certificate
 
 LOCALHOST = "127.0.0.1"
 PORT_BASE = 9151
@@ -57,17 +59,14 @@ class Context(NamedTuple):
 
 async def run_local_ursula_fleet(
     context: Context, nursery: trio.Nursery
-) -> Tuple[List[HTTPServerHandle], Contact]:
+) -> tuple[list[HTTPServerHandle], Contact]:
     handles = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
         ursula = Ursula()
 
         # Make the first node the dedicated teacher of the other nodes
-        if i > 0:
-            seed_contacts = [Contact(LOCALHOST, PORT_BASE)]
-        else:
-            seed_contacts = []
+        seed_contacts = [Contact(LOCALHOST, PORT_BASE)] if i > 0 else []
 
         assert isinstance(context.identity_client, MockIdentityClient)
 
@@ -85,7 +84,7 @@ async def run_local_ursula_fleet(
             identity_client=context.identity_client,
             payment_client=context.payment_client,
             peer_client=PeerClient(),
-            parent_logger=context.logger.get_child(f"Ursula{i+1}"),
+            parent_logger=context.logger.get_child(f"Ursula{i + 1}"),
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
             clock=context.clock,
@@ -95,6 +94,9 @@ async def run_local_ursula_fleet(
         handle = HTTPServerHandle(UrsulaHTTPServer(server))
         await nursery.start(handle.startup)
         handles.append(handle)
+
+        # Make sure the HTTP server is operational before proceeding
+        await fetch_certificate(LOCALHOST, PORT_BASE + i)
 
     return handles, Contact(LOCALHOST, PORT_BASE)
 
@@ -163,7 +165,7 @@ async def bob_decrypts(
     return decrypted[0]
 
 
-async def main(mocked: bool = True) -> None:
+async def main(*, mocked: bool = True) -> None:
     logger = Logger(handlers=[ConsoleHandler(level=Level.INFO)])
     domain = Domain.TAPIR
 
@@ -189,7 +191,7 @@ async def main(mocked: bool = True) -> None:
             context.logger.info("Mocked mode - starting Ursulas")
             server_handles, seed_contact = await run_local_ursula_fleet(context, nursery)
             # Wait for all the nodes to learn about each other
-            await trio.sleep(3600)
+            await trio.sleep(1)
         else:
             seed_contact = Contact("tapir.nucypher.network", 9151)
 
@@ -220,7 +222,13 @@ async def main(mocked: bool = True) -> None:
 
         context.logger.info("Bob retrieves")
         decrypted = await bob_decrypts(
-            context, seed_contact, bob, alice.card(), publisher.card(), policy, message_kit
+            context,
+            seed_contact,
+            bob,
+            alice.card(),
+            publisher.card(),
+            policy,
+            message_kit,
         )
 
         assert message == decrypted
@@ -232,12 +240,8 @@ async def main(mocked: bool = True) -> None:
                 await handle.shutdown()
 
 
-def run_main(mocked: bool = True) -> None:
-    if mocked:
-        clock = trio.testing.MockClock(autojump_threshold=0)
-        trio.run(main, mocked, clock=clock)
-    else:
-        trio.run(main, mocked)
+def run_main(*, mocked: bool = True) -> None:
+    trio.run(functools.partial(main, mocked=mocked))
 
 
 if __name__ == "__main__":

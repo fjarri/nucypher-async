@@ -1,12 +1,10 @@
-from contextlib import asynccontextmanager
 from collections import defaultdict
-from typing import Tuple, Union, Dict, Optional, AsyncIterator, Any, cast
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, cast
 
-from pons import Amount, Address, Signer, Method, Mutability, ContractABI
-from pons._client import ClientSession
-from pons._contract import (
-    BoundMethodCall,
-)  # TODO: expose as the public API in pons
+from ethereum_rpc import Address, Amount
+from pons import BoundMethodCall, ClientSession, ContractABI, Method, Signer
 
 
 class MockContract:
@@ -15,11 +13,11 @@ class MockContract:
 
     def _method_by_selector(self, selector: bytes) -> Method:
         for method in self._abi.method:
-            if method.selector == selector:
+            if isinstance(method, Method) and method.selector == selector:
                 return method
         raise ValueError(f"Could not find a method with selector {selector!r}")
 
-    def _dispatch(self, data_bytes: bytes) -> Tuple[Method, bytes]:
+    def _dispatch(self, data_bytes: bytes) -> tuple[Method, bytes]:
         selector = data_bytes[:4]
         input_bytes = data_bytes[4:]
         method = self._method_by_selector(selector)
@@ -33,12 +31,8 @@ class MockContract:
         # Note: assuming here that if the result is a tuple,
         # it's supposed to be encoded as several values.
         # Should be fine for tests.
-        if isinstance(result, tuple):
-            results = result
-        else:
-            results = (result,)
-        output_bytes = method.outputs.encode(*results)
-        return output_bytes
+        results = result if isinstance(result, tuple) else (result,)
+        return method.outputs.encode(*results)
 
     def transact(self, address: Address, amount: Amount, data_bytes: bytes) -> None:
         method, input_bytes = self._dispatch(data_bytes)
@@ -48,8 +42,8 @@ class MockContract:
 
 class MockBackend:
     def __init__(self) -> None:
-        self._balances: Dict[Address, Amount] = defaultdict(lambda: Amount.wei(0))
-        self._contracts: Dict[Address, MockContract] = {}
+        self._balances: dict[Address, Amount] = defaultdict(lambda: Amount.wei(0))
+        self._contracts: dict[Address, MockContract] = {}
 
     def mock_register_contract(self, address: Address, mock_contract: MockContract) -> None:
         self._contracts[address] = mock_contract
@@ -57,21 +51,19 @@ class MockBackend:
     @asynccontextmanager
     async def session(self) -> AsyncIterator[ClientSession]:
         # We only implement a few methods from ClientSession, but that's all we need
-        yield cast(ClientSession, self)
+        yield cast("ClientSession", self)
 
-    async def eth_call(self, call: BoundMethodCall) -> Any:
+    async def call(self, call: BoundMethodCall) -> Any:
         return call.decode_output(self._contracts[call.contract_address].call(call.data_bytes))
 
     async def transact(
-        self, signer: Signer, call: BoundMethodCall, amount: Optional[Amount] = None
+        self, signer: Signer, call: BoundMethodCall, amount: Amount | None = None
     ) -> None:
         # TODO: change the caller's balance appropriately
         # TODO: check that the call is payable if amount is not 0
-        if amount is None:
-            amount = Amount.wei(0)
-        else:
-            # Lower the type from specific currency
-            amount = Amount.wei(amount.as_wei())
+
+        # Lower the type from specific currency
+        amount = Amount.wei(0 if amount is None else amount.as_wei())
 
         # Lower the signer address type
         address = Address(bytes(signer.address))

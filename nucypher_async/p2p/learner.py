@@ -1,23 +1,27 @@
-from typing import Optional, Iterable, Tuple, List, Set, Dict
+from collections.abc import Iterable
 
 import trio
-
-from nucypher_core import TreasureMap, Conditions, Context
+from nucypher_core import Conditions, Context, TreasureMap
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..drivers.identity import IdentityAddress, AmountT, IdentityClient
+from ..domain import Domain
+from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
-from ..domain import Domain
-from ..storage import InMemoryStorage, BaseStorage
+from ..storage import BaseStorage, InMemoryStorage
 from ..utils.logging import NULL_LOGGER, Logger
-from .ursula import UrsulaInfo, UrsulaClient
-from .verification import VerifiedUrsulaInfo, verify_staking_remote
-from .fleet_sensor import FleetSensor, NodeEntry, StakingProviderEntry, FleetSensorSnapshot
+from .fleet_sensor import (
+    FleetSensor,
+    FleetSensorSnapshot,
+    NodeEntry,
+    StakingProviderEntry,
+)
 from .fleet_state import FleetState
+from .ursula import UrsulaClient, UrsulaInfo
+from .verification import VerifiedUrsulaInfo, verify_staking_remote
 
 
 class Learner:
@@ -34,12 +38,12 @@ class Learner:
         self,
         domain: Domain,
         identity_client: IdentityClient,
-        this_node: Optional[VerifiedUrsulaInfo] = None,
-        peer_client: Optional[PeerClient] = None,
-        seed_contacts: Optional[Iterable[Contact]] = None,
+        this_node: VerifiedUrsulaInfo | None = None,
+        peer_client: PeerClient | None = None,
+        seed_contacts: Iterable[Contact] | None = None,
         parent_logger: Logger = NULL_LOGGER,
-        storage: Optional[BaseStorage] = None,
-        clock: Optional[BaseClock] = None,
+        storage: BaseStorage | None = None,
+        clock: BaseClock | None = None,
     ):
         if peer_client is None:
             peer_client = PeerClient()
@@ -73,20 +77,20 @@ class Learner:
 
     def _test_set_seed_contacts(self, seed_contacts: Iterable[Contact]) -> None:
         """
-        This function is for tests only.
+        For tests only.
         Supposed to be called before starting the server.
         """
         self._seed_contacts = list(seed_contacts)
 
     def _test_add_verified_node(self, node: VerifiedUrsulaInfo, stake: AmountT) -> None:
         """
-        This function is for tests only.
+        For tests only.
         Supposed to be called before starting the server.
         """
         self._fleet_sensor.report_verified_node(node, stake)
         self.fleet_state.add_metadatas([node])
 
-    async def _verify_contact(self, contact: Contact) -> Tuple[VerifiedUrsulaInfo, AmountT]:
+    async def _verify_contact(self, contact: Contact) -> tuple[VerifiedUrsulaInfo, AmountT]:
         self._logger.debug("Verifying a contact {}", contact)
 
         # TODO: merge all of it into `public_information()`?
@@ -106,7 +110,7 @@ class Learner:
 
         return node, staked
 
-    async def _learn_from_node(self, node: VerifiedUrsulaInfo) -> List[UrsulaInfo]:
+    async def _learn_from_node(self, node: VerifiedUrsulaInfo) -> list[UrsulaInfo]:
         self._logger.debug(
             "Learning from {} ({})",
             node.contact,
@@ -135,10 +139,7 @@ class Learner:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
                     metadatas = await self._learn_from_node(node)
             except (PeerError, trio.TooSlowError) as exc:
-                if isinstance(exc, trio.TooSlowError):
-                    message = "timed out"
-                else:
-                    message = str(exc)
+                message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
                     "Error when trying to learn from {} ({}): {}",
                     node.contact,
@@ -159,8 +160,11 @@ class Learner:
                 # We just need to signal that the learning ended, no info to return
                 result.set(None)
 
-    async def verify_contact_and_report(self, contact: Contact) -> Optional[VerifiedUrsulaInfo]:
-        with self._fleet_sensor.try_lock_contact_for_verification(contact) as (contact_, result):
+    async def verify_contact_and_report(self, contact: Contact) -> VerifiedUrsulaInfo | None:
+        with self._fleet_sensor.try_lock_contact_for_verification(contact) as (
+            contact_,
+            result,
+        ):
             if contact_ is None:
                 self._logger.debug("{} is already being verified", contact)
                 return await result.wait()
@@ -170,10 +174,7 @@ class Learner:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
             except (PeerError, trio.TooSlowError) as exc:
-                if isinstance(exc, trio.TooSlowError):
-                    message = "timed out"
-                else:
-                    message = str(exc)
+                message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
                     "Error when trying to verify {}: {}",
                     contact,
@@ -193,7 +194,7 @@ class Learner:
 
         return node
 
-    def passive_learning(self, sender_host: Optional[str], metadatas: Iterable[UrsulaInfo]) -> None:
+    def passive_learning(self, sender_host: str | None, metadatas: Iterable[UrsulaInfo]) -> None:
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
         self._logger.debug("Passive learning from {}", sender_host or "unknown host")
@@ -205,12 +206,14 @@ class Learner:
                 async with self._identity_client.session() as session:
                     providers = await session.get_active_staking_providers()
         except trio.TooSlowError as exc:
-            self._logger.debug(f"Failed to get staking providers list from the blockchain: {exc}")
+            self._logger.debug(
+                "Failed to get staking providers list from the blockchain: {exc}", exc=exc
+            )
             return
 
         self._fleet_sensor.report_staking_providers(providers)
 
-    async def seed_round(self, must_succeed: bool = False) -> None:
+    async def seed_round(self, *, must_succeed: bool = False) -> None:
         self._logger.debug("Starting a seed round")
 
         if not self._seed_contacts:
@@ -266,13 +269,13 @@ class Learner:
     async def reencrypt(
         self,
         ursula: VerifiedUrsulaInfo,
-        capsules: List[Capsule],
+        capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
-        conditions: Optional[Conditions] = None,
-        context: Optional[Context] = None,
-    ) -> List[VerifiedCapsuleFrag]:
+        conditions: Conditions | None = None,
+        context: Context | None = None,
+    ) -> list[VerifiedCapsuleFrag]:
         return await self._ursula_client.reencrypt(
             ursula=ursula,
             capsules=capsules,
@@ -313,16 +316,16 @@ class Learner:
         # in `learning_round()` instead, to simplify the API.
         return self._fleet_sensor.is_empty()
 
-    def get_possible_contacts_for(self, address: IdentityAddress) -> Set[Contact]:
+    def get_possible_contacts_for(self, address: IdentityAddress) -> set[Contact]:
         return self._fleet_sensor.try_get_possible_contacts_for(address)
 
-    def get_available_staking_providers(self) -> List[StakingProviderEntry]:
+    def get_available_staking_providers(self) -> list[StakingProviderEntry]:
         return self._fleet_sensor.get_available_staking_providers()
 
-    def get_verified_node_entries(self) -> Dict[IdentityAddress, NodeEntry]:
+    def get_verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
         return self._fleet_sensor.verified_node_entries
 
-    def get_verified_ursulas(self, include_this_node: bool = False) -> List[VerifiedUrsulaInfo]:
+    def get_verified_ursulas(self, *, include_this_node: bool = False) -> list[VerifiedUrsulaInfo]:
         my_metadata = [self._this_node] if include_this_node and self._this_node else []
         return my_metadata + self._fleet_sensor.verified_metadata()
 

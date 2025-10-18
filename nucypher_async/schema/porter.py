@@ -1,12 +1,15 @@
-from typing import List, Optional, Dict, Mapping, cast
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, cast
 
 from attrs import frozen
-from nucypher_core import TreasureMap, RetrievalKit, Context
-from nucypher_core.umbral import PublicKey, CapsuleFrag, VerifiedCapsuleFrag
+from nucypher_core import Context, RetrievalKit, TreasureMap
+from nucypher_core.umbral import CapsuleFrag, PublicKey, VerifiedCapsuleFrag
 
-from ..base.types import JSON
 from ..drivers.identity import IdentityAddress
 from .base import from_json
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..base.types import JSON
 
 
 @frozen
@@ -18,7 +21,7 @@ class UrsulaResult:
 
 @frozen
 class GetUrsulasResult:
-    ursulas: List[UrsulaResult]
+    ursulas: list[UrsulaResult]
 
 
 @frozen
@@ -30,15 +33,15 @@ class GetUrsulasResponse:
 @frozen
 class _GetUrsulasRequestAsQueryParams:
     quantity: int
-    include_ursulas: Optional[str]
-    exclude_ursulas: Optional[str]
+    include_ursulas: str | None
+    exclude_ursulas: str | None
 
 
 @frozen
 class GetUrsulasRequest:
     quantity: int
-    include_ursulas: Optional[List[IdentityAddress]]
-    exclude_ursulas: Optional[List[IdentityAddress]]
+    include_ursulas: list[IdentityAddress] | None
+    exclude_ursulas: list[IdentityAddress] | None
 
     @classmethod
     def from_query_params(cls, params: Mapping[str, str]) -> "GetUrsulasRequest":
@@ -46,7 +49,7 @@ class GetUrsulasRequest:
         Since `/get_ursulas` endpoint supports the request being passed through query params,
         and it's not exactly a fully structured JSON, we need a separate method to deserialize it.
         """
-        typed_params = from_json(_GetUrsulasRequestAsQueryParams, cast(JSON, params))
+        typed_params = from_json(_GetUrsulasRequestAsQueryParams, cast("JSON", params))
 
         if typed_params.include_ursulas:
             include_ursulas = typed_params.include_ursulas.split(",")
@@ -63,17 +66,17 @@ class GetUrsulasRequest:
             include_ursulas=include_ursulas or [],
             exclude_ursulas=exclude_ursulas or [],
         )
-        return from_json(GetUrsulasRequest, cast(JSON, request_json))
+        return from_json(GetUrsulasRequest, cast("JSON", request_json))
 
 
 @frozen
 class RetrieveCFragsRequest:
     treasure_map: TreasureMap
-    retrieval_kits: List[RetrievalKit]
+    retrieval_kits: list[RetrievalKit]
     alice_verifying_key: PublicKey
     bob_encrypting_key: PublicKey
     bob_verifying_key: PublicKey
-    context: Optional[Context]
+    context: Context | None
 
 
 # TODO: what would be nice to have is the support of "deserialization with context",
@@ -83,12 +86,12 @@ class RetrieveCFragsRequest:
 
 @frozen
 class ServerRetrievalResult:
-    cfrags: Dict[IdentityAddress, VerifiedCapsuleFrag]
+    cfrags: dict[IdentityAddress, VerifiedCapsuleFrag]
 
 
 @frozen
 class ServerRetrieveCFragsResult:
-    retrieval_results: List[ServerRetrievalResult]
+    retrieval_results: list[ServerRetrievalResult]
 
 
 @frozen
@@ -99,12 +102,12 @@ class ServerRetrieveCFragsResponse:
 
 @frozen
 class ClientRetrievalResult:
-    cfrags: Dict[IdentityAddress, CapsuleFrag]
+    cfrags: dict[IdentityAddress, CapsuleFrag]
 
 
 @frozen
 class ClientRetrieveCFragsResult:
-    retrieval_results: List[ClientRetrievalResult]
+    retrieval_results: list[ClientRetrievalResult]
 
 
 @frozen

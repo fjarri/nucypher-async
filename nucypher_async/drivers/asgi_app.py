@@ -1,5 +1,5 @@
 """
-This module encapsulates the specific ASGI framework
+Encapsulates the specific ASGI framework
 used to create an ASGI app out of server objects.
 
 This is a thin layer that serves the following purposes:
@@ -10,23 +10,23 @@ This is a thin layer that serves the following purposes:
 Nothing else should be happening here, the bulk of the server logic is located in server objects.
 """
 
-from contextlib import asynccontextmanager
 import http
-from typing import Callable, Awaitable, AsyncIterator, AsyncContextManager, cast
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import cast
 
+import trio
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-import trio
 
-from ..base.types import JSON
 from ..base.http_server import ASGIFramework
-from ..base.peer_error import ServerSidePeerError, InactivePolicy
-from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
+from ..base.peer_error import InactivePolicy, ServerSidePeerError
 from ..base.porter import BasePorterServer, PorterRoutes
+from ..base.types import JSON
+from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
 from ..utils.logging import Logger
-
 
 # HTTP status codes don't need to be unique or exhaustive, it's just an additional way
 # to convey information to the user.
@@ -89,14 +89,14 @@ async def rest_api_call(logger: Logger, endpoint_future: Awaitable[JSON]) -> Res
 def make_lifespan(
     on_startup: Callable[[trio.Nursery], Awaitable[None]],
     on_shutdown: Callable[[trio.Nursery], Awaitable[None]],
-) -> Callable[[Starlette], AsyncContextManager[None]]:
+) -> Callable[[Starlette], AbstractAsyncContextManager[None]]:
     """
     A custom lifespan factory for Starlette that maintains a nursery
     in which background tasks can be run.
     """
 
     @asynccontextmanager
-    async def lifespan_context(app: Starlette) -> AsyncIterator[None]:
+    async def lifespan_context(_app: Starlette) -> AsyncIterator[None]:
         async with trio.open_nursery() as nursery:
             await on_startup(nursery)
             yield
@@ -106,42 +106,40 @@ def make_lifespan(
 
 
 def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
-    """
-    Returns an ASGI app serving as a front-end for a network peer (Ursula).
-    """
-
+    """Returns an ASGI app serving as a front-end for a network peer (Ursula)."""
     logger = ursula_server.logger().get_child("App")
 
     async def ping(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         return await binary_api_call(logger, ursula_server.endpoint_ping(remote_host))
 
-    async def node_metadata_get(request: Request) -> Response:
+    async def node_metadata_get(_request: Request) -> Response:
         return await binary_api_call(logger, ursula_server.endpoint_node_metadata_get())
 
     async def node_metadata_post(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await binary_api_call(
-            logger, ursula_server.endpoint_node_metadata_post(remote_host, request_bytes)
+            logger,
+            ursula_server.endpoint_node_metadata_post(remote_host, request_bytes),
         )
 
-    async def public_information(request: Request) -> Response:
+    async def public_information(_request: Request) -> Response:
         return await binary_api_call(logger, ursula_server.endpoint_public_information())
 
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
         return await binary_api_call(logger, ursula_server.endpoint_reencrypt(request_bytes))
 
-    async def status(request: Request) -> Response:
+    async def status(_request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
         return await html_call(logger, ursula_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
         await ursula_server.start(nursery)
 
-    async def on_shutdown(nursery: trio.Nursery) -> None:
-        await ursula_server.stop(nursery)
+    async def on_shutdown(_nursery: trio.Nursery) -> None:
+        await ursula_server.stop()
 
     routes = [
         Route(f"/{UrsulaRoutes.PING}", ping),
@@ -156,34 +154,32 @@ def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast(ASGIFramework, app)
+    return cast("ASGIFramework", app)
 
 
 def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
-    """
-    Returns an ASGI app serving as a front-end for a Porter.
-    """
-
+    """Returns an ASGI app serving as a front-end for a Porter."""
     logger = porter_server.logger().get_child("App")
 
     async def get_ursulas(request: Request) -> Response:
         request_body = await request.json() if await request.body() else None
         return await rest_api_call(
-            logger, porter_server.endpoint_get_ursulas(dict(request.query_params), request_body)
+            logger,
+            porter_server.endpoint_get_ursulas(dict(request.query_params), request_body),
         )
 
     async def retrieve_cfrags(request: Request) -> Response:
         request_body = await request.json() if await request.body() else {}
         return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(request_body))
 
-    async def status(request: Request) -> Response:
+    async def status(_request: Request) -> Response:
         return await html_call(logger, porter_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
         await porter_server.start(nursery)
 
-    async def on_shutdown(nursery: trio.Nursery) -> None:
-        await porter_server.stop(nursery)
+    async def on_shutdown(_nursery: trio.Nursery) -> None:
+        await porter_server.stop()
 
     routes = [
         Route(f"/{PorterRoutes.GET_URSULAS}", get_ursulas),
@@ -195,4 +191,4 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast(ASGIFramework, app)
+    return cast("ASGIFramework", app)

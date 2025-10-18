@@ -11,23 +11,23 @@ Cattrs sort of works, but still requires some boilerplate (see below).
 
 TODO: an ideal schema library would support all that, and:
 - fully declarative use with less boilerplate, where every schema class
-  would be derived from one base class
-- deserialization with context
-- anonymous dictionary fields with set keys, instead of creating a nested class as we do now
+  would be derived from one base class;
+- deserialization with context;
+- anonymous dictionary fields with set keys, instead of creating a nested class as we do now.
 """
 
 import base64
-from typing import Type, TypeVar, cast, Any
+from typing import Any, TypeVar, cast
 
 import cattrs
-from nucypher_core import TreasureMap, Context, RetrievalKit
-from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag, CapsuleFrag
+from nucypher_core import Context, RetrievalKit, TreasureMap
+from nucypher_core.umbral import CapsuleFrag, PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
 from ..base.types import JSON
+from ..drivers.identity import IdentityAddress
 
 
-def structure_identity_address(val: str, cls: Type[IdentityAddress]) -> IdentityAddress:
+def structure_identity_address(val: str, cls: type[IdentityAddress]) -> IdentityAddress:
     return cls.from_hex(val)
 
 
@@ -35,7 +35,7 @@ def unstructure_identity_address(val: IdentityAddress) -> str:
     return val.checksum
 
 
-def structure_public_key(val: str, cls: Type[PublicKey]) -> PublicKey:
+def structure_public_key(val: str, cls: type[PublicKey]) -> PublicKey:
     return cls.from_compressed_bytes(bytes.fromhex(val))
 
 
@@ -43,7 +43,7 @@ def unstructure_public_key(val: PublicKey) -> str:
     return val.to_compressed_bytes().hex()
 
 
-def structure_treasure_map(val: str, cls: Type[TreasureMap]) -> TreasureMap:
+def structure_treasure_map(val: str, cls: type[TreasureMap]) -> TreasureMap:
     return cls.from_bytes(base64.b64decode(val.encode()))
 
 
@@ -51,7 +51,7 @@ def unstructure_treasure_map(val: TreasureMap) -> str:
     return base64.b64encode(bytes(val)).decode()
 
 
-def structure_retrieval_kit(val: str, cls: Type[RetrievalKit]) -> RetrievalKit:
+def structure_retrieval_kit(val: str, cls: type[RetrievalKit]) -> RetrievalKit:
     return cls.from_bytes(base64.b64decode(val.encode()))
 
 
@@ -59,7 +59,7 @@ def unstructure_retrieval_kit(val: RetrievalKit) -> str:
     return base64.b64encode(bytes(val)).decode()
 
 
-def structure_cfrag(val: str, cls: Type[CapsuleFrag]) -> CapsuleFrag:
+def structure_cfrag(val: str, cls: type[CapsuleFrag]) -> CapsuleFrag:
     return cls.from_bytes(base64.b64decode(val.encode()))
 
 
@@ -67,7 +67,7 @@ def unstructure_vcfrag(val: VerifiedCapsuleFrag) -> str:
     return base64.b64encode(bytes(val)).decode()
 
 
-def structure_context(val: str, cls: Type[Context]) -> Context:
+def structure_context(val: str, cls: type[Context]) -> Context:
     return cls(val)
 
 
@@ -103,7 +103,7 @@ class ValidationError(Exception):
 _FROM_JSON_T = TypeVar("_FROM_JSON_T")
 
 
-def from_json(cls: Type[_FROM_JSON_T], obj: JSON) -> _FROM_JSON_T:
+def from_json(cls: type[_FROM_JSON_T], obj: JSON) -> _FROM_JSON_T:
     # TODO: make validation errors more human-readable
     try:
         return _CONVERTER.structure(obj, cls)
@@ -113,4 +113,4 @@ def from_json(cls: Type[_FROM_JSON_T], obj: JSON) -> _FROM_JSON_T:
 
 def to_json(obj: Any) -> JSON:
     # TODO: use the base class from `attrs` when the new version is released where it is public
-    return cast(JSON, _CONVERTER.unstructure(obj))
+    return cast("JSON", _CONVERTER.unstructure(obj))

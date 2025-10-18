@@ -1,36 +1,33 @@
-from typing import Optional, Iterable, Union, Dict, List, Mapping
+from collections.abc import Iterable, Mapping
 
-from attrs import frozen
 import arrow
 import trio
-
+from attrs import frozen
 from nucypher_core import (
     Address,
-    TreasureMap,
-    MessageKit,
-    EncryptedTreasureMap,
-    RetrievalKit,
-    Conditions,
     Context,
+    EncryptedTreasureMap,
+    MessageKit,
+    RetrievalKit,
+    TreasureMap,
 )
 from nucypher_core.umbral import (
     PublicKey,
-    Capsule,
     VerifiedCapsuleFrag,
 )
 
-from ..drivers.identity import IdentityAddress
-from ..drivers.payment import PaymentClient
 from ..characters.pre import (
-    Policy,
-    RecipientCard,
-    Publisher,
     DelegatorCard,
+    Policy,
+    Publisher,
     PublisherCard,
     Recipient,
+    RecipientCard,
 )
+from ..drivers.identity import IdentityAddress
+from ..drivers.payment import PaymentClient
+from ..p2p.algorithms import get_ursulas, verified_nodes_iter
 from ..p2p.learner import Learner
-from ..p2p.algorithms import verified_nodes_iter, get_ursulas
 from ..p2p.verification import VerifiedUrsulaInfo
 from .porter import PorterClient
 
@@ -49,7 +46,7 @@ async def grant(
     publisher: Publisher,
     learner: Learner,
     payment_client: PaymentClient,
-    handpicked_addresses: Optional[Iterable[IdentityAddress]] = None,
+    handpicked_addresses: Iterable[IdentityAddress] | None = None,
 ) -> EnactedPolicy:
     async with payment_client.session() as session:
         if await session.is_policy_active(policy.hrac):
@@ -66,7 +63,7 @@ async def grant(
 
     assigned_kfrags = {
         Address(bytes(node.staking_provider_address)): (node.encrypting_key, key_frag)
-        for node, key_frag in zip(nodes, policy.key_frags)
+        for node, key_frag in zip(nodes, policy.key_frags, strict=True)
     }
 
     encrypted_treasure_map = publisher.make_treasure_map(
@@ -93,7 +90,7 @@ async def grant(
     )
 
 
-def encrypt(policy: Union[Policy, EnactedPolicy], message: bytes) -> MessageKit:
+def encrypt(policy: Policy | EnactedPolicy, message: bytes) -> MessageKit:
     return MessageKit(
         policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=None
     )
@@ -102,7 +99,7 @@ def encrypt(policy: Union[Policy, EnactedPolicy], message: bytes) -> MessageKit:
 @frozen
 class RetrievalState:
     retrieval_kit: RetrievalKit
-    vcfrags: Dict[IdentityAddress, VerifiedCapsuleFrag]
+    vcfrags: dict[IdentityAddress, VerifiedCapsuleFrag]
 
     @classmethod
     def from_message_kit(cls, message_kit: MessageKit) -> "RetrievalState":
@@ -126,9 +123,9 @@ async def retrieve(
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-    context: Optional[Context] = None,
-) -> Dict[IdentityAddress, VerifiedCapsuleFrag]:
-    responses: Dict[IdentityAddress, VerifiedCapsuleFrag] = {}
+    context: Context | None = None,
+) -> dict[IdentityAddress, VerifiedCapsuleFrag]:
+    responses: dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
     async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
         verified_cfrags = await learner.reencrypt(
@@ -148,21 +145,23 @@ async def retrieve(
         IdentityAddress(bytes(address)): ekfrag
         for address, ekfrag in treasure_map.destinations.items()
     }
-    async with trio.open_nursery() as nursery:
-        async with verified_nodes_iter(learner, destinations) as node_iter:
-            async for node in node_iter:
-                nursery.start_soon(reencrypt, nursery, node)
+    async with (
+        trio.open_nursery() as nursery,
+        verified_nodes_iter(learner, destinations) as node_iter,
+    ):
+        async for node in node_iter:
+            nursery.start_soon(reencrypt, nursery, node)
     return responses
 
 
 async def retrieve_via_learner(
     learner: Learner,
-    retrieval_states: List[RetrievalState],
+    retrieval_states: list[RetrievalState],
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-    context: Optional[Context] = None,
-) -> List[RetrievalState]:
+    context: Context | None = None,
+) -> list[RetrievalState]:
     # TODO: the simlpest implementation
     # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
     new_states = []
@@ -181,12 +180,12 @@ async def retrieve_via_learner(
 
 async def retrieve_via_porter(
     porter_client: PorterClient,
-    retrieval_states: List[RetrievalState],
+    retrieval_states: list[RetrievalState],
     treasure_map: TreasureMap,
     delegator_card: DelegatorCard,
     recipient_card: RecipientCard,
-    context: Optional[Context] = None,
-) -> List[RetrievalState]:
+    context: Context | None = None,
+) -> list[RetrievalState]:
     retrieval_kits = [state.retrieval_kit for state in retrieval_states]
     response = await porter_client.retrieve_cfrags(
         treasure_map=treasure_map,
@@ -197,19 +196,20 @@ async def retrieve_via_porter(
     )
 
     return [
-        old_state.with_vcfrags(vcfrags) for old_state, vcfrags in zip(retrieval_states, response)
+        old_state.with_vcfrags(vcfrags)
+        for old_state, vcfrags in zip(retrieval_states, response, strict=True)
     ]
 
 
 async def retrieve_and_decrypt(
-    client: Union[Learner, PorterClient],
+    client: Learner | PorterClient,
     message_kits: Iterable[MessageKit],
     enacted_policy: EnactedPolicy,
     delegator_card: DelegatorCard,
     recipient: Recipient,
     publisher_card: PublisherCard,
-    context: Optional[Context] = None,
-) -> List[bytes]:
+    context: Context | None = None,
+) -> list[bytes]:
     treasure_map = recipient.decrypt_treasure_map(
         enacted_policy.encrypted_treasure_map, publisher_card
     )
@@ -240,11 +240,11 @@ async def retrieve_and_decrypt(
 
     # TODO: check that we have enough vcfrags
 
-    decrypted = [
+    return [
         recipient.decrypt_message_kit(
-            message_kit=message_kit, treasure_map=treasure_map, vcfrags=state.vcfrags.values()
+            message_kit=message_kit,
+            treasure_map=treasure_map,
+            vcfrags=state.vcfrags.values(),
         )
-        for state, message_kit in zip(retrieval_states, message_kits)
+        for state, message_kit in zip(retrieval_states, message_kits, strict=True)
     ]
-
-    return decrypted

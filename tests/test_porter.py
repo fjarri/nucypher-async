@@ -1,31 +1,29 @@
-from typing import List
-
 import trio
 import trio.testing
 
+from nucypher_async.characters.pre import Delegator, Publisher, Recipient
+from nucypher_async.client.porter import PorterClient
+from nucypher_async.client.pre import encrypt, grant, retrieve_and_decrypt
 from nucypher_async.domain import Domain
-from nucypher_async.server import PorterServer, UrsulaServer
+from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.mocks import (
-    MockNetwork,
+    MockHTTPClient,
     MockIdentityClient,
+    MockNetwork,
     MockPaymentClient,
     MockPeerClient,
-    MockHTTPClient,
 )
-from nucypher_async.drivers.payment import AmountMATIC
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.characters.pre import Delegator, Recipient, Publisher
-from nucypher_async.client.porter import PorterClient
-from nucypher_async.client.pre import grant, encrypt, retrieve_and_decrypt
+from nucypher_async.server import PorterServer, UrsulaServer
 
 
 async def test_get_ursulas(
     mock_network: MockNetwork,
-    fully_learned_ursulas: List[UrsulaServer],
+    fully_learned_ursulas: list[UrsulaServer],
     porter_server: PorterServer,
-    autojump_clock: trio.testing.MockClock,
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
-    mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
+    mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())  # noqa: S104
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient("127.0.0.1", 9000, http_client)
 
@@ -46,11 +44,11 @@ async def test_retrieve_cfrags(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_payment_client: MockPaymentClient,
-    fully_learned_ursulas: List[UrsulaServer],
+    fully_learned_ursulas: list[UrsulaServer],
     porter_server: PorterServer,
-    autojump_clock: trio.testing.MockClock,
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
-    mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())
+    mock_client = MockHTTPClient(mock_network, "0.0.0.0", porter_server.ssl_certificate())  # noqa: S104
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient("127.0.0.1", 9000, http_client)
 

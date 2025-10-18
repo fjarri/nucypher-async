@@ -1,8 +1,8 @@
 from cryptography.exceptions import InternalError
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from cryptography.hazmat.primitives import hashes
 from nacl.exceptions import CryptoError
 from nacl.secret import SecretBox
 
@@ -20,7 +20,6 @@ def derive_key_material_from_password(password: bytes, salt: bytes) -> bytes:
     :param salt: cryptographic salt added during key derivation
     :return:
     """
-
     # WARNING: RFC7914 recommends that you use a 2^20 cost value for sensitive
     # files. It is NOT recommended to change the `_scrypt_cost` value unless
     # you know what you are doing.
@@ -37,7 +36,7 @@ def derive_key_material_from_password(password: bytes, salt: bytes) -> bytes:
         ).derive(password)
     except InternalError as exc:
         required_memory = 128 * 2**_scrypt_cost * 8 // (10**6)
-        if exc.err_code[0].reason == 65:
+        if exc.err_code[0].reason == 65:  # noqa: PLR2004
             raise MemoryError(
                 f"Scrypt key derivation requires at least {required_memory} MB of memory. "
                 "Please free up some memory and try again."
@@ -48,18 +47,14 @@ def derive_key_material_from_password(password: bytes, salt: bytes) -> bytes:
 
 
 def derive_wrapping_key_from_key_material(key_material: bytes, salt: bytes) -> bytes:
-    """
-    Uses HKDF to derive a 32 byte wrapping key to encrypt key material with.
-    """
-
-    wrapping_key = HKDF(
+    """Uses HKDF to derive a 32 byte wrapping key to encrypt key material with."""
+    return HKDF(
         algorithm=hashes.BLAKE2b(64),
         length=SecretBox.KEY_SIZE,
         salt=salt,
         info=b"NuCypher-KeyWrap",
         backend=default_backend(),
     ).derive(key_material)
-    return wrapping_key
 
 
 class SecretBoxAuthenticationError(Exception):
@@ -69,8 +64,7 @@ class SecretBoxAuthenticationError(Exception):
 def secret_box_encrypt(key_material: bytes, salt: bytes, plaintext: bytes) -> bytes:
     wrapping_key = derive_wrapping_key_from_key_material(key_material, salt)
     secret_box = SecretBox(wrapping_key)
-    ciphertext = secret_box.encrypt(plaintext)
-    return ciphertext
+    return secret_box.encrypt(plaintext)
 
 
 def secret_box_decrypt(key_material: bytes, salt: bytes, ciphertext: bytes) -> bytes:

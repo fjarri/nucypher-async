@@ -1,38 +1,38 @@
 """
 A rough draft of the Eth driver.
-TODO:
+
+Todo:
 - finish up registries properly (include ABIs in the registry class,
   merge ABIs with contract addresses, add registries for different networks)
 - find a way to get ABIs automatically
 - find a way to test transactions
 - set gas value properly (estimate gas, gas strategies)
 - add newtypes for currencies instead of just using wei
+
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Type, AsyncIterator, cast
+from typing import cast
 
 from eth_account import Account
-from eth_account.signers.base import BaseAccount
-
+from eth_account.signers.local import LocalAccount
+from ethereum_rpc import Address, Amount
 from nucypher_core import HRAC
 from pons import (
-    HTTPProvider,
+    AccountSigner,
     Client,
+    ClientSession,
     ContractABI,
     DeployedContract,
-    Signer,
-    AccountSigner,
+    HTTPProvider,
     Method,
     Mutability,
-    Address,
-    Amount,
+    Signer,
     abi,
 )
-from pons._client import ClientSession
 
 from ..domain import Domain
-
 
 _SUBSCRIPTION_MANAGER_ABI = ContractABI(
     methods=[
@@ -76,27 +76,21 @@ class BaseContracts:
 
 
 class LynxContracts(BaseContracts):
-    """
-    Registry for Polygon-Mumbai.
-    """
+    """Registry for Polygon-Mumbai."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class TapirContracts(BaseContracts):
-    """
-    Registry for Polygon-Mumbai.
-    """
+    """Registry for Polygon-Mumbai."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class MainnetContracts(BaseContracts):
-    """
-    Registry for Polygon-Mainnet.
-    """
+    """Registry for Polygon-Mainnet."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
     SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xB0194073421192F6Cf38d72c791Be8729721A0b3")
@@ -112,14 +106,14 @@ class PaymentAccount:
     def random(cls) -> "PaymentAccount":
         return cls(Account.create())
 
-    def __init__(self, account: BaseAccount):
+    def __init__(self, account: LocalAccount):
         self._account = account
         self.address = PaymentAddress.from_hex(account.address)
 
 
 class PaymentAccountSigner(AccountSigner):
     def __init__(self, payment_account: PaymentAccount):
-        super().__init__(payment_account._account)
+        super().__init__(payment_account._account)  # noqa: SLF001
 
     @property
     def address(self) -> PaymentAddress:
@@ -137,7 +131,7 @@ class PaymentClient:
     def __init__(self, backend_client: Client, domain: Domain):
         self._client = backend_client
 
-        registry: Type[BaseContracts]
+        registry: type[BaseContracts]
         if domain == Domain.MAINNET:
             registry = MainnetContracts
         elif domain == Domain.LYNX:
@@ -161,17 +155,17 @@ class PaymentClientSession:
     def __init__(self, payment_client: PaymentClient, backend_session: ClientSession):
         self._payment_client = payment_client
         self._backend_session = backend_session
-        self._manager = self._payment_client._manager
+        self._manager = self._payment_client._manager  # noqa: SLF001
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
-        is_active = await self._backend_session.eth_call(
+        is_active = await self._backend_session.call(
             self._manager.method.isPolicyActive(bytes(hrac))
         )
         # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
-        return cast(bool, is_active)
+        return cast("bool", is_active)
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
-        amount = await self._backend_session.eth_call(
+        amount = await self._backend_session.call(
             self._manager.method.getPolicyCost(shares, policy_start, policy_end)
         )
         return AmountMATIC.wei(amount)
