@@ -3,10 +3,11 @@ A peer interface is intentionally distantiated from an HTTP server,
 to illustrate that it does not necessarily need to work via HTTP.
 """
 
-from abc import ABC, abstractmethod
-from enum import Enum, unique
 import json
-from typing import Type, Dict, Callable, Any
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from enum import Enum, unique
+from typing import Any
 
 from .types import JSON
 
@@ -73,7 +74,7 @@ class ServerSidePeerError(ABC, PeerError):
         """Mapping of this error class to a unique error code."""
         ...
 
-    def to_json(self) -> Dict[str, JSON]:
+    def to_json(self) -> dict[str, JSON]:
         return dict(error=self.args[0], code=self.error_code().value)
 
 
@@ -89,7 +90,7 @@ class InvalidMessage(ServerSidePeerError):
         return PeerErrorCode.INVALID_MESSAGE
 
     @classmethod
-    def for_message(cls, message_cls: Type[Any], exc: Exception) -> "InvalidMessage":
+    def for_message(cls, message_cls: type[Any], exc: Exception) -> "InvalidMessage":
         return cls(f"Failed to parse {message_cls.__name__} bytes: {exc}")
 
 
@@ -102,7 +103,7 @@ class InactivePolicy(ServerSidePeerError):
 # For some reason without the annotation `mypy` complains when I try to instantiate the class
 # take from this dict (because `ServerSidePeerError` is abstract), even though
 # it infers the same return value by itself.
-_PEER_ERROR_CODE_TO_CLASS: Dict[PeerErrorCode, Callable[[str], ServerSidePeerError]] = {
+_PEER_ERROR_CODE_TO_CLASS: dict[PeerErrorCode, Callable[[str], ServerSidePeerError]] = {
     cls.error_code(): cls
     for cls in [
         GenericPeerError,

@@ -1,18 +1,23 @@
-import httpx
 import json
-from typing import List, Optional, Dict, Iterable, Tuple
+from collections.abc import Iterable
+from http import HTTPStatus
 
-from nucypher_core import TreasureMap, RetrievalKit, Context
+import httpx
+from nucypher_core import Context, RetrievalKit, TreasureMap
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
-from ..characters.pre import DelegatorCard, RecipientCard
 from .. import schema
-from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
+from ..characters.pre import DelegatorCard, RecipientCard
+from ..drivers.identity import IdentityAddress
+from ..schema.porter import (
+    ClientRetrieveCFragsResponse,
+    GetUrsulasResponse,
+    RetrieveCFragsRequest,
+)
 
 
 class PorterClient:
-    def __init__(self, host: str, port: int, http_client: Optional[httpx.AsyncClient]):
+    def __init__(self, host: str, port: int, http_client: httpx.AsyncClient | None):
         if http_client is not None:
             self._http_client = http_client
         else:
@@ -23,9 +28,9 @@ class PorterClient:
     async def get_ursulas(
         self,
         quantity: int,
-        include_ursulas: Optional[Iterable[IdentityAddress]] = None,
-        exclude_ursulas: Optional[Iterable[IdentityAddress]] = None,
-    ) -> Dict[IdentityAddress, Tuple[str, PublicKey]]:
+        include_ursulas: Iterable[IdentityAddress] | None = None,
+        exclude_ursulas: Iterable[IdentityAddress] | None = None,
+    ) -> dict[IdentityAddress, tuple[str, PublicKey]]:
         include_ursulas = list(include_ursulas) if include_ursulas else []
         exclude_ursulas = list(exclude_ursulas) if exclude_ursulas else []
 
@@ -39,9 +44,9 @@ class PorterClient:
             f"https://{self._host}:{self._port}/get_ursulas", params=request
         )
 
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             # TODO: a more specialized exception
-            raise Exception(f"/get_ursulas failed with status {response.status_code}")
+            raise RuntimeError(f"/get_ursulas failed with status {response.status_code}")
 
         response_json = response.json()
         parsed_response = schema.from_json(GetUrsulasResponse, response_json)
@@ -57,8 +62,8 @@ class PorterClient:
         retrieval_kits: Iterable[RetrievalKit],
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
-        context: Optional[Context] = None,
-    ) -> List[Dict[IdentityAddress, VerifiedCapsuleFrag]]:
+        context: Context | None = None,
+    ) -> list[dict[IdentityAddress, VerifiedCapsuleFrag]]:
         request = RetrieveCFragsRequest(
             treasure_map=treasure_map,
             retrieval_kits=list(retrieval_kits),
@@ -72,15 +77,17 @@ class PorterClient:
             f"https://{self._host}:{self._port}/retrieve_cfrags",
             content=json.dumps(schema.to_json(request)),
         )
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             # TODO: a more specialized exception
-            raise Exception(f"/retrieve_cfrags failed with status {response.status_code}")
+            raise RuntimeError(f"/retrieve_cfrags failed with status {response.status_code}")
 
         response_json = response.json()
         parsed_response = schema.from_json(ClientRetrieveCFragsResponse, response_json)
 
         processed_response = []
-        for rkit, result in zip(retrieval_kits, parsed_response.result.retrieval_results):
+        for rkit, result in zip(
+            retrieval_kits, parsed_response.result.retrieval_results, strict=True
+        ):
             processed_result = {
                 address: cfrag.verify(
                     rkit.capsule,

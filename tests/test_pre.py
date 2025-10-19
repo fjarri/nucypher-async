@@ -1,23 +1,25 @@
-from typing import List
-
 import trio
 import trio.testing
 
-from nucypher_async.drivers.payment import AmountMATIC
+from nucypher_async.characters.pre import Delegator, Publisher, Recipient
+from nucypher_async.client.pre import encrypt, grant, retrieve_and_decrypt
 from nucypher_async.domain import Domain
-from nucypher_async.server import UrsulaServer
-from nucypher_async.characters.pre import Delegator, Recipient, Publisher
-from nucypher_async.client.pre import grant, retrieve_and_decrypt, encrypt
-from nucypher_async.p2p.learner import Learner
+from nucypher_async.drivers.payment import AmountMATIC
+from nucypher_async.mocks import (
+    MockIdentityClient,
+    MockNetwork,
+    MockPaymentClient,
+    MockPeerClient,
+)
 from nucypher_async.p2p.algorithms import verified_nodes_iter
-from nucypher_async.mocks import MockIdentityClient, MockPaymentClient, MockPeerClient, MockNetwork
+from nucypher_async.p2p.learner import Learner
+from nucypher_async.server import UrsulaServer
 from nucypher_async.utils.logging import Logger
 
 
 async def test_verified_nodes_iter(
-    nursery: trio.Nursery,
-    autojump_clock: trio.testing.MockClock,
-    fully_learned_ursulas: List[UrsulaServer],
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
+    fully_learned_ursulas: list[UrsulaServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
@@ -35,17 +37,16 @@ async def test_verified_nodes_iter(
     nodes = []
 
     with trio.fail_after(10):
-        async with verified_nodes_iter(learner, addresses) as aiter:
-            async for node in aiter:
+        async with verified_nodes_iter(learner, addresses) as verified_nodes:
+            async for node in verified_nodes:
                 nodes.append(node)
 
     assert len(nodes) == 3
 
 
 async def test_granting(
-    nursery: trio.Nursery,
-    autojump_clock: trio.testing.MockClock,
-    fully_learned_ursulas: List[UrsulaServer],
+    autojump_clock: trio.testing.MockClock,  # noqa: ARG001
+    fully_learned_ursulas: list[UrsulaServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_payment_client: MockPaymentClient,

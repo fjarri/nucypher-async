@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
 
 import trio
 
@@ -20,27 +19,21 @@ class BasePorterServer(ABC):
     """
 
     @abstractmethod
-    async def start(self, nursery: trio.Nursery) -> None:
-        ...
+    async def start(self, nursery: trio.Nursery) -> None: ...
 
     @abstractmethod
-    async def stop(self, nursery: trio.Nursery) -> None:
-        ...
+    async def stop(self) -> None: ...
 
     @abstractmethod
     async def endpoint_get_ursulas(
-        self, request_params: Dict[str, str], request_body: Optional[JSON]
-    ) -> JSON:
-        ...
+        self, request_params: dict[str, str], request_body: JSON | None
+    ) -> JSON: ...
 
     @abstractmethod
-    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
-        ...
+    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON: ...
 
     @abstractmethod
-    async def endpoint_status(self) -> str:
-        ...
+    async def endpoint_status(self) -> str: ...
 
     @abstractmethod
-    def logger(self) -> Logger:
-        ...
+    def logger(self) -> Logger: ...

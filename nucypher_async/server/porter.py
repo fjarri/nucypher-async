@@ -1,36 +1,35 @@
 import http
-from typing import Tuple, Optional, Dict, List
 
 import attrs
 import trio
 
-from ..base.types import JSON
-from ..base.http_server import BaseHTTPServer, ASGIFramework
+from .. import schema
+from ..base.http_server import ASGIFramework, BaseHTTPServer
 from ..base.porter import BasePorterServer
+from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..client.pre import retrieve_via_learner, RetrievalState
-from ..drivers.asgi_app import make_porter_asgi_app, HTTPError
-from ..utils import BackgroundTask
-from ..utils.logging import Logger
-from ..utils.ssl import SSLPrivateKey, SSLCertificate
-from ..p2p.learner import Learner
+from ..client.pre import RetrievalState, retrieve_via_learner
+from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
 from ..p2p.algorithms import (
     get_ursulas,
     learning_task,
-    verification_task,
     staker_query_task,
+    verification_task,
 )
-from .. import schema
+from ..p2p.learner import Learner
 from ..schema.porter import (
     GetUrsulasRequest,
-    UrsulaResult,
     GetUrsulasResponse,
     GetUrsulasResult,
+    RetrieveCFragsRequest,
+    ServerRetrievalResult,
     ServerRetrieveCFragsResponse,
     ServerRetrieveCFragsResult,
-    ServerRetrievalResult,
-    RetrieveCFragsRequest,
+    UrsulaResult,
 )
+from ..utils import BackgroundTask
+from ..utils.logging import Logger
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from .config import PorterServerConfig
 from .status import render_status
 
@@ -69,13 +68,13 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         self.started = False
 
-    def host_and_port(self) -> Tuple[str, int]:
+    def host_and_port(self) -> tuple[str, int]:
         return self._config.host, self._config.port
 
     def ssl_certificate(self) -> SSLCertificate:
         return self._config.ssl_certificate
 
-    def ssl_ca_chain(self) -> Optional[List[SSLCertificate]]:
+    def ssl_ca_chain(self) -> list[SSLCertificate] | None:
         return self._config.ssl_ca_chain
 
     def ssl_private_key(self) -> SSLPrivateKey:
@@ -88,7 +87,8 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         return self._logger
 
     async def start(self, nursery: trio.Nursery) -> None:
-        assert not self.started
+        if self.started:
+            raise RuntimeError("The loop is already started")
 
         await self.learner.seed_round(must_succeed=True)
 
@@ -99,8 +99,9 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         self.started = True
 
-    async def stop(self, nursery: trio.Nursery) -> None:
-        assert self.started
+    async def stop(self) -> None:
+        if not self.started:
+            raise RuntimeError("The loop is not started")
 
         await self._verification_task.stop()
         await self._learning_task.stop()
@@ -109,7 +110,7 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         self.started = False
 
     async def endpoint_get_ursulas(
-        self, request_params: Dict[str, str], request_body: Optional[JSON]
+        self, request_params: dict[str, str], request_body: JSON | None
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)

@@ -1,9 +1,10 @@
-from typing import Dict, Set, Tuple, List, cast
+from typing import cast
 
-from pons import Address, Amount, ContractABI, Client
+from ethereum_rpc import Address, Amount
+from pons import Client, ContractABI
 
 from ..domain import Domain
-from ..drivers.identity import IdentityClient, IdentityAddress, AmountT
+from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from .eth import MockBackend, MockContract
 
 
@@ -11,33 +12,33 @@ class SimplePREApplication(MockContract):
     def __init__(self, abi: ContractABI):
         super().__init__(abi)
         self._min_stake = Amount.ether(40000)
-        self._approved_staking_providers: Dict[Address, Amount] = {}
-        self._stakes: Dict[Address, Amount] = {}
-        self._staking_provider_to_operator: Dict[Address, Address] = {}
-        self._operator_to_staking_provider: Dict[Address, Address] = {}
-        self._confirmed_operators: Set[Address] = set()
+        self._approved_staking_providers: dict[Address, Amount] = {}
+        self._stakes: dict[Address, Amount] = {}
+        self._staking_provider_to_operator: dict[Address, Address] = {}
+        self._operator_to_staking_provider: dict[Address, Address] = {}
+        self._confirmed_operators: set[Address] = set()
 
-    def authorizedStake(self, staking_provider_address: Address) -> int:
+    def authorizedStake(self, staking_provider_address: Address) -> int:  # noqa: N802
         return self._stakes[staking_provider_address].as_wei()
 
-    def stakingProviderFromOperator(self, operator_address: Address) -> Address:
+    def stakingProviderFromOperator(self, operator_address: Address) -> Address:  # noqa: N802
         return self._operator_to_staking_provider[operator_address]
 
-    def getOperatorFromStakingProvider(self, staking_provider_address: Address) -> Address:
+    def getOperatorFromStakingProvider(self, staking_provider_address: Address) -> Address:  # noqa: N802
         return self._staking_provider_to_operator[staking_provider_address]
 
-    def isAuthorized(self, staking_provider_address: Address) -> bool:
+    def isAuthorized(self, staking_provider_address: Address) -> bool:  # noqa: N802
         return (
             staking_provider_address in self._stakes
             and self._stakes[staking_provider_address] >= self._min_stake
         )
 
-    def isOperatorConfirmed(self, operator_address: Address) -> bool:
+    def isOperatorConfirmed(self, operator_address: Address) -> bool:  # noqa: N802
         return operator_address in self._confirmed_operators
 
-    def getActiveStakingProviders(
-        self, start_index: int, max_staking_providers: int
-    ) -> Tuple[int, List[Tuple[int, int]]]:
+    def getActiveStakingProviders(  # noqa: N802
+        self, _start_index: int, _max_staking_providers: int
+    ) -> tuple[int, list[tuple[int, int]]]:
         # TODO: support pagination
         total = sum(amount.as_wei() for amount in self._stakes.values())
         return total, [
@@ -75,7 +76,7 @@ class SimplePREApplication(MockContract):
 class MockIdentityClient(IdentityClient):
     def __init__(self) -> None:
         mock_backend = MockBackend()
-        super().__init__(cast(Client, mock_backend), Domain.MAINNET)
+        super().__init__(cast("Client", mock_backend), Domain.MAINNET)
 
         self._mock_backend = mock_backend
 
@@ -91,7 +92,7 @@ class MockIdentityClient(IdentityClient):
         amount_t: AmountT,
     ) -> None:
         """
-        This essentially includes 4 operations:
+        Includes 4 operations:
         - approve T for staking (in the T contract)
         - stake (in the TokenStaking contract)
         - bond staking provider with operator (in the PREApplication contract)

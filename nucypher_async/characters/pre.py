@@ -1,35 +1,34 @@
-from typing import Optional, Iterable, List, Mapping, Tuple
+from collections.abc import Iterable, Mapping
 
 from attrs import frozen
-
 from nucypher_core import (
-    Address,
-    TreasureMap,
-    MessageKit,
     HRAC,
-    EncryptedTreasureMap,
+    Address,
     EncryptedKeyFrag,
+    EncryptedTreasureMap,
+    MessageKit,
+    TreasureMap,
 )
 from nucypher_core.umbral import (
-    generate_kfrags,
-    PublicKey,
     Capsule,
-    VerifiedKeyFrag,
-    VerifiedCapsuleFrag,
+    PublicKey,
     RecoverableSignature,
+    VerifiedCapsuleFrag,
+    VerifiedKeyFrag,
+    generate_kfrags,
     reencrypt,
 )
 
-from ..drivers.peer import PeerPrivateKey
 from ..drivers.identity import IdentityAccount
 from ..drivers.payment import PaymentAccount, PaymentAccountSigner
+from ..drivers.peer import PeerPrivateKey
 from ..master_key import MasterKey
 
 
 @frozen
 class Policy:
     hrac: HRAC
-    key_frags: List[VerifiedKeyFrag]
+    key_frags: list[VerifiedKeyFrag]
     encrypting_key: PublicKey
     threshold: int
 
@@ -99,7 +98,7 @@ class Publisher:
         self,
         policy: Policy,
         recipient_card: "RecipientCard",
-        assigned_kfrags: Mapping[Address, Tuple[PublicKey, VerifiedKeyFrag]],
+        assigned_kfrags: Mapping[Address, tuple[PublicKey, VerifiedKeyFrag]],
     ) -> EncryptedTreasureMap:
         treasure_map = TreasureMap(
             signer=self._signer,
@@ -160,8 +159,8 @@ class RecipientCard:
 class Ursula:
     def __init__(
         self,
-        master_key: Optional[MasterKey] = None,
-        identity_account: Optional[IdentityAccount] = None,
+        master_key: MasterKey | None = None,
+        identity_account: IdentityAccount | None = None,
     ):
         self.__master_key = master_key or MasterKey.random()
         identity_account_ = identity_account or IdentityAccount.random()
@@ -191,7 +190,7 @@ class Ursula:
 
     def reencrypt(
         self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
-    ) -> List[VerifiedCapsuleFrag]:
+    ) -> list[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
     def __str__(self) -> str:

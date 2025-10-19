@@ -1,18 +1,18 @@
-from nucypher_core import NodeMetadataPayload, NodeMetadata, Address
-from nucypher_core.umbral import Signer, PublicKey, RecoverableSignature
+from nucypher_core import Address, NodeMetadata, NodeMetadataPayload
 from nucypher_core.ferveo import FerveoPublicKey
+from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
+from ..characters.pre import Ursula
+from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import (
     Contact,
-    SecureContact,
     PeerError,
     PeerPrivateKey,
     PeerPublicKey,
+    SecureContact,
 )
-from ..domain import Domain
-from ..characters.pre import Ursula
 from .ursula import UrsulaInfo
 
 
@@ -71,8 +71,7 @@ def _verify_peer_shared(
 
     if now < ursula_info.public_key.not_valid_before:
         raise PeerVerificationError(
-            "Peer public key will only become active "
-            f"at {ursula_info.public_key.not_valid_before}"
+            f"Peer public key will only become active at {ursula_info.public_key.not_valid_before}"
         )
 
     if now > ursula_info.public_key.not_valid_after:
@@ -138,8 +137,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
 
         if ursula_info.public_key != received_from.public_key:
             raise PeerVerificationError(
-                "Peer public key mismatch between the payload "
-                "and the contact it was received from"
+                "Peer public key mismatch between the payload and the contact it was received from"
             )
 
         return cls(ursula_info.metadata)

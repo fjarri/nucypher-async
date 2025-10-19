@@ -1,28 +1,28 @@
 from functools import cached_property
-from typing import TypeVar, Type, Protocol, List, Optional
+from typing import Protocol, TypeVar
 
 import arrow
 from nucypher_core import (
-    NodeMetadata,
-    MetadataRequest,
-    MetadataResponse,
-    ReencryptionRequest,
-    ReencryptionResponse,
-    NodeMetadataPayload,
-    FleetStateChecksum,
-    TreasureMap,
     Address,
     Conditions,
     Context,
+    FleetStateChecksum,
+    MetadataRequest,
+    MetadataResponse,
+    NodeMetadata,
+    NodeMetadataPayload,
+    ReencryptionRequest,
+    ReencryptionResponse,
+    TreasureMap,
 )
-from nucypher_core.umbral import PublicKey, Capsule, VerifiedCapsuleFrag
+from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
 from ..base.peer_error import InvalidMessage
 from ..base.ursula import UrsulaRoutes
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
-from ..drivers.peer import Contact, SecureContact, PeerPublicKey, PeerClient
 from ..drivers.identity import IdentityAddress
+from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
 
 
 class UrsulaInfo:
@@ -86,12 +86,11 @@ DeserializableT_co = TypeVar("DeserializableT_co", covariant=True)
 
 class Deserializable(Protocol[DeserializableT_co]):
     @classmethod
-    def from_bytes(cls, data: bytes) -> DeserializableT_co:
-        ...
+    def from_bytes(cls, data: bytes) -> DeserializableT_co: ...
 
 
 def unwrap_bytes(
-    message_bytes: bytes, cls: Type[Deserializable[DeserializableT_co]]
+    message_bytes: bytes, cls: type[Deserializable[DeserializableT_co]]
 ) -> DeserializableT_co:
     try:
         message = cls.from_bytes(message_bytes)
@@ -113,12 +112,12 @@ class UrsulaClient:
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:
-            raise InvalidMessage.for_message(str, exc)
+            raise InvalidMessage.for_message(str, exc) from exc
 
     async def get_ursulas_info(
         self,
         ursula: UrsulaInfo,
-    ) -> List[UrsulaInfo]:
+    ) -> list[UrsulaInfo]:
         response_bytes = await self._peer_client.communicate(
             ursula.secure_contact, UrsulaRoutes.NODE_METADATA
         )
@@ -137,7 +136,7 @@ class UrsulaClient:
         ursula: UrsulaInfo,
         fleet_state_checksum: FleetStateChecksum,
         this_ursula: UrsulaInfo,
-    ) -> List[UrsulaInfo]:
+    ) -> list[UrsulaInfo]:
         # TODO: should `this_ursula` be narrowed down to VerifiedUrsulaInfo?
         request = MetadataRequest(fleet_state_checksum, [this_ursula.metadata])
         response_bytes = await self._peer_client.communicate(
@@ -163,20 +162,20 @@ class UrsulaClient:
     async def reencrypt(
         self,
         ursula: UrsulaInfo,
-        capsules: List[Capsule],
+        capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
-        conditions: Optional[Conditions] = None,
-        context: Optional[Context] = None,
-    ) -> List[VerifiedCapsuleFrag]:
+        conditions: Conditions | None = None,
+        context: Context | None = None,
+    ) -> list[VerifiedCapsuleFrag]:
         # TODO: should we narrow down `ursula` to `VerifiedUrsulaInfo`?
         try:
             ekfrag = treasure_map.destinations[Address(bytes(ursula.staking_provider_address))]
         except KeyError as exc:
             raise ValueError(
                 f"The provided treasure map does not list Ursula {ursula.staking_provider_address}"
-            )
+            ) from exc
 
         request = ReencryptionRequest(
             capsules=capsules,
@@ -214,4 +213,4 @@ class UrsulaClient:
         except UnicodeDecodeError as exc:
             # TODO: the error contents is the HTML page with Mako traceback,
             # process it accordingly.
-            raise InvalidMessage.for_message(str, exc)
+            raise InvalidMessage.for_message(str, exc) from exc

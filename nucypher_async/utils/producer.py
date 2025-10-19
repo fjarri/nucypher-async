@@ -1,30 +1,21 @@
 import sys
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from functools import wraps
-from typing import (
-    Callable,
-    TypeVar,
-    Union,
-    Tuple,
-    Type,
-    AsyncIterator,
-    Any,
-    Awaitable,
-    AsyncContextManager,
-)
-from types import TracebackType
+from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
-from typing_extensions import ParamSpec, Concatenate
 import trio
 
+if TYPE_CHECKING:
+    from types import TracebackType
 
 Param = ParamSpec("Param")
 RetType = TypeVar("RetType")
 
 
 def producer(
-    wrapped: Callable[Concatenate[Callable[[RetType], Awaitable[None]], Param], Awaitable[None]]
-) -> Callable[Param, AsyncContextManager[trio.abc.ReceiveChannel[RetType]]]:
+    wrapped: Callable[Concatenate[Callable[[RetType], Awaitable[None]], Param], Awaitable[None]],
+) -> Callable[Param, AbstractAsyncContextManager[trio.abc.ReceiveChannel[RetType]]]:
     """
     Trio does not allow yielding from inside open nurseries,
     so this function is used to emulate the functionality of an async generator
@@ -38,16 +29,16 @@ def producer(
     @wraps(wrapped)
     async def wrapper(*args: Any, **kwds: Any) -> AsyncIterator[trio.abc.ReceiveChannel[RetType]]:
         send_channel, receive_channel = trio.open_memory_channel[RetType](0)
-        exc_info: Union[
-            Tuple[Type[BaseException], BaseException, TracebackType], Tuple[None, None, None]
-        ] = (None, None, None)
+        exc_info: (
+            tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None]
+        ) = (None, None, None)
 
         async def worker() -> None:
             nonlocal exc_info
             with send_channel:
                 try:
                     await wrapped(send_channel.send, *args, **kwds)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     # If we just let it raise here, this exception may be ignored.
                     # Instead, we're saving the traceback to raise it after the nursery is closed.
                     exc_info = sys.exc_info()

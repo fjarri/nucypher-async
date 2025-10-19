@@ -1,14 +1,15 @@
-from pathlib import Path
+import importlib.metadata
 import subprocess
-from typing import Optional, List, Sequence
+from collections.abc import Sequence
+from pathlib import Path
 
 from attrs import frozen
-import pkg_resources
 
 
 def _run_in_project_dir(cmd: Sequence[str]) -> str:
     cwd = Path(__file__).parent
-    results = subprocess.run(cmd, capture_output=True, cwd=cwd, check=True)
+    # TODO: use some library that queries git instead of just calling it
+    results = subprocess.run(cmd, capture_output=True, cwd=cwd, check=True)  # noqa: S603
     return results.stdout.strip().decode()
 
 
@@ -23,12 +24,12 @@ class FileDiff:
 class CodeInfo:
     version: str
     release: bool
-    git_revision: Optional[str]
-    diff: List[FileDiff]
+    git_revision: str | None
+    diff: list[FileDiff]
 
     @classmethod
     def collect(cls) -> "CodeInfo":
-        version = pkg_resources.get_distribution("nucypher-async").version
+        version = importlib.metadata.version("nucypher-async")
         revision = git_revision()
 
         if revision:
@@ -42,7 +43,7 @@ class CodeInfo:
         return cls(version=version, release=release, git_revision=revision, diff=diff)
 
 
-def git_revision() -> Optional[str]:
+def git_revision() -> str | None:
     try:
         revision = _run_in_project_dir(["git", "rev-parse", "HEAD"])
     except OSError:
@@ -50,7 +51,7 @@ def git_revision() -> Optional[str]:
     return revision or None
 
 
-def git_tag() -> Optional[str]:
+def git_tag() -> str | None:
     try:
         tag = _run_in_project_dir(["git", "tag", "--points-at", "HEAD"])
     except OSError:
@@ -58,7 +59,7 @@ def git_tag() -> Optional[str]:
     return tag or None
 
 
-def git_diff() -> List[FileDiff]:
+def git_diff() -> list[FileDiff]:
     try:
         diff_str = _run_in_project_dir(["git", "diff", "--numstat"])
     except OSError:

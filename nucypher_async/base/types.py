@@ -1,4 +1,1 @@
-from typing import Union, List, Dict
-
-
-JSON = Union[str, int, float, bool, None, List["JSON"], Dict[str, "JSON"]]
+JSON = str | int | float | bool | None | list["JSON"] | dict[str, "JSON"]

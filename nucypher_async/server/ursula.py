@@ -1,31 +1,33 @@
-from typing import Optional
-
 import trio
 from nucypher_core import (
-    NodeMetadata,
     MetadataRequest,
-    MetadataResponsePayload,
     MetadataResponse,
+    MetadataResponsePayload,
+    NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
 )
 
-from ..base.peer_error import InactivePolicy, GenericPeerError
+from ..base.peer_error import GenericPeerError, InactivePolicy
+from ..characters.pre import PublisherCard, Ursula
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import (
     BasePeerAndUrsulaServer,
-    SecureContact,
     PeerPrivateKey,
+    SecureContact,
 )
-from ..characters.pre import Ursula, PublisherCard
+from ..p2p.algorithms import learning_task, verification_task
+from ..p2p.learner import Learner
+from ..p2p.ursula import UrsulaInfo
+from ..p2p.verification import (
+    PeerVerificationError,
+    VerifiedUrsulaInfo,
+    verify_staking_local,
+)
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from ..p2p.ursula import UrsulaInfo
-from ..p2p.learner import Learner
-from ..p2p.algorithms import verification_task, learning_task
-from ..p2p.verification import VerifiedUrsulaInfo, verify_staking_local, PeerVerificationError
-from .status import render_status
 from .config import UrsulaServerConfig
+from .status import render_status
 
 
 class UrsulaServer(BasePeerAndUrsulaServer):
@@ -53,7 +55,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         self._storage = config.storage
 
         ursula_info = self._storage.get_my_ursula_info()
-        maybe_node: Optional[VerifiedUrsulaInfo] = None
+        maybe_node: VerifiedUrsulaInfo | None = None
         if ursula_info is not None:
             self._logger.debug("Found existing metadata, verifying")
             try:
@@ -66,8 +68,9 @@ class UrsulaServer(BasePeerAndUrsulaServer):
                     domain=config.domain,
                 )
             except PeerVerificationError as exc:
-                self._logger.warn(
-                    f"Obsolete/invalid metadata found ({exc}), updating",
+                self._logger.warning(
+                    "Obsolete/invalid metadata found ({}), updating",
+                    exc,
                     exc_info=True,
                 )
 
@@ -124,7 +127,8 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         return self._logger
 
     async def start(self, nursery: trio.Nursery) -> None:
-        assert not self.started
+        if self.started:
+            raise RuntimeError("The loop is already started")
 
         self._logger.debug("Starting tasks")
 
@@ -137,16 +141,17 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
         self.started = True
 
-    async def stop(self, nursery: trio.Nursery) -> None:
-        assert self.started
+    async def stop(self) -> None:
+        if not self.started:
+            raise RuntimeError("The loop is not started")
         await self._learning_task.stop()
         await self._verification_task.stop()
         self.started = False
 
-    async def endpoint_ping(self, remote_host: Optional[str]) -> bytes:
+    async def endpoint_ping(self, remote_host: str | None) -> bytes:
         if remote_host:
             return remote_host.encode()
-        raise GenericPeerError()
+        raise GenericPeerError
 
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [
@@ -156,11 +161,10 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
-        response = MetadataResponse(self.ursula.signer, response_payload)
-        return response
+        return MetadataResponse(self.ursula.signer, response_payload)
 
     async def node_metadata_post(
-        self, remote_host: Optional[str], request: MetadataRequest
+        self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse:
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
@@ -200,12 +204,10 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         # TODO: catch reencryption errors (if any) and raise RPC error here
         vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=request.capsules)
 
-        response = ReencryptionResponse(
+        return ReencryptionResponse(
             signer=self.ursula.signer,
-            capsules_and_vcfrags=list(zip(request.capsules, vcfrags)),
+            capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
         )
-
-        return response
 
     async def endpoint_status(self) -> str:
         return render_status(
