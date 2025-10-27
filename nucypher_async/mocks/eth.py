@@ -26,17 +26,17 @@ class MockContract:
     def call(self, data_bytes: bytes) -> bytes:
         method, input_bytes = self._dispatch(data_bytes)
         assert not method.mutating
-        args = method.inputs.decode_into_tuple(input_bytes)
+        args = method.inputs.decode(input_bytes).as_tuple
         result = getattr(self, method.name)(*args)
         # Note: assuming here that if the result is a tuple,
         # it's supposed to be encoded as several values.
         # Should be fine for tests.
         results = result if isinstance(result, tuple) else (result,)
-        return method.outputs.encode(*results)
+        return method.outputs.encode(results)
 
     def transact(self, address: Address, amount: Amount, data_bytes: bytes) -> None:
         method, input_bytes = self._dispatch(data_bytes)
-        args = method.inputs.decode_into_tuple(input_bytes)
+        args = method.inputs.decode(input_bytes).as_tuple
         getattr(self, method.name)(address, amount, *args)
 
 

@@ -25,12 +25,12 @@ from pons import (
     ClientSession,
     ContractABI,
     DeployedContract,
-    HTTPProvider,
     Method,
     Mutability,
     Signer,
     abi,
 )
+from pons.http_provider import HTTPProvider
 
 from ..domain import Domain
 
