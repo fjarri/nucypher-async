@@ -15,7 +15,7 @@ dependencies = [
     "pynacl>=1.5",
     "mnemonic>=0.20",
     "eth-account>=0.6",
-    "pons>=0.10",
+    "pons[http-provider]>=0.11",
     "ethereum_rpc>=0.1.1",
     "platformdirs>=2",
     "mako>=1",
@@ -31,7 +31,7 @@ license = "GPL-3.0-only"
 
 [project.optional-dependencies]
 tests = [
-    "alysis>=0.6.1",
+    "pons[local-provider]>=0.11",
     "pytest>=6",
     "pytest-trio",
     "pytest-cov",
