@@ -8,7 +8,7 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import IdentityClient
 from ..drivers.payment import PaymentClient
-from ..drivers.peer import Contact, PeerClient
+from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
@@ -64,9 +64,74 @@ def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseS
 
 
 @frozen
+class PeerServerConfig:
+    bind_as: str
+    contact: Contact
+    ssl_certificate: SSLCertificate | None
+    ssl_private_key: SSLPrivateKey | None
+    ssl_ca_chain: list[SSLCertificate] | None
+
+    @classmethod
+    def from_config_values(
+        cls,
+        *,
+        bind_as: str = "127.0.0.1",
+        external_host: str,
+        port: int,
+        ssl_private_key_path: str | Path | None,
+        ssl_certificate_path: str | Path | None,
+        ssl_ca_chain_path: str | Path | None = None,
+    ) -> "PeerServerConfig":
+        ssl_private_key: SSLPrivateKey | None
+        if ssl_private_key_path is not None:
+            with Path(ssl_private_key_path).open("rb") as pk_file:
+                ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
+        else:
+            ssl_private_key = None
+
+        ssl_certificate: SSLCertificate | None
+        if ssl_certificate_path is not None:
+            with Path(ssl_certificate_path).open("rb") as cert_file:
+                ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
+            if ssl_certificate.declared_host != external_host:
+                raise ValueError(
+                    "The declared external host is `{external_host}`, "
+                    "but the given SSL certificate has `{ssl_certificate.declared_host}`"
+                )
+            # TODO: check that the SSL certificate corresponds to the given private key
+        else:
+            ssl_certificate = None
+
+        ssl_ca_chain: list[SSLCertificate] | None
+        if ssl_ca_chain_path is not None:
+            with Path(ssl_ca_chain_path).open("rb") as chain_file:
+                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
+                # TODO: check that they are in the correct order? (root certificate last)
+        else:
+            ssl_ca_chain = None
+
+        contact = Contact(external_host, port)
+
+        return cls(
+            bind_as=bind_as,
+            contact=contact,
+            ssl_private_key=ssl_private_key,
+            ssl_certificate=ssl_certificate,
+            ssl_ca_chain=ssl_ca_chain,
+        )
+
+    @property
+    def peer_public_key(self) -> PeerPublicKey | None:
+        return PeerPublicKey(self.ssl_certificate) if self.ssl_certificate else None
+
+    @property
+    def peer_private_key(self) -> PeerPrivateKey | None:
+        return PeerPrivateKey(self.ssl_private_key) if self.ssl_private_key else None
+
+
+@frozen
 class UrsulaServerConfig:
     domain: Domain
-    contact: Contact
     identity_client: IdentityClient
     payment_client: PaymentClient
     peer_client: PeerClient
@@ -81,8 +146,6 @@ class UrsulaServerConfig:
         *,
         identity_endpoint: str,
         payment_endpoint: str,
-        host: str,
-        port: int = 9151,
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
@@ -97,7 +160,6 @@ class UrsulaServerConfig:
         ] = PaymentClient.from_endpoint,
     ) -> "UrsulaServerConfig":
         domain_ = Domain.from_string(domain)
-        contact = Contact(host, port)
         identity_client = identity_client_factory(identity_endpoint, domain_)
         payment_client = payment_client_factory(payment_endpoint, domain_)
         logger = make_logger(
@@ -113,7 +175,6 @@ class UrsulaServerConfig:
 
         return cls(
             domain=domain_,
-            contact=contact,
             identity_client=identity_client,
             payment_client=payment_client,
             peer_client=peer_client,
@@ -127,11 +188,6 @@ class UrsulaServerConfig:
 @frozen
 class PorterServerConfig:
     domain: Domain
-    host: str
-    port: int
-    ssl_certificate: SSLCertificate
-    ssl_private_key: SSLPrivateKey
-    ssl_ca_chain: list[SSLCertificate] | None
     identity_client: IdentityClient
     peer_client: PeerClient
     parent_logger: Logger
@@ -144,17 +200,12 @@ class PorterServerConfig:
         cls,
         *,
         identity_endpoint: str,
-        ssl_certificate_path: str | Path,
-        ssl_private_key_path: str | Path,
-        ssl_ca_chain_path: str | Path | None = None,
         debug: bool = False,
         profile_name: str = "porter",
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
         persistent_storage: bool = True,
-        host: str = "0.0.0.0",  # noqa: S104
-        port: int = 443,
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
@@ -172,30 +223,8 @@ class PorterServerConfig:
         seed_contacts = seed_contacts_for_domain(domain_)
         peer_client = PeerClient()
 
-        ssl_certificate_path = Path(ssl_certificate_path)
-        ssl_private_key_path = Path(ssl_private_key_path)
-
-        with ssl_certificate_path.open("rb") as cert_file:
-            ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
-
-        with ssl_private_key_path.open("rb") as pk_file:
-            ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
-
-        if ssl_ca_chain_path is not None:
-            ssl_ca_chain_path = Path(ssl_ca_chain_path)
-            with ssl_ca_chain_path.open("rb") as chain_file:
-                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
-                # TODO: check that they are in the correct order? (root certificate last)
-        else:
-            ssl_ca_chain = None
-
         return cls(
             domain=domain_,
-            host=host,
-            port=port,
-            ssl_certificate=ssl_certificate,
-            ssl_private_key=ssl_private_key,
-            ssl_ca_chain=ssl_ca_chain,
             identity_client=identity_client,
             peer_client=peer_client,
             parent_logger=logger,

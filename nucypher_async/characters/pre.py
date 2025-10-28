@@ -177,7 +177,7 @@ class Ursula:
             identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
         )
 
-    def peer_private_key(self) -> PeerPrivateKey:
+    def make_peer_private_key(self) -> PeerPrivateKey:
         return self.__master_key.make_peer_private_key()
 
     def decrypt_kfrag(

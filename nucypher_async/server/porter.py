@@ -30,12 +30,12 @@ from ..schema.porter import (
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from .config import PorterServerConfig
+from .config import PeerServerConfig, PorterServerConfig
 from .status import render_status
 
 
 class PorterServer(BaseHTTPServer, BasePorterServer):
-    def __init__(self, config: PorterServerConfig):
+    def __init__(self, peer_server_config: PeerServerConfig, config: PorterServerConfig):
         self._clock = config.clock
         self._config = config
         self._logger = config.parent_logger.get_child("PorterServer")
@@ -48,6 +48,21 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
             clock=config.clock,
             storage=config.storage,
         )
+
+        self._contact = peer_server_config.contact
+
+        # TODO: generate self-signed ones if these are missing in the config
+        if peer_server_config.ssl_private_key is not None:
+            self._ssl_private_key = peer_server_config.ssl_private_key
+        else:
+            raise NotImplementedError
+
+        if peer_server_config.ssl_certificate is not None:
+            self._ssl_certificate = peer_server_config.ssl_certificate
+        else:
+            raise NotImplementedError
+
+        self._ssl_ca_chain = peer_server_config.ssl_ca_chain
 
         self._domain = config.domain
 
@@ -69,16 +84,16 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
         self.started = False
 
     def host_and_port(self) -> tuple[str, int]:
-        return self._config.host, self._config.port
+        return self._contact.host, self._contact.port
 
     def ssl_certificate(self) -> SSLCertificate:
-        return self._config.ssl_certificate
+        return self._ssl_certificate
 
     def ssl_ca_chain(self) -> list[SSLCertificate] | None:
-        return self._config.ssl_ca_chain
+        return self._ssl_ca_chain
 
     def ssl_private_key(self) -> SSLPrivateKey:
-        return self._config.ssl_private_key
+        return self._ssl_private_key
 
     def into_asgi_app(self) -> ASGIFramework:
         return make_porter_asgi_app(self)
