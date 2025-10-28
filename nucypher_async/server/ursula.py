@@ -11,19 +11,11 @@ from nucypher_core import (
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..characters.pre import PublisherCard, Ursula
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import (
-    BasePeerAndUrsulaServer,
-    PeerPrivateKey,
-    SecureContact,
-)
+from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
 from ..p2p.ursula import UrsulaInfo
-from ..p2p.verification import (
-    PeerVerificationError,
-    VerifiedUrsulaInfo,
-    verify_staking_local,
-)
+from ..p2p.verification import PeerVerificationError, VerifiedUrsulaInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from .config import PeerServerConfig, UrsulaServerConfig

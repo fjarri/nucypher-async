@@ -153,6 +153,10 @@ exclude = [
     "PLR2004",
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["nucypher_async"]
+split-on-trailing-comma = false
+
 [tool.mypy]
 strict = true
 warn_unreachable = true

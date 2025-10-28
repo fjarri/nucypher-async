@@ -6,13 +6,7 @@ from ..base.time import BaseClock
 from ..characters.pre import Ursula
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
-from ..drivers.peer import (
-    Contact,
-    PeerError,
-    PeerPrivateKey,
-    PeerPublicKey,
-    SecureContact,
-)
+from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
 from .ursula import UrsulaInfo
 
 

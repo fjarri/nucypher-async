@@ -11,10 +11,7 @@ from nucypher_core import (
     RetrievalKit,
     TreasureMap,
 )
-from nucypher_core.umbral import (
-    PublicKey,
-    VerifiedCapsuleFrag,
-)
+from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from ..characters.pre import (
     DelegatorCard,

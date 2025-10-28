@@ -9,11 +9,7 @@ from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 from .. import schema
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..drivers.identity import IdentityAddress
-from ..schema.porter import (
-    ClientRetrieveCFragsResponse,
-    GetUrsulasResponse,
-    RetrieveCFragsRequest,
-)
+from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
 
 class PorterClient:

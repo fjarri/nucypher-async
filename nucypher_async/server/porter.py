@@ -10,12 +10,7 @@ from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..client.pre import RetrievalState, retrieve_via_learner
 from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..p2p.algorithms import (
-    get_ursulas,
-    learning_task,
-    staker_query_task,
-    verification_task,
-)
+from ..p2p.algorithms import get_ursulas, learning_task, staker_query_task, verification_task
 from ..p2p.learner import Learner
 from ..schema.porter import (
     GetUrsulasRequest,

@@ -20,15 +20,7 @@ from eth_account._utils.signing import to_standard_signature_bytes
 from eth_account.messages import encode_defunct
 from eth_account.signers.base import BaseAccount
 from ethereum_rpc import Address, Amount
-from pons import (
-    Client,
-    ClientSession,
-    ContractABI,
-    DeployedContract,
-    Method,
-    Mutability,
-    abi,
-)
+from pons import Client, ClientSession, ContractABI, DeployedContract, Method, Mutability, abi
 from pons.http_provider import HTTPProvider
 
 from ..domain import Domain

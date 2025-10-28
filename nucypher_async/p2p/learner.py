@@ -13,12 +13,7 @@ from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils.logging import NULL_LOGGER, Logger
-from .fleet_sensor import (
-    FleetSensor,
-    FleetSensorSnapshot,
-    NodeEntry,
-    StakingProviderEntry,
-)
+from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
 from .ursula import UrsulaClient, UrsulaInfo
 from .verification import VerifiedUrsulaInfo, verify_staking_remote
