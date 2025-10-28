@@ -10,7 +10,13 @@ from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .drivers.peer import UrsulaHTTPServer
 from .master_key import EncryptedMasterKey, MasterKey
-from .server import PorterServer, PorterServerConfig, UrsulaServer, UrsulaServerConfig
+from .server import (
+    PeerServerConfig,
+    PorterServer,
+    PorterServerConfig,
+    UrsulaServer,
+    UrsulaServerConfig,
+)
 
 
 async def make_ursula_server(
@@ -19,6 +25,7 @@ async def make_ursula_server(
     async with await trio.Path(config_path).open(encoding="utf-8") as file:
         config = json.loads(await file.read())
 
+    # TODO: too low level for this method, extract into a classmethod constructor?
     signer = config["signer_uri"]
     assert signer.startswith("keystore://")
     signer = signer[len("keystore://") :]
@@ -35,11 +42,18 @@ async def make_ursula_server(
 
     local_ursula = Ursula(master_key=key, identity_account=acc)
 
+    # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
+    peer_server_config = PeerServerConfig.from_config_values(
+        external_host=config["rest_host"],
+        port=config["rest_port"],
+        ssl_certificate_path=config.get("ssl_certificate", None),
+        ssl_private_key_path=config.get("ssl_private_key", None),
+        ssl_ca_chain_path=config.get("ssl_ca_chain", None),
+    )
+
     config = UrsulaServerConfig.from_config_values(
         profile_name=config.get("profile_name", "ursula-" + config["domain"]),
         domain=config["domain"],
-        host=config["rest_host"],
-        port=config["rest_port"],
         identity_endpoint=config["eth_provider_uri"],
         payment_endpoint=config["payment_provider"],
         log_to_console=True,
@@ -48,24 +62,31 @@ async def make_ursula_server(
         debug=config.get("debug", False),
     )
 
-    return await UrsulaServer.async_init(ursula=local_ursula, config=config)
+    return await UrsulaServer.async_init(
+        ursula=local_ursula, peer_server_config=peer_server_config, config=config
+    )
 
 
 def make_porter_server(config_path: str) -> PorterServer:
     with Path(config_path).open(encoding="utf-8") as file:
         config = json.load(file)
 
+    peer_server_config = PeerServerConfig.from_config_values(
+        external_host=config["rest_host"],
+        port=config["rest_port"],
+        ssl_certificate_path=config["ssl_certificate"],
+        ssl_private_key_path=config["ssl_private_key"],
+        ssl_ca_chain_path=config.get("ssl_ca_chain", None),
+    )
+
     config = PorterServerConfig.from_config_values(
         profile_name=config.get("profile_name", "porter-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
-        ssl_certificate_path=config["ssl_certificate"],
-        ssl_private_key_path=config["ssl_private_key"],
-        ssl_ca_chain_path=config.get("ssl_ca_chain", None),
         debug=config.get("debug", False),
     )
 
-    return PorterServer(config)
+    return PorterServer(peer_server_config=peer_server_config, config=config)
 
 
 @click.group()

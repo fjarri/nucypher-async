@@ -18,6 +18,7 @@ from nucypher_async.mocks import (
     MockPeerClient,
 )
 from nucypher_async.server import (
+    PeerServerConfig,
     PorterServer,
     PorterServerConfig,
     UrsulaServer,
@@ -77,9 +78,16 @@ async def lonely_ursulas(
             staking_provider_address, ursulas[i].operator_address, AmountT.ether(40000)
         )
 
+        peer_server_config = PeerServerConfig(
+            bind_as="127.0.0.1",
+            contact=Contact("127.0.0.1", 9150 + i),
+            ssl_certificate=None,
+            ssl_private_key=None,
+            ssl_ca_chain=None,
+        )
+
         config = UrsulaServerConfig(
             domain=Domain.MAINNET,
-            contact=Contact("127.0.0.1", 9150 + i),
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
             payment_client=mock_payment_client,
@@ -90,7 +98,9 @@ async def lonely_ursulas(
             clock=mock_clock,
         )
 
-        server = await UrsulaServer.async_init(ursula=ursulas[i], config=config)
+        server = await UrsulaServer.async_init(
+            ursula=ursulas[i], peer_server_config=peer_server_config, config=config
+        )
         handle = mock_network.add_server(UrsulaHTTPServer(server))
         servers.append((handle, server))
 
@@ -155,13 +165,16 @@ async def porter_server(
     ssl_private_key = SSLPrivateKey.from_seed(b"1231234")
     ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
 
+    peer_server_config = PeerServerConfig(
+        bind_as="127.0.0.1",
+        contact=Contact(host, port),
+        ssl_certificate=ssl_certificate,
+        ssl_private_key=ssl_private_key,
+        ssl_ca_chain=None,
+    )
+
     config = PorterServerConfig(
         domain=Domain.MAINNET,
-        host=host,
-        port=port,
-        ssl_private_key=ssl_private_key,
-        ssl_certificate=ssl_certificate,
-        ssl_ca_chain=None,
         identity_client=mock_identity_client,
         peer_client=MockPeerClient(mock_network, host),
         parent_logger=logger,
@@ -169,7 +182,7 @@ async def porter_server(
         seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
         clock=mock_clock,
     )
-    server = PorterServer(config)
+    server = PorterServer(peer_server_config=peer_server_config, config=config)
 
     handle = mock_network.add_server(server)
 

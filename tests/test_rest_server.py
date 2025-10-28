@@ -11,16 +11,22 @@ from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPaymentClient
 from nucypher_async.p2p.ursula import UrsulaClient
-from nucypher_async.server import UrsulaServer, UrsulaServerConfig
+from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
 @pytest.fixture
 def ursula_server() -> UrsulaServer:
+    peer_server_config = PeerServerConfig(
+        bind_as="127.0.0.1",
+        contact=Contact("127.0.0.1", 9151),
+        ssl_certificate=None,
+        ssl_private_key=None,
+        ssl_ca_chain=None,
+    )
     config = UrsulaServerConfig(
         domain=Domain.MAINNET,
-        contact=Contact("127.0.0.1", 9151),
         identity_client=MockIdentityClient(),
         payment_client=MockPaymentClient(),
         peer_client=PeerClient(),
@@ -32,6 +38,7 @@ def ursula_server() -> UrsulaServer:
 
     return UrsulaServer(
         ursula=Ursula(),
+        peer_server_config=peer_server_config,
         config=config,
         staking_provider_address=IdentityAddress(os.urandom(20)),
     )

@@ -26,18 +26,21 @@ from ..p2p.verification import (
 )
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .config import UrsulaServerConfig
+from .config import PeerServerConfig, UrsulaServerConfig
 from .status import render_status
 
 
 class UrsulaServer(BasePeerAndUrsulaServer):
     @classmethod
-    async def async_init(cls, ursula: Ursula, config: UrsulaServerConfig) -> "UrsulaServer":
+    async def async_init(
+        cls, ursula: Ursula, peer_server_config: PeerServerConfig, config: UrsulaServerConfig
+    ) -> "UrsulaServer":
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(session, ursula.operator_address)
 
         return cls(
             ursula=ursula,
+            peer_server_config=peer_server_config,
             config=config,
             staking_provider_address=staking_provider_address,
         )
@@ -45,6 +48,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
     def __init__(
         self,
         ursula: Ursula,
+        peer_server_config: PeerServerConfig,
         config: UrsulaServerConfig,
         staking_provider_address: IdentityAddress,
     ):
@@ -56,16 +60,22 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
         ursula_info = self._storage.get_my_ursula_info()
         maybe_node: VerifiedUrsulaInfo | None = None
+
+        peer_private_key = peer_server_config.peer_private_key or ursula.make_peer_private_key()
+
         if ursula_info is not None:
             self._logger.debug("Found existing metadata, verifying")
+
             try:
                 maybe_node = VerifiedUrsulaInfo.checked_local(
                     clock=self._clock,
                     ursula_info=ursula_info,
                     ursula=self.ursula,
                     staking_provider_address=staking_provider_address,
-                    contact=config.contact,
+                    contact=peer_server_config.contact,
                     domain=config.domain,
+                    peer_public_key=peer_server_config.peer_public_key,
+                    peer_private_key=peer_private_key,
                 )
             except PeerVerificationError as exc:
                 self._logger.warning(
@@ -78,13 +88,14 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             self._logger.debug("Generating new metadata")
             self._node = VerifiedUrsulaInfo.generate(
                 clock=self._clock,
-                peer_private_key=self.ursula.peer_private_key(),
+                peer_private_key=peer_private_key,
+                peer_public_key=peer_server_config.peer_public_key,
                 signer=self.ursula.signer,
                 operator_signature=self.ursula.operator_signature,
                 encrypting_key=self.ursula.encrypting_key,
                 dkg_key=self.ursula.dkg_key,
                 staking_provider_address=staking_provider_address,
-                contact=config.contact,
+                contact=peer_server_config.contact,
                 domain=config.domain,
             )
             self._storage.set_my_ursula_info(self._node)
@@ -102,6 +113,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             clock=self._clock,
         )
 
+        self._peer_private_key = peer_private_key
         self._payment_client = config.payment_client
 
         self._started_at = self._clock.utcnow()
@@ -121,7 +133,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         return self._node.secure_contact
 
     def peer_private_key(self) -> PeerPrivateKey:
-        return self.ursula.peer_private_key()
+        return self._peer_private_key
 
     def logger(self) -> Logger:
         return self._logger

@@ -90,6 +90,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
     def generate(
         cls,
         peer_private_key: PeerPrivateKey,
+        peer_public_key: PeerPublicKey | None,
         signer: Signer,
         encrypting_key: PublicKey,
         dkg_key: FerveoPublicKey,
@@ -100,7 +101,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         domain: Domain,
     ) -> "VerifiedUrsulaInfo":
         # TODO: use Ursula instead of several arguments
-        public_key = PeerPublicKey.generate(peer_private_key, clock, contact)
+        public_key = peer_public_key or PeerPublicKey.generate(peer_private_key, clock, contact)
         payload = NodeMetadataPayload(
             staking_provider_address=Address(bytes(staking_provider_address)),
             domain=domain.value,
@@ -151,6 +152,8 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
+        peer_private_key: PeerPrivateKey,
+        peer_public_key: PeerPublicKey | None,
     ) -> "VerifiedUrsulaInfo":
         _verify_peer_shared(
             clock=clock,
@@ -160,10 +163,17 @@ class VerifiedUrsulaInfo(UrsulaInfo):
             expected_operator_address=ursula.operator_address,
         )
 
-        if not ursula.peer_private_key().matches(ursula_info.public_key):
+        if not peer_private_key.matches(ursula_info.public_key):
             raise PeerVerificationError(
-                "The public key in the metadata does not match the given private key"
+                "The peer public key in the metadata does not match the given peer private key"
             )
+
+        if peer_public_key is not None and peer_public_key != ursula_info.public_key:
+            raise PeerVerificationError(
+                "The peer public key in the metadata does not match the given peer public key"
+            )
+
+        # TODO: check that peer_public_key.host == contact.host? Or is that redundant at this point?
 
         if ursula_info.staking_provider_address != staking_provider_address:
             raise PeerVerificationError(

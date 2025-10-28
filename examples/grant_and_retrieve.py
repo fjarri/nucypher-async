@@ -35,7 +35,7 @@ from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockClock, MockIdentityClient, MockPaymentClient
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.server import UrsulaServer, UrsulaServerConfig
+from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
@@ -78,9 +78,16 @@ async def run_local_ursula_fleet(
             AmountT.ether(40000),
         )
 
+        peer_server_config = PeerServerConfig(
+            bind_as="127.0.0.1",
+            contact=Contact(LOCALHOST, PORT_BASE + i),
+            ssl_certificate=None,
+            ssl_private_key=None,
+            ssl_ca_chain=None,
+        )
+
         config = UrsulaServerConfig(
             domain=context.domain,
-            contact=Contact(LOCALHOST, PORT_BASE + i),
             identity_client=context.identity_client,
             payment_client=context.payment_client,
             peer_client=PeerClient(),
@@ -90,7 +97,9 @@ async def run_local_ursula_fleet(
             clock=context.clock,
         )
 
-        server = await UrsulaServer.async_init(ursula, config)
+        server = await UrsulaServer.async_init(
+            ursula, peer_server_config=peer_server_config, config=config
+        )
         handle = HTTPServerHandle(UrsulaHTTPServer(server))
         await nursery.start(handle.startup)
         handles.append(handle)
