@@ -13,7 +13,7 @@ from ..utils import wait_for_any
 from ..utils.producer import producer
 from .fleet_sensor import NodeEntry
 from .learner import Learner
-from .verification import VerifiedUrsulaInfo
+from .verification import VerifiedNodeInfo
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
 
@@ -99,7 +99,7 @@ async def staker_query_task(stop_event: trio.Event, learner: Learner) -> None:
 
 @producer
 async def verified_nodes_iter(
-    yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
+    yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     addresses: Iterable[IdentityAddress],
     verified_within: float | None = None,
@@ -150,7 +150,7 @@ async def verified_nodes_iter(
 
 @producer
 async def random_verified_nodes_iter(  # noqa: C901
-    yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
+    yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
     overhead: int = 0,
@@ -182,7 +182,7 @@ async def random_verified_nodes_iter(  # noqa: C901
     drawn = 0
     failed = 0
 
-    send_channel, receive_channel = trio.open_memory_channel[VerifiedUrsulaInfo | None](0)
+    send_channel, receive_channel = trio.open_memory_channel[VerifiedNodeInfo | None](0)
 
     async def verify_and_yield(contact: Contact) -> None:
         node = await learner.verify_contact_and_report(contact)
@@ -227,7 +227,7 @@ async def get_ursulas(
     quantity: int,
     include_ursulas: Iterable[IdentityAddress] | None = None,
     exclude_ursulas: Iterable[IdentityAddress] | None = None,
-) -> list[VerifiedUrsulaInfo]:
+) -> list[VerifiedNodeInfo]:
     nodes = []
 
     include = set(include_ursulas) if include_ursulas else set()

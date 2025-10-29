@@ -25,7 +25,7 @@ from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
 
 
-class UrsulaInfo:
+class NodeInfo:
     def __init__(self, metadata: NodeMetadata):
         self.metadata = metadata
 
@@ -77,7 +77,7 @@ class UrsulaInfo:
         return bytes(self.metadata)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "UrsulaInfo":
+    def from_bytes(cls, data: bytes) -> "NodeInfo":
         return cls(NodeMetadata.from_bytes(data))
 
 
@@ -116,8 +116,8 @@ class UrsulaClient:
 
     async def get_ursulas_info(
         self,
-        ursula: UrsulaInfo,
-    ) -> list[UrsulaInfo]:
+        ursula: NodeInfo,
+    ) -> list[NodeInfo]:
         response_bytes = await self._peer_client.communicate(
             ursula.secure_contact, UrsulaRoutes.NODE_METADATA
         )
@@ -129,15 +129,15 @@ class UrsulaClient:
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
 
-        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+        return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
     async def exchange_ursulas_info(
         self,
-        ursula: UrsulaInfo,
+        ursula: NodeInfo,
         fleet_state_checksum: FleetStateChecksum,
-        this_ursula: UrsulaInfo,
-    ) -> list[UrsulaInfo]:
-        # TODO: should `this_ursula` be narrowed down to VerifiedUrsulaInfo?
+        this_ursula: NodeInfo,
+    ) -> list[NodeInfo]:
+        # TODO: should `this_ursula` be narrowed down to VerifiedNodeInfo?
         request = MetadataRequest(fleet_state_checksum, [this_ursula.metadata])
         response_bytes = await self._peer_client.communicate(
             ursula.secure_contact, UrsulaRoutes.NODE_METADATA, bytes(request)
@@ -150,18 +150,18 @@ class UrsulaClient:
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
 
-        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+        return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
-    async def public_information(self, secure_contact: SecureContact) -> UrsulaInfo:
+    async def public_information(self, secure_contact: SecureContact) -> NodeInfo:
         response_bytes = await self._peer_client.communicate(
             secure_contact, UrsulaRoutes.PUBLIC_INFORMATION
         )
         metadata = unwrap_bytes(response_bytes, NodeMetadata)
-        return UrsulaInfo(metadata)
+        return NodeInfo(metadata)
 
     async def reencrypt(
         self,
-        ursula: UrsulaInfo,
+        ursula: NodeInfo,
         capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
@@ -169,7 +169,7 @@ class UrsulaClient:
         conditions: Conditions | None = None,
         context: Context | None = None,
     ) -> list[VerifiedCapsuleFrag]:
-        # TODO: should we narrow down `ursula` to `VerifiedUrsulaInfo`?
+        # TODO: should we narrow down `ursula` to `VerifiedNodeInfo`?
         try:
             ekfrag = treasure_map.destinations[Address(bytes(ursula.staking_provider_address))]
         except KeyError as exc:

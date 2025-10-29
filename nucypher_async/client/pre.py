@@ -25,7 +25,7 @@ from ..drivers.identity import IdentityAddress
 from ..drivers.pre import PREClient
 from ..p2p.algorithms import get_ursulas, verified_nodes_iter
 from ..p2p.learner import Learner
-from ..p2p.verification import VerifiedUrsulaInfo
+from ..p2p.verification import VerifiedNodeInfo
 from .porter import PorterClient
 
 
@@ -124,7 +124,7 @@ async def retrieve(
 ) -> dict[IdentityAddress, VerifiedCapsuleFrag]:
     responses: dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
-    async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
+    async def reencrypt(nursery: trio.Nursery, node: VerifiedNodeInfo) -> None:
         verified_cfrags = await learner.reencrypt(
             ursula=node,
             capsules=[retrieval_kit.capsule],

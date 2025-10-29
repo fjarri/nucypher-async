@@ -14,8 +14,8 @@ from ..drivers.identity import IdentityAddress
 from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
-from ..p2p.ursula import UrsulaInfo
-from ..p2p.verification import PeerVerificationError, VerifiedUrsulaInfo, verify_staking_local
+from ..p2p.node_info import NodeInfo
+from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from .config import PeerServerConfig, UrsulaServerConfig
@@ -55,20 +55,20 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         self._logger = config.parent_logger.get_child("UrsulaServer")
         self._storage = config.storage
 
-        ursula_info = self._storage.get_my_ursula_info()
-        maybe_node: VerifiedUrsulaInfo | None = None
+        node_info = self._storage.get_my_node_info()
+        maybe_node: VerifiedNodeInfo | None = None
 
         peer_private_key = (
             peer_server_config.peer_private_key or reencryptor.make_peer_private_key()
         )
 
-        if ursula_info is not None:
+        if node_info is not None:
             self._logger.debug("Found existing metadata, verifying")
 
             try:
-                maybe_node = VerifiedUrsulaInfo.checked_local(
+                maybe_node = VerifiedNodeInfo.checked_local(
                     clock=self._clock,
-                    ursula_info=ursula_info,
+                    node_info=node_info,
                     reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
                     contact=peer_server_config.contact,
@@ -85,7 +85,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
         if maybe_node is None:
             self._logger.debug("Generating new metadata")
-            self._node = VerifiedUrsulaInfo.generate(
+            self._node = VerifiedNodeInfo.generate(
                 clock=self._clock,
                 peer_private_key=peer_private_key,
                 peer_public_key=peer_server_config.peer_public_key,
@@ -97,7 +97,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
                 contact=peer_server_config.contact,
                 domain=config.domain,
             )
-            self._storage.set_my_ursula_info(self._node)
+            self._storage.set_my_node_info(self._node)
         else:
             self._node = maybe_node
 
@@ -185,14 +185,14 @@ class UrsulaServer(BasePeerAndUrsulaServer):
             )
             return MetadataResponse(self.reencryptor.signer, response_payload)
 
-        new_metadatas = [UrsulaInfo(m) for m in request.announce_nodes]
+        new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
         return await self.node_metadata_get()
 
     async def public_information(self) -> NodeMetadata:
-        # TODO: can we just return UrsulaInfo?
+        # TODO: can we just return NodeInfo?
         return self._node.metadata
 
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:

@@ -10,7 +10,7 @@ from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPREClient
-from nucypher_async.p2p.ursula import UrsulaClient
+from nucypher_async.p2p.node_info import UrsulaClient
 from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import NULL_LOGGER
