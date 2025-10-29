@@ -14,7 +14,7 @@ from nucypher_async.utils.logging import Logger
 
 async def test_verified_nodes_iter(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    fully_learned_ursulas: list[NodeServer],
+    fully_learned_nodes: list[NodeServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
@@ -24,11 +24,11 @@ async def test_verified_nodes_iter(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         parent_logger=logger,
     )
 
-    addresses = [server._node.staking_provider_address for server in fully_learned_ursulas[:3]]
+    addresses = [server._node.staking_provider_address for server in fully_learned_nodes[:3]]
     nodes = []
 
     with trio.fail_after(10):
@@ -41,7 +41,7 @@ async def test_verified_nodes_iter(
 
 async def test_granting(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    fully_learned_ursulas: list[NodeServer],
+    fully_learned_nodes: list[NodeServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
@@ -55,7 +55,7 @@ async def test_granting(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
     )
 
     # Fund Alice
@@ -76,7 +76,7 @@ async def test_granting(
             learner=alice_learner,
             pre_client=mock_pre_client,
             handpicked_addresses=[
-                server._node.staking_provider_address for server in fully_learned_ursulas[:3]
+                server._node.staking_provider_address for server in fully_learned_nodes[:3]
             ],
         )
 
@@ -87,7 +87,7 @@ async def test_granting(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
     )
 
     with trio.fail_after(10):

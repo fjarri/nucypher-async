@@ -100,7 +100,7 @@ def unwrap_bytes(
     return message
 
 
-class UrsulaClient:
+class NodeClient:
     def __init__(self, peer_client: PeerClient):
         self._peer_client = peer_client
 
@@ -114,38 +114,38 @@ class UrsulaClient:
         except UnicodeDecodeError as exc:
             raise InvalidMessage.for_message(str, exc) from exc
 
-    async def get_ursulas_info(
+    async def get_node_info(
         self,
-        ursula: NodeInfo,
+        node_info: NodeInfo,
     ) -> list[NodeInfo]:
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, NodeRoutes.NODE_METADATA
+            node_info.secure_contact, NodeRoutes.NODE_METADATA
         )
         response = unwrap_bytes(response_bytes, MetadataResponse)
 
         try:
-            payload = response.verify(ursula.verifying_key)
+            payload = response.verify(node_info.verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
 
         return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
-    async def exchange_ursulas_info(
+    async def exchange_node_info(
         self,
-        ursula: NodeInfo,
+        node_info: NodeInfo,
         fleet_state_checksum: FleetStateChecksum,
-        this_ursula: NodeInfo,
+        this_node_info: NodeInfo,
     ) -> list[NodeInfo]:
-        # TODO: should `this_ursula` be narrowed down to VerifiedNodeInfo?
-        request = MetadataRequest(fleet_state_checksum, [this_ursula.metadata])
+        # TODO: should `this_node_info` be narrowed down to VerifiedNodeInfo?
+        request = MetadataRequest(fleet_state_checksum, [this_node_info.metadata])
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
+            node_info.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
         )
         response = unwrap_bytes(response_bytes, MetadataResponse)
 
         try:
-            payload = response.verify(ursula.verifying_key)
+            payload = response.verify(node_info.verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
@@ -161,7 +161,7 @@ class UrsulaClient:
 
     async def reencrypt(
         self,
-        ursula: NodeInfo,
+        node_info: NodeInfo,
         capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
@@ -169,12 +169,12 @@ class UrsulaClient:
         conditions: Conditions | None = None,
         context: Context | None = None,
     ) -> list[VerifiedCapsuleFrag]:
-        # TODO: should we narrow down `ursula` to `VerifiedNodeInfo`?
+        # TODO: should we narrow down `node_info` to `VerifiedNodeInfo`?
         try:
-            ekfrag = treasure_map.destinations[Address(bytes(ursula.staking_provider_address))]
+            ekfrag = treasure_map.destinations[Address(bytes(node_info.staking_provider_address))]
         except KeyError as exc:
             raise ValueError(
-                f"The provided treasure map does not list node {ursula.staking_provider_address}"
+                f"The provided treasure map does not list node {node_info.staking_provider_address}"
             ) from exc
 
         request = ReencryptionRequest(
@@ -187,7 +187,7 @@ class UrsulaClient:
             context=context,
         )
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, NodeRoutes.REENCRYPT, bytes(request)
+            node_info.secure_contact, NodeRoutes.REENCRYPT, bytes(request)
         )
 
         response = unwrap_bytes(response_bytes, ReencryptionResponse)
@@ -196,7 +196,7 @@ class UrsulaClient:
             verified_cfrags = response.verify(
                 capsules=capsules,
                 alice_verifying_key=delegator_card.verifying_key,
-                ursula_verifying_key=ursula.verifying_key,
+                ursula_verifying_key=node_info.verifying_key,
                 policy_encrypting_key=treasure_map.policy_encrypting_key,
                 bob_encrypting_key=recipient_card.encrypting_key,
             )

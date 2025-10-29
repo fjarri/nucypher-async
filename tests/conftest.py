@@ -61,7 +61,7 @@ def mock_pre_client() -> MockPREClient:
 
 
 @pytest.fixture
-async def lonely_ursulas(
+async def lonely_nodes(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
@@ -108,32 +108,32 @@ async def lonely_ursulas(
 
 
 @pytest.fixture
-async def chain_seeded_ursulas(
-    lonely_ursulas: list[tuple[MockHTTPServerHandle, NodeServer]],
+async def chain_seeded_nodes(
+    lonely_nodes: list[tuple[MockHTTPServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.
-    for (_handle1, server1), (_handle2, server2) in itertools.pairwise(lonely_ursulas):
+    for (_handle1, server1), (_handle2, server2) in itertools.pairwise(lonely_nodes):
         server2.learner._test_set_seed_contacts([server1.secure_contact().contact])
 
-    for handle, _server in lonely_ursulas:
+    for handle, _server in lonely_nodes:
         await handle.startup()
 
-    yield [server for _handle, server in lonely_ursulas]
+    yield [server for _handle, server in lonely_nodes]
 
-    for handle, _server in lonely_ursulas:
+    for handle, _server in lonely_nodes:
         await handle.shutdown()
 
 
 @pytest.fixture
-async def fully_learned_ursulas(
+async def fully_learned_nodes(
     mock_identity_client: MockIdentityClient,
-    lonely_ursulas: list[tuple[MockHTTPServerHandle, NodeServer]],
+    lonely_nodes: list[tuple[MockHTTPServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.
-    for _handle, server in lonely_ursulas:
-        for _other_handle, other_server in lonely_ursulas:
+    for _handle, server in lonely_nodes:
+        for _other_handle, other_server in lonely_nodes:
             if other_server is server:
                 continue
 
@@ -142,12 +142,12 @@ async def fully_learned_ursulas(
                 stake = await session.get_staked_amount(peer_info.staking_provider_address)
             server.learner._test_add_verified_node(peer_info, stake)
 
-    for handle, _server in lonely_ursulas:
+    for handle, _server in lonely_nodes:
         await handle.startup()
 
-    yield [server for _handle, server in lonely_ursulas]
+    yield [server for _handle, server in lonely_nodes]
 
-    for handle, _server in lonely_ursulas:
+    for handle, _server in lonely_nodes:
         await handle.shutdown()
 
 
@@ -155,7 +155,7 @@ async def fully_learned_ursulas(
 async def porter_server(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    fully_learned_ursulas: list[NodeServer],
+    fully_learned_nodes: list[NodeServer],
     logger: logging.Logger,
     mock_clock: MockClock,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
@@ -179,7 +179,7 @@ async def porter_server(
         peer_client=MockPeerClient(mock_network, host),
         parent_logger=logger,
         storage=InMemoryStorage(),
-        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         clock=mock_clock,
     )
     server = PorterServer(peer_server_config=peer_server_config, config=config)

@@ -10,7 +10,7 @@ from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..client.pre import RetrievalState, retrieve_via_learner
 from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..p2p.algorithms import get_ursulas, learning_task, staker_query_task, verification_task
+from ..p2p.algorithms import get_nodes, learning_task, staker_query_task, verification_task
 from ..p2p.learner import Learner
 from ..schema.porter import (
     GetUrsulasRequest,
@@ -148,11 +148,11 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         try:
             with trio.fail_after(5):
-                nodes = await get_ursulas(
+                nodes = await get_nodes(
                     learner=self.learner,
                     quantity=request.quantity,
-                    include_ursulas=request.include_ursulas,
-                    exclude_ursulas=request.exclude_ursulas,
+                    include_nodes=request.include_ursulas,
+                    exclude_nodes=request.exclude_ursulas,
                 )
         except trio.TooSlowError as exc:
             raise HTTPError(

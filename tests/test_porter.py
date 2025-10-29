@@ -17,9 +17,9 @@ from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import NodeServer, PorterServer
 
 
-async def test_get_ursulas(
+async def test_get_nodes(
     mock_network: MockNetwork,
-    fully_learned_ursulas: list[NodeServer],
+    fully_learned_nodes: list[NodeServer],
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
@@ -27,24 +27,24 @@ async def test_get_ursulas(
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient("127.0.0.1", 9000, http_client)
 
-    some_ursulas = [
-        fully_learned_ursulas[3]._node.staking_provider_address,
-        fully_learned_ursulas[7]._node.staking_provider_address,
+    some_nodes = [
+        fully_learned_nodes[3]._node.staking_provider_address,
+        fully_learned_nodes[7]._node.staking_provider_address,
     ]
-    ursulas = await porter_client.get_ursulas(quantity=3, include_ursulas=some_ursulas)
-    assert len(ursulas) == 3
-    assert all(ursula in ursulas for ursula in some_ursulas)
+    nodes = await porter_client.get_nodes(quantity=3, include_nodes=some_nodes)
+    assert len(nodes) == 3
+    assert all(node in nodes for node in some_nodes)
 
-    ursulas = await porter_client.get_ursulas(quantity=8, exclude_ursulas=some_ursulas)
-    assert len(ursulas) == 8
-    assert all(ursula not in ursulas for ursula in some_ursulas)
+    nodes = await porter_client.get_nodes(quantity=8, exclude_nodes=some_nodes)
+    assert len(nodes) == 8
+    assert all(node not in nodes for node in some_nodes)
 
 
 async def test_retrieve_cfrags(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
-    fully_learned_ursulas: list[NodeServer],
+    fully_learned_nodes: list[NodeServer],
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
@@ -61,7 +61,7 @@ async def test_retrieve_cfrags(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_ursulas[0].secure_contact().contact],
+        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
     )
 
     # Fund Alice
@@ -82,7 +82,7 @@ async def test_retrieve_cfrags(
             learner=alice_learner,
             pre_client=mock_pre_client,
             handpicked_addresses=[
-                server._node.staking_provider_address for server in fully_learned_ursulas[:3]
+                server._node.staking_provider_address for server in fully_learned_nodes[:3]
             ],
         )
 

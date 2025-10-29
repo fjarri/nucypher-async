@@ -151,7 +151,7 @@ class NodeServerConfig:
         log_to_file: bool = True,
         persistent_storage: bool = True,
         debug: bool = False,
-        profile_name: str = "ursula",
+        profile_name: str = "node",
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
@@ -162,7 +162,7 @@ class NodeServerConfig:
         pre_client = pre_client_factory(pre_endpoint, domain_)
         logger = make_logger(
             profile_name,
-            "ursula",
+            "node",
             log_to_console=log_to_console,
             log_to_file=log_to_file,
             debug=debug,

@@ -155,7 +155,7 @@ async def random_verified_nodes_iter(  # noqa: C901
     amount: int,
     overhead: int = 0,
     verified_within: float | None = None,
-    exclude_ursulas: Iterable[IdentityAddress] | None = None,
+    exclude_nodes: Iterable[IdentityAddress] | None = None,
 ) -> None:
     if learner.is_empty():
         await learner.seed_round()
@@ -165,7 +165,7 @@ async def random_verified_nodes_iter(  # noqa: C901
     providers = learner.get_available_staking_providers()
     reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
-    exclude_ursulas = set(exclude_ursulas) if exclude_ursulas else set()
+    exclude_nodes = set(exclude_nodes) if exclude_nodes else set()
 
     def is_usable(
         address: IdentityAddress, node_entries: Mapping[IdentityAddress, NodeEntry]
@@ -194,7 +194,7 @@ async def random_verified_nodes_iter(  # noqa: C901
 
             while drawn < amount + failed + overhead and reservoir:
                 drawn_address = reservoir.draw().address
-                if drawn_address in exclude_ursulas:
+                if drawn_address in exclude_nodes:
                     continue
                 if drawn_address not in node_entries:
                     continue
@@ -222,18 +222,18 @@ async def random_verified_nodes_iter(  # noqa: C901
                     return
 
 
-async def get_ursulas(
+async def get_nodes(
     learner: Learner,
     quantity: int,
-    include_ursulas: Iterable[IdentityAddress] | None = None,
-    exclude_ursulas: Iterable[IdentityAddress] | None = None,
+    include_nodes: Iterable[IdentityAddress] | None = None,
+    exclude_nodes: Iterable[IdentityAddress] | None = None,
 ) -> list[VerifiedNodeInfo]:
     nodes = []
 
-    include = set(include_ursulas) if include_ursulas else set()
-    exclude = set(exclude_ursulas) if exclude_ursulas else set()
+    include = set(include_nodes) if include_nodes else set()
+    exclude = set(exclude_nodes) if exclude_nodes else set()
 
-    # Note: include_ursulas takes priority over exclude_ursulas
+    # Note: include_nodes takes priority over exclude_nodes
     async with verified_nodes_iter(learner, include, verified_within=60) as node_iter:
         async for node in node_iter:
             nodes.append(node)
@@ -246,7 +246,7 @@ async def get_ursulas(
             amount=quantity_remaining,
             overhead=overhead,
             verified_within=60,
-            exclude_ursulas=exclude | include,
+            exclude_nodes=exclude | include,
         ) as node_iter:
             async for node in node_iter:
                 nodes.append(node)

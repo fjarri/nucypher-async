@@ -166,7 +166,7 @@ class NodeServer(BasePeerAndNodeServer):
 
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [
-            m.metadata for m in self.learner.get_verified_ursulas(include_this_node=True)
+            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
         ]
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,

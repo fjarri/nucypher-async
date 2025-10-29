@@ -23,7 +23,7 @@ from ..characters.pre import (
 )
 from ..drivers.identity import IdentityAddress
 from ..drivers.pre import PREClient
-from ..p2p.algorithms import get_ursulas, verified_nodes_iter
+from ..p2p.algorithms import get_nodes, verified_nodes_iter
 from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedNodeInfo
 from .porter import PorterClient
@@ -52,10 +52,10 @@ async def grant(
     handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
     shares = len(policy.key_frags)
 
-    nodes = await get_ursulas(
+    nodes = await get_nodes(
         learner=learner,
         quantity=shares,
-        include_ursulas=handpicked_addresses,
+        include_nodes=handpicked_addresses,
     )
 
     assigned_kfrags = {
@@ -124,9 +124,9 @@ async def retrieve(
 ) -> dict[IdentityAddress, VerifiedCapsuleFrag]:
     responses: dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
-    async def reencrypt(nursery: trio.Nursery, node: VerifiedNodeInfo) -> None:
+    async def reencrypt(nursery: trio.Nursery, node_info: VerifiedNodeInfo) -> None:
         verified_cfrags = await learner.reencrypt(
-            ursula=node,
+            node_info=node_info,
             capsules=[retrieval_kit.capsule],
             treasure_map=treasure_map,
             delegator_card=delegator_card,
@@ -134,7 +134,7 @@ async def retrieve(
             conditions=retrieval_kit.conditions,
             context=context,
         )
-        responses[node.staking_provider_address] = verified_cfrags[0]
+        responses[node_info.staking_provider_address] = verified_cfrags[0]
         if len(responses) == treasure_map.threshold:
             nursery.cancel_scope.cancel()
 
@@ -146,8 +146,8 @@ async def retrieve(
         trio.open_nursery() as nursery,
         verified_nodes_iter(learner, destinations) as node_iter,
     ):
-        async for node in node_iter:
-            nursery.start_soon(reencrypt, nursery, node)
+        async for node_info in node_iter:
+            nursery.start_soon(reencrypt, nursery, node_info)
     return responses
 
 

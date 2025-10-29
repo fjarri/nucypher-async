@@ -57,7 +57,7 @@ class Context(NamedTuple):
     clock: BaseClock
 
 
-async def run_local_ursula_fleet(
+async def run_local_node_fleet(
     context: Context, nursery: trio.Nursery
 ) -> tuple[list[HTTPServerHandle], Contact]:
     handles = []
@@ -198,7 +198,7 @@ async def main(*, mocked: bool = True) -> None:
     async with trio.open_nursery() as nursery:
         if mocked:
             context.logger.info("Mocked mode - starting nodes")
-            server_handles, seed_contact = await run_local_ursula_fleet(context, nursery)
+            server_handles, seed_contact = await run_local_node_fleet(context, nursery)
             # Wait for all the nodes to learn about each other
             await trio.sleep(1)
         else:

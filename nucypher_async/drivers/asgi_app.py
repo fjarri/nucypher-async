@@ -105,41 +105,41 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_node_asgi_app(ursula_server: BaseNodeServer) -> ASGIFramework:
+def make_node_asgi_app(node_server: BaseNodeServer) -> ASGIFramework:
     """Returns an ASGI app serving as a front-end for a network node."""
-    logger = ursula_server.logger().get_child("App")
+    logger = node_server.logger().get_child("App")
 
     async def ping(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
-        return await binary_api_call(logger, ursula_server.endpoint_ping(remote_host))
+        return await binary_api_call(logger, node_server.endpoint_ping(remote_host))
 
     async def node_metadata_get(_request: Request) -> Response:
-        return await binary_api_call(logger, ursula_server.endpoint_node_metadata_get())
+        return await binary_api_call(logger, node_server.endpoint_node_metadata_get())
 
     async def node_metadata_post(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await binary_api_call(
             logger,
-            ursula_server.endpoint_node_metadata_post(remote_host, request_bytes),
+            node_server.endpoint_node_metadata_post(remote_host, request_bytes),
         )
 
     async def public_information(_request: Request) -> Response:
-        return await binary_api_call(logger, ursula_server.endpoint_public_information())
+        return await binary_api_call(logger, node_server.endpoint_public_information())
 
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
-        return await binary_api_call(logger, ursula_server.endpoint_reencrypt(request_bytes))
+        return await binary_api_call(logger, node_server.endpoint_reencrypt(request_bytes))
 
     async def status(_request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
-        return await html_call(logger, ursula_server.endpoint_status())
+        return await html_call(logger, node_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
-        await ursula_server.start(nursery)
+        await node_server.start(nursery)
 
     async def on_shutdown(_nursery: trio.Nursery) -> None:
-        await ursula_server.stop()
+        await node_server.stop()
 
     routes = [
         Route(f"/{NodeRoutes.PING}", ping),

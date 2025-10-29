@@ -6,7 +6,7 @@ from nucypher_async.server import NodeServer
 
 async def test_learning(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    chain_seeded_ursulas: list[NodeServer],
+    chain_seeded_nodes: list[NodeServer],
 ) -> None:
     while True:
         # Wait multiple learning cycles
@@ -14,10 +14,10 @@ async def test_learning(
         await trio.sleep(100)
 
         known_nodes = {
-            server._node.staking_provider_address: server.learner.get_verified_ursulas(
+            server._node.staking_provider_address: server.learner.get_verified_nodes(
                 include_this_node=True
             )
-            for server in chain_seeded_ursulas
+            for server in chain_seeded_nodes
         }
 
         # Each node should know about every other node by now.

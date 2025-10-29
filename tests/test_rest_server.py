@@ -10,14 +10,14 @@ from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.peer import Contact, NodeHTTPServer, PeerClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPREClient
-from nucypher_async.p2p.node_info import UrsulaClient
+from nucypher_async.p2p.node_info import NodeClient
 from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
 @pytest.fixture
-def ursula_server() -> NodeServer:
+def node_server() -> NodeServer:
     peer_server_config = PeerServerConfig(
         bind_as="127.0.0.1",
         contact=Contact("127.0.0.1", 9151),
@@ -47,16 +47,16 @@ def ursula_server() -> NodeServer:
 async def test_client_real_server(
     nursery: trio.Nursery,
     capsys: pytest.CaptureFixture[str],
-    ursula_server: NodeServer,
+    node_server: NodeServer,
 ) -> None:
-    handle = HTTPServerHandle(NodeHTTPServer(ursula_server))
+    handle = HTTPServerHandle(NodeHTTPServer(node_server))
     await nursery.start(handle.startup)
 
-    client = UrsulaClient(PeerClient())
-    response = await client.ping(ursula_server.secure_contact())
+    client = NodeClient(PeerClient())
+    response = await client.ping(node_server.secure_contact())
     assert response == "127.0.0.1"
 
-    response = await client.status(ursula_server.secure_contact())
+    response = await client.status(node_server.secure_contact())
 
     await handle.shutdown()
     capsys.readouterr()

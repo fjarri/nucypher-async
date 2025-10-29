@@ -15,7 +15,7 @@ from ..storage import BaseStorage, InMemoryStorage
 from ..utils.logging import NULL_LOGGER, Logger
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
-from .node_info import NodeInfo, UrsulaClient
+from .node_info import NodeClient, NodeInfo
 from .verification import VerifiedNodeInfo, verify_staking_remote
 
 
@@ -51,7 +51,7 @@ class Learner:
             storage = InMemoryStorage()
         self._storage = storage
 
-        self._ursula_client = UrsulaClient(peer_client)
+        self._node_client = NodeClient(peer_client)
         self._identity_client = identity_client
 
         self._domain = domain
@@ -89,18 +89,18 @@ class Learner:
         self._logger.debug("Verifying a contact {}", contact)
 
         # TODO: merge all of it into `public_information()`?
-        secure_contact = await self._ursula_client.handshake(contact)
-        ursula_info = await self._ursula_client.public_information(secure_contact)
+        secure_contact = await self._node_client.handshake(contact)
+        node_info = await self._node_client.public_information(secure_contact)
 
         async with self._identity_client.session() as session:
-            staking_provider_address = ursula_info.staking_provider_address
+            staking_provider_address = node_info.staking_provider_address
             operator_address = await verify_staking_remote(session, staking_provider_address)
             staked = await session.get_staked_amount(staking_provider_address)
 
         # TODO: separate stateless checks (can be done once) and transient checks
         # (expiry, staking status etc), and only perform the former if the metadata changed.
         node = VerifiedNodeInfo.checked_remote(
-            self.clock, ursula_info, secure_contact, operator_address, self._domain
+            self.clock, node_info, secure_contact, operator_address, self._domain
         )
 
         return node, staked
@@ -113,13 +113,13 @@ class Learner:
         )
 
         if self._this_node:
-            ursulas_info = await self._ursula_client.exchange_ursulas_info(
+            node_infos = await self._node_client.exchange_node_info(
                 node, self.fleet_state.checksum, self._this_node
             )
         else:
-            ursulas_info = await self._ursula_client.get_ursulas_info(node)
+            node_infos = await self._node_client.get_node_info(node)
 
-        return ursulas_info
+        return node_infos
 
     async def learn_from_node_and_report(self, node: VerifiedNodeInfo) -> None:
         with self._fleet_sensor.try_lock_contact_for_learning(node.contact) as (
@@ -263,7 +263,7 @@ class Learner:
 
     async def reencrypt(
         self,
-        ursula: VerifiedNodeInfo,
+        node_info: VerifiedNodeInfo,
         capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
@@ -271,8 +271,8 @@ class Learner:
         conditions: Conditions | None = None,
         context: Context | None = None,
     ) -> list[VerifiedCapsuleFrag]:
-        return await self._ursula_client.reencrypt(
-            ursula=ursula,
+        return await self._node_client.reencrypt(
+            node_info=node_info,
             capsules=capsules,
             treasure_map=treasure_map,
             delegator_card=delegator_card,
@@ -320,7 +320,7 @@ class Learner:
     def get_verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
         return self._fleet_sensor.verified_node_entries
 
-    def get_verified_ursulas(self, *, include_this_node: bool = False) -> list[VerifiedNodeInfo]:
+    def get_verified_nodes(self, *, include_this_node: bool = False) -> list[VerifiedNodeInfo]:
         my_metadata = [self._this_node] if include_this_node and self._this_node else []
         return my_metadata + self._fleet_sensor.verified_metadata()
 

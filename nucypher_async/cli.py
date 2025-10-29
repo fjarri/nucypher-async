@@ -13,7 +13,7 @@ from .master_key import EncryptedMasterKey, MasterKey
 from .server import NodeServer, NodeServerConfig, PeerServerConfig, PorterServer, PorterServerConfig
 
 
-async def make_ursula_server(
+async def make_node_server(
     config_path: str, nucypher_password: str, geth_password: str
 ) -> NodeServer:
     async with await trio.Path(config_path).open(encoding="utf-8") as file:
@@ -46,7 +46,7 @@ async def make_ursula_server(
     )
 
     config = NodeServerConfig.from_config_values(
-        profile_name=config.get("profile_name", "ursula-" + config["domain"]),
+        profile_name=config.get("profile_name", "node-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
         pre_endpoint=config["pre_provider"],
@@ -92,8 +92,8 @@ def main() -> None:
 @click.argument("config_path")
 @click.argument("nucypher_password")
 @click.argument("geth_password")
-def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None:
-    server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
+def node(config_path: str, nucypher_password: str, geth_password: str) -> None:
+    server = trio.run(make_node_server, config_path, nucypher_password, geth_password)
     handle = HTTPServerHandle(NodeHTTPServer(server))
     trio.run(handle.startup)
 
