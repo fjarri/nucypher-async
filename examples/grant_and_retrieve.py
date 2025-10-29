@@ -17,7 +17,7 @@ from nucypher_async.characters.pre import (
     PublisherCard,
     Recipient,
     RecipientCard,
-    Ursula,
+    Reencryptor,
 )
 from nucypher_async.client.pre import (
     EnactedPolicy,
@@ -63,7 +63,7 @@ async def run_local_ursula_fleet(
     handles = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
-        ursula = Ursula()
+        reencryptor = Reencryptor()
 
         # Make the first node the dedicated teacher of the other nodes
         seed_contacts = [Contact(LOCALHOST, PORT_BASE)] if i > 0 else []
@@ -74,7 +74,7 @@ async def run_local_ursula_fleet(
         staking_provider_account = IdentityAccount.random()
         context.identity_client.mock_set_up(
             staking_provider_account.address,
-            ursula.operator_address,
+            reencryptor.operator_address,
             AmountT.ether(40000),
         )
 
@@ -98,7 +98,7 @@ async def run_local_ursula_fleet(
         )
 
         server = await UrsulaServer.async_init(
-            ursula, peer_server_config=peer_server_config, config=config
+            reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
         )
         handle = HTTPServerHandle(UrsulaHTTPServer(server))
         await nursery.start(handle.startup)

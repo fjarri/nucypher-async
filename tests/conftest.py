@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 import pytest
 import trio
 
-from nucypher_async.characters.pre import Ursula
+from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAddress
 from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
@@ -41,8 +41,8 @@ async def mock_clock() -> MockClock:
 
 
 @pytest.fixture
-def ursulas() -> list[Ursula]:
-    return [Ursula() for i in range(10)]
+def reencryptors() -> list[Reencryptor]:
+    return [Reencryptor() for i in range(10)]
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ async def lonely_ursulas(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_payment_client: MockPaymentClient,
-    ursulas: list[Ursula],
+    reencryptors: list[Reencryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
 ) -> list[tuple[MockHTTPServerHandle, UrsulaServer]]:
@@ -75,7 +75,7 @@ async def lonely_ursulas(
         staking_provider_address = IdentityAddress(os.urandom(20))
 
         mock_identity_client.mock_set_up(
-            staking_provider_address, ursulas[i].operator_address, AmountT.ether(40000)
+            staking_provider_address, reencryptors[i].operator_address, AmountT.ether(40000)
         )
 
         peer_server_config = PeerServerConfig(
@@ -99,7 +99,7 @@ async def lonely_ursulas(
         )
 
         server = await UrsulaServer.async_init(
-            ursula=ursulas[i], peer_server_config=peer_server_config, config=config
+            reencryptor=reencryptors[i], peer_server_config=peer_server_config, config=config
         )
         handle = mock_network.add_server(UrsulaHTTPServer(server))
         servers.append((handle, server))

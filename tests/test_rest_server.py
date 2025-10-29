@@ -3,7 +3,7 @@ import os
 import pytest
 import trio
 
-from nucypher_async.characters.pre import Ursula
+from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
@@ -37,7 +37,7 @@ def ursula_server() -> UrsulaServer:
     )
 
     return UrsulaServer(
-        ursula=Ursula(),
+        reencryptor=Reencryptor(),
         peer_server_config=peer_server_config,
         config=config,
         staking_provider_address=IdentityAddress(os.urandom(20)),

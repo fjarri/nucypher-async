@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 import trio
 
-from .characters.pre import Ursula
+from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .drivers.peer import UrsulaHTTPServer
@@ -40,7 +40,7 @@ async def make_ursula_server(
     encrypted_key = EncryptedMasterKey.from_payload(keystore)
     key = encrypted_key.decrypt(nucypher_password)
 
-    local_ursula = Ursula(master_key=key, identity_account=acc)
+    reencryptor = Reencryptor(master_key=key, identity_account=acc)
 
     # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
     peer_server_config = PeerServerConfig.from_config_values(
@@ -63,7 +63,7 @@ async def make_ursula_server(
     )
 
     return await UrsulaServer.async_init(
-        ursula=local_ursula, peer_server_config=peer_server_config, config=config
+        reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
     )
 
 

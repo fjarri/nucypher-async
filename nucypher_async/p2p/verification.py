@@ -3,7 +3,7 @@ from nucypher_core.ferveo import FerveoPublicKey
 from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
-from ..characters.pre import Ursula
+from ..characters.pre import Reencryptor
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
@@ -142,7 +142,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
         cls,
         clock: BaseClock,
         ursula_info: UrsulaInfo,
-        ursula: Ursula,
+        reencryptor: Reencryptor,
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
@@ -154,7 +154,7 @@ class VerifiedUrsulaInfo(UrsulaInfo):
             ursula_info=ursula_info,
             expected_contact=contact,
             expected_domain=domain,
-            expected_operator_address=ursula.operator_address,
+            expected_operator_address=reencryptor.operator_address,
         )
 
         if not peer_private_key.matches(ursula_info.public_key):
@@ -176,16 +176,16 @@ class VerifiedUrsulaInfo(UrsulaInfo):
                 f"{staking_provider_address} recorded in the blockchain"
             )
 
-        if ursula_info.verifying_key != ursula.signer.verifying_key():
+        if ursula_info.verifying_key != reencryptor.signer.verifying_key():
             raise PeerVerificationError(
                 f"Verifying key mismatch: {ursula_info.verifying_key} in the metadata, "
-                f"{ursula.signer.verifying_key()} derived from the master key"
+                f"{reencryptor.signer.verifying_key()} derived from the master key"
             )
 
-        if ursula_info.encrypting_key != ursula.encrypting_key:
+        if ursula_info.encrypting_key != reencryptor.encrypting_key:
             raise PeerVerificationError(
                 f"Encrypting key mismatch: {ursula_info.encrypting_key} in the metadata, "
-                f"{ursula.encrypting_key} derived from the master key"
+                f"{reencryptor.encrypting_key} derived from the master key"
             )
 
         return cls(ursula_info.metadata)

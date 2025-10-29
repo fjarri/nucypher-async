@@ -156,7 +156,7 @@ class RecipientCard:
         self.verifying_key = verifying_key
 
 
-class Ursula:
+class Reencryptor:
     def __init__(
         self,
         master_key: MasterKey | None = None,
@@ -195,4 +195,4 @@ class Ursula:
 
     def __str__(self) -> str:
         operator_short = self.operator_address.checksum[:10]
-        return f"Ursula(operator={operator_short})"
+        return f"Reencryptor(operator={operator_short})"
