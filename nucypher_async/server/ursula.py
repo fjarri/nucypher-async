@@ -1,18 +1,27 @@
+from collections.abc import Sequence
+from http import HTTPStatus
+
 import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     MetadataResponsePayload,
     NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
+    ThresholdDecryptionResponse,
 )
+from nucypher_core.ferveo import Transcript, Validator
 
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..characters.pre import PublisherCard, Ursula
+from ..drivers.asgi_app import HTTPError
+from ..drivers.cbd import Ritual
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
-from ..p2p.algorithms import learning_task, verification_task
+from ..p2p.algorithms import learning_task, verification_task, verified_nodes_iter
 from ..p2p.learner import Learner
 from ..p2p.ursula import UrsulaInfo
 from ..p2p.verification import PeerVerificationError, VerifiedUrsulaInfo, verify_staking_local
@@ -106,7 +115,9 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         )
 
         self._peer_private_key = peer_private_key
-        self._payment_client = config.payment_client
+        self._pre_client = config.pre_client
+        self._cbd_client = config.cbd_client
+        self._identity_client = config.identity_client
 
         self._started_at = self._clock.utcnow()
 
@@ -188,11 +199,113 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         # TODO: can we just return UrsulaInfo?
         return self._node.metadata
 
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse:
+        decryption_request = self.ursula.decrypt_threshold_decryption_request(request)
+        self._logger.info(
+            f"Threshold decryption request for ritual ID #{decryption_request.ritual_id}"
+        )
+
+        #self._verify_active_ritual(decryption_request)
+        async with self._cbd_client.session() as session:
+            assert session.is_ritual_active(decryption_request.ritual_id)
+            assert session.is_participant(decryption_request.ritual_id, self.staking_provider_address)
+
+        #self._verify_encryption_authorization(decryption_request)
+        ciphertext_header = decryption_request.ciphertext_header
+        authorization = decryption_request.acp.authorization
+        async with self._cbd_client.session() as session:
+            assert session.is_encryption_authorized(
+                ritual_id=decryption_request.ritual_id,
+                evidence=authorization,
+                ciphertext_header=bytes(ciphertext_header),
+            )
+
+        # TODO: evaluate and check conditions here
+
+        async with self._cbd_client.session() as session:
+            ritual = await session.get_ritual(decryption_request.ritual_id)  # TODO: can be cached
+
+            validators = []
+            for i, staking_provider_address in enumerate(ritual.providers):
+                if self.checksum_address == self.ursula.staking_provider_address:
+                    # Local
+                    public_key = self.ursula.ritual_public_key
+                else:
+                    # Remote
+                    # TODO optimize rpc calls by obtaining public keys altogether
+                    #  instead of one-by-one?
+                    public_key = await session.get_provider_public_key(
+                        provider=staking_provider_address, ritual_id=ritual.id
+                    )
+                validator = Validator(
+                    address=staking_provider_address,
+                    public_key=public_key,
+                    share_index=i,
+                )
+                validators.append(validator)
+
+        # FIXME: Workaround: add serialized public key to aggregated transcript.
+        # Since we use serde/bincode in rust, we need a metadata field for the public key, which is the field size,
+        # as 8 bytes in little-endian. See ferveo#209
+        public_key_metadata = b"0\x00\x00\x00\x00\x00\x00\x00"
+        transcript = (
+            bytes(ritual.aggregated_transcript)
+            + public_key_metadata
+            + bytes(ritual.public_key)
+        )
+        aggregated_transcript = AggregatedTranscript.from_bytes(transcript)
+        decryption_share = self.ursula.produce_decryption_share(
+            nodes=validators,
+            threshold=ritual.threshold,
+            shares=ritual.shares,
+            checksum_address=self.checksum_address,
+            ritual_id=ritual.id,
+            aggregated_transcript=aggregated_transcript,
+            ciphertext_header=ciphertext_header,
+            aad=aad,
+            variant=variant,
+        )
+
+        # return the decryption share
+        decryption_response = ThresholdDecryptionResponse(
+            ritual_id=ritual.id,
+            decryption_share=bytes(decryption_share),
+        )
+        return self.ursula.encrypt_threshold_decryption_response(
+            response=decryption_response,
+            requester_public_key=request.requester_public_key,
+        )
+
+    async def _resolve_validators(
+        self, ritual: Ritual, participants: Sequence[Ritual.Participant]
+    ) -> list[Validator]:
+        # enforces that the node is part of the ritual
+        if self._node.staking_provider_address not in [p.provider for p in participants]:
+            raise HTTPError(
+                f"Node not part of ritual {ritual.id}",
+                HTTPStatus.FORBIDDEN,
+            )
+
+        validators = [Validator(self._node.staking_provider_address.checksum, self.ursula.dkg_key)]
+
+        addresses = [p.provider for p in participants]
+        async with verified_nodes_iter(self.learner, addresses) as node_iter:
+            async for node in node_iter:
+                validators.append(
+                    Validator(
+                        address=node.staking_provider_address.checksum, public_key=node.dkg_key
+                    )
+                )
+
+        return list(sorted(validators, key=lambda x: x.address))
+
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
-        async with self._payment_client.session() as session:
+        async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
                 raise InactivePolicy(f"Policy {hrac} is not active")
 

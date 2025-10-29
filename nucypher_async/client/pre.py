@@ -5,13 +5,14 @@ import trio
 from attrs import frozen
 from nucypher_core import (
     Address,
+    Conditions,
     Context,
     EncryptedTreasureMap,
     MessageKit,
     RetrievalKit,
     TreasureMap,
 )
-from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
+from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
 from ..characters.pre import (
     DelegatorCard,
@@ -22,7 +23,7 @@ from ..characters.pre import (
     RecipientCard,
 )
 from ..drivers.identity import IdentityAddress
-from ..drivers.payment import PaymentClient
+from ..drivers.pre import PREClient
 from ..p2p.algorithms import get_ursulas, verified_nodes_iter
 from ..p2p.learner import Learner
 from ..p2p.verification import VerifiedUrsulaInfo
@@ -42,10 +43,10 @@ async def grant(
     recipient_card: RecipientCard,
     publisher: Publisher,
     learner: Learner,
-    payment_client: PaymentClient,
+    pre_client: PREClient,
     handpicked_addresses: Iterable[IdentityAddress] | None = None,
 ) -> EnactedPolicy:
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         if await session.is_policy_active(policy.hrac):
             raise RuntimeError(f"Policy {policy.hrac} is already active")
 
@@ -70,9 +71,9 @@ async def grant(
     policy_start = learner.clock.utcnow()
     policy_end = policy_start.shift(days=30)  # TODO: make adjustable
 
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         await session.create_policy(
-            publisher.payment_signer,
+            publisher.pre_signer,
             policy.hrac,
             shares,
             int(policy_start.timestamp()),

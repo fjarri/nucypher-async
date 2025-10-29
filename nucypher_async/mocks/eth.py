@@ -4,7 +4,15 @@ from contextlib import asynccontextmanager
 from typing import Any, cast
 
 from ethereum_rpc import Address, Amount
-from pons import BoundMethodCall, ClientSession, ContractABI, Method, Signer
+from pons import (
+    BoundMethodCall,
+    ClientSession,
+    ContractABI,
+    Method,
+    MultiMethod,
+    Mutability,
+    Signer,
+)
 
 
 class MockContract:
@@ -13,7 +21,11 @@ class MockContract:
 
     def _method_by_selector(self, selector: bytes) -> Method:
         for method in self._abi.method:
-            if isinstance(method, Method) and method.selector == selector:
+            if isinstance(method, MultiMethod):
+                for method in method.methods.values():
+                    if method.selector == selector:
+                        return method
+            elif method.selector == selector:
                 return method
         raise ValueError(f"Could not find a method with selector {selector!r}")
 

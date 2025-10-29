@@ -1,13 +1,31 @@
-from collections.abc import Iterable, Mapping
+from typing import Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
+from ethereum_rpc import keccak
 from attrs import frozen
 from nucypher_core import (
     HRAC,
     Address,
     EncryptedKeyFrag,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     EncryptedTreasureMap,
     MessageKit,
+    SessionStaticKey,
+    ThresholdDecryptionRequest,
+    ThresholdDecryptionResponse,
+    ThresholdMessageKit,
     TreasureMap,
+)
+from nucypher_core.ferveo import (
+    AggregatedTranscript,
+    CiphertextHeader,
+    DecryptionSharePrecomputed,
+    DecryptionShareSimple,
+    Dkg,
+    DkgPublicKey,
+    FerveoVariant,
+    Validator,
+    ValidatorMessage,
 )
 from nucypher_core.umbral import (
     Capsule,
@@ -19,9 +37,10 @@ from nucypher_core.umbral import (
     reencrypt,
 )
 
-from ..drivers.identity import IdentityAccount
-from ..drivers.payment import PaymentAccount, PaymentAccountSigner
+from ..drivers.cbd import Ritual
+from ..drivers.identity import IdentityAccount, IdentityAddress
 from ..drivers.peer import PeerPrivateKey
+from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
 
 
@@ -84,14 +103,14 @@ class DelegatorCard:
 class Publisher:
     @classmethod
     def random(cls) -> "Publisher":
-        return cls(MasterKey.random(), PaymentAccount.random())
+        return cls(MasterKey.random(), PREAccount.random())
 
-    def __init__(self, master_key: MasterKey, payment_account: PaymentAccount):
+    def __init__(self, master_key: MasterKey, pre_account: PREAccount):
         self.__master_key = master_key
         self._signer = self.__master_key.make_signer()
-        self._payment_account = payment_account
-        self.payment_signer = PaymentAccountSigner(self._payment_account)
-        self.payment_address = self._payment_account.address
+        self._pre_account = pre_account
+        self.pre_signer = PREAccountSigner(self._pre_account)
+        self.pre_address = self._pre_account.address
         self.verifying_key = self._signer.verifying_key()
 
     def make_treasure_map(
@@ -156,14 +175,14 @@ class RecipientCard:
         self.verifying_key = verifying_key
 
 
-class Ursula:
+class Reencryptor:
     def __init__(
         self,
         master_key: MasterKey | None = None,
         identity_account: IdentityAccount | None = None,
     ):
         self.__master_key = master_key or MasterKey.random()
-        identity_account_ = identity_account or IdentityAccount.random()
+        self.identity_account = identity_account or IdentityAccount.random()
 
         self.signer = self.__master_key.make_signer()
         self._decrypting_key = self.__master_key.make_decrypting_key()
@@ -172,9 +191,9 @@ class Ursula:
         self._dkg_keypair = self.__master_key.make_dkg_keypair()
         self.dkg_key = self._dkg_keypair.public_key()
 
-        self.operator_address = identity_account_.address
+        self.operator_address = self.identity_account.address
         self.operator_signature = RecoverableSignature.from_be_bytes(
-            identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
+            self.identity_account.sign_message(self.signer.verifying_key().to_compressed_bytes())
         )
 
     def make_peer_private_key(self) -> PeerPrivateKey:
@@ -188,10 +207,64 @@ class Ursula:
     ) -> VerifiedKeyFrag:
         return encrypted_kfrag.decrypt(self._decrypting_key, hrac, publisher_card.verifying_key)
 
+    def decrypt_threshold_decryption_request(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> ThresholdDecryptionRequest:
+        shared_secret = self.__master_key.make_shared_secret(
+            request.ritual_id, request.requester_public_key
+        )
+        return request.decrypt(shared_secret)
+
+    def encrypt_threshold_decryption_response(
+        self,
+        response: ThresholdDecryptionResponse,
+        requester_public_key: SessionStaticKey,
+    ) -> EncryptedThresholdDecryptionResponse:
+        shared_secret = self.__master_key.make_shared_secret(
+            response.ritual_id, requester_public_key
+        )
+        return response.encrypt(shared_secret)
+
     def reencrypt(
         self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
     ) -> list[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
+
+    def derive_decryption_share(
+        self,
+        ritual: Ritual,
+        staking_provider_address: IdentityAddress,
+        validators: Sequence[Validator],
+        ciphertext_header: CiphertextHeader,
+        aad: bytes,
+        variant: FerveoVariant,
+    ) -> Union[DecryptionShareSimple, DecryptionSharePrecomputed]:
+        me = Validator(address=staking_provider_address.checksum, public_key=self.dkg_key)
+        dkg = Dkg(
+            tau=ritual.id,
+            # CHECK: is this always equal to the number of participants?
+            shares_num=ritual.dkg_size,
+            security_threshold=ritual.threshold,
+            validators=validators,
+            me=me,
+        )
+
+        if variant == FerveoVariant.Simple:
+            return ritual.aggregated_transcript.create_decryption_share_simple(
+                dkg=dkg,
+                ciphertext_header=ciphertext_header,
+                aad=aad,
+                validator_keypair=self._dkg_keypair,
+            )
+        elif variant == FerveoVariant.Precomputed:
+            return ritual.aggregated_transcript.create_decryption_share_precomputed(
+                dkg=dkg,
+                ciphertext_header=ciphertext_header,
+                aad=aad,
+                validator_keypair=self._dkg_keypair,
+            )
+        else:
+            raise NotImplementedError
 
     def __str__(self) -> str:
         operator_short = self.operator_address.checksum[:10]

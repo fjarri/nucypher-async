@@ -55,7 +55,7 @@ async def make_ursula_server(
         profile_name=config.get("profile_name", "ursula-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
-        payment_endpoint=config["payment_provider"],
+        pre_endpoint=config["payment_provider"],
         log_to_console=True,
         log_to_file=True,
         persistent_storage=True,

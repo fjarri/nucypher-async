@@ -18,14 +18,28 @@ from typing import cast
 from eth_account import Account
 from eth_account._utils.signing import to_standard_signature_bytes
 from eth_account.messages import encode_defunct
-from eth_account.signers.base import BaseAccount
+from eth_account.signers.local import LocalAccount
 from ethereum_rpc import Address, Amount
-from pons import Client, ClientSession, ContractABI, DeployedContract, Method, Mutability, abi
+from nucypher_core.ferveo import FerveoPublicKey
+from pons import (
+    AccountSigner,
+    Client,
+    ClientSession,
+    ContractABI,
+    DeployedContract,
+    Error,
+    Method,
+    Mutability,
+    Provider,
+    Signer,
+    abi,
+)
 from pons.http_provider import HTTPProvider
 
 from ..domain import Domain
 
-_PRE_APP_ABI = ContractABI(
+# nucypher_contracts::TACoApplication.sol
+_TACO_APP_ABI = ContractABI(
     methods=[
         Method(
             name="authorizedStake",
@@ -34,13 +48,13 @@ _PRE_APP_ABI = ContractABI(
             outputs=abi.uint(96),
         ),
         Method(
-            name="stakingProviderFromOperator",
+            name="operatorToStakingProvider",
             mutability=Mutability.VIEW,
             inputs=dict(_operator=abi.address),
             outputs=abi.address,
         ),
         Method(
-            name="getOperatorFromStakingProvider",
+            name="stakingProviderToOperator",
             mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.address,
@@ -61,8 +75,72 @@ _PRE_APP_ABI = ContractABI(
             name="getActiveStakingProviders",
             mutability=Mutability.VIEW,
             inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
-            outputs=[abi.uint(256), abi.uint(256)[2][...]],
+            outputs=[abi.uint(256), abi.bytes(32)[...]],
         ),
+        Method(
+            name="bondOperator",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_stakingProvider=abi.address, _operator=abi.address),
+        ),
+        Method(
+            name="confirmOperatorAddress",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_operator=abi.address),
+        ),
+    ],
+    errors=[Error(name="MyError", fields=dict(_stakingProvider=abi.address, sender=abi.address))],
+)
+
+_TACO_CHILD_APP_ABI = ContractABI(
+    methods=[
+        Method(
+            name="confirmOperatorAddress",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_operator=abi.address),
+        ),
+    ]
+)
+
+_STAKING_ABI = ContractABI(
+    methods=[
+        Method(
+            name="setRoles",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_stakingProvider=abi.address),
+        ),
+        Method(
+            name="setStakes",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _stakingProvider=abi.address,
+                _tStake=abi.uint(96),
+                _keepInTStake=abi.uint(96),
+                _nuInTStake=abi.uint(96),
+            ),
+        ),
+        Method(
+            name="authorizationIncreased",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _stakingProvider=abi.address,
+                _fromAmount=abi.uint(96),
+                _toAmount=abi.uint(96),
+            ),
+        ),
+    ]
+)
+
+G2PointStruct = abi.struct(word0=abi.bytes(32), word1=abi.bytes(32), word2=abi.bytes(32))
+
+_COORDINATOR_ABI = ContractABI(
+    methods=[
+        Method(
+            name="setProviderPublicKey",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(
+                _publicKey=G2PointStruct,
+            ),
+        )
     ]
 )
 
@@ -72,28 +150,25 @@ class IdentityAddress(Address):
 
 
 class BaseContracts:
-    PRE_APPLICATION: IdentityAddress
+    TACO_APPLICATION: IdentityAddress
 
 
 class LynxContracts(BaseContracts):
     """Registry for Lynx on Goerli."""
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class TapirContracts(BaseContracts):
     """Registry for Tapir on Goerli."""
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class MainnetContracts(BaseContracts):
     """Registry for mainnet."""
 
-    # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x0000000000000000000000000000000000000000")
 
 
 class IdentityAccount:
@@ -107,8 +182,9 @@ class IdentityAccount:
     def random(cls) -> "IdentityAccount":
         return cls(Account.create())
 
-    def __init__(self, account: BaseAccount):
+    def __init__(self, account: LocalAccount):
         self._account = account
+        self.signer = AccountSigner(self._account)
         self.address = IdentityAddress.from_hex(account.address)
 
     def sign_message(self, message: bytes) -> bytes:
@@ -131,11 +207,6 @@ class IdentityClient:
     def from_endpoint(cls, url: str, domain: Domain) -> "IdentityClient":
         assert url.startswith("https://")
         provider = HTTPProvider(url)
-        client = Client(provider)
-        return cls(client, domain)
-
-    def __init__(self, backend_client: Client, domain: Domain):
-        self._client = backend_client
 
         registry: type[BaseContracts]
         if domain == Domain.MAINNET:
@@ -147,23 +218,44 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        self._pre_application = DeployedContract(address=registry.PRE_APPLICATION, abi=_PRE_APP_ABI)
+        return cls(
+            Client(provider),
+            registry.TACO_APPLICATION,
+            registry.TACO_APPLICATION,
+            registry.TACO_APPLICATION,
+        )
+
+    def __init__(
+        self,
+        backend_client: Client,
+        taco_application_address: Address,
+        staking_address: Address,
+        coordinator_address: Address,
+    ):
+        # TODO: or should we take `DeployedContract`
+        # and assert that _TACO_APP_ABI is compatible with it?
+        self._backend_client = backend_client
+        self._app = DeployedContract(address=taco_application_address, abi=_TACO_APP_ABI)
+        self._staking = DeployedContract(address=staking_address, abi=_STAKING_ABI)
+        self._coordinator = DeployedContract(address=coordinator_address, abi=_COORDINATOR_ABI)
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator["IdentityClientSession"]:
-        async with self._client.session() as backend_session:
+        async with self._backend_client.session() as backend_session:
             yield IdentityClientSession(self, backend_session)
 
 
 class IdentityClientSession:
-    def __init__(self, identity_client: IdentityClient, backend_session: ClientSession):
-        self._identity_client = identity_client
+    def __init__(self, client: IdentityClient, backend_session: ClientSession):
+        self._client = client
         self._backend_session = backend_session
-        self._pre_application = identity_client._pre_application  # noqa: SLF001
+        self._app = client._app
+        self._staking = client._staking
+        self._coordinator = client._coordinator
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.call(
-            self._pre_application.method.authorizedStake(staking_provider_address)
+            self._app.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
 
@@ -171,7 +263,7 @@ class IdentityClientSession:
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._pre_application.method.stakingProviderFromOperator(operator_address)
+            self._app.method.operatorToStakingProvider(operator_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -179,7 +271,7 @@ class IdentityClientSession:
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._pre_application.method.getOperatorFromStakingProvider(staking_provider_address)
+            self._app.method.stakingProviderToOperator(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -190,7 +282,7 @@ class IdentityClientSession:
         return cast(
             "bool",
             await self._backend_session.call(
-                self._pre_application.method.isAuthorized(staking_provider_address)
+                self._app.method.isAuthorized(staking_provider_address)
             ),
         )
 
@@ -199,7 +291,7 @@ class IdentityClientSession:
         return cast(
             "bool",
             await self._backend_session.call(
-                self._pre_application.method.isOperatorConfirmed(operator_address)
+                self._app.method.isOperatorConfirmed(operator_address)
             ),
         )
 
@@ -210,12 +302,65 @@ class IdentityClientSession:
     async def get_active_staking_providers(
         self, start_index: int = 0, max_staking_providers: int = 0
     ) -> dict[IdentityAddress, AmountT]:
+        # TODO: implement pagination
         _total_staked, staking_providers_data = await self._backend_session.call(
-            self._pre_application.method.getActiveStakingProviders(
-                start_index, max_staking_providers
-            )
+            self._app.method.getActiveStakingProviders(start_index, max_staking_providers)
         )
-        return {
-            IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
-            for address, amount in staking_providers_data
+        staking_providers = {
+            IdentityAddress(data[:20]): AmountT.wei(int.from_bytes(data[20:], byteorder="big"))
+            for data in staking_providers_data
         }
+
+        return staking_providers
+
+    async def add_staking_provider(
+        self,
+        owner_signer: Signer,
+        staking_provider_signer: Signer,
+        operator_address: IdentityAddress,
+        stake: AmountT,
+    ) -> None:
+        staking_provider_address = staking_provider_signer.address
+
+        # TODO: this only applies to testnet staking. How do we make it general? Or move it to tests?
+        await self._backend_session.transact(
+            owner_signer, self._staking.method.setRoles(_stakingProvider=staking_provider_address)
+        )
+        await self._backend_session.transact(
+            owner_signer,
+            self._staking.method.setStakes(
+                _stakingProvider=staking_provider_address,
+                _tStake=stake.as_wei(),
+                _keepInTStake=0,
+                _nuInTStake=0,
+            ),
+        )
+        await self._backend_session.transact(
+            owner_signer,
+            self._staking.method.authorizationIncreased(
+                _stakingProvider=staking_provider_address, _fromAmount=0, _toAmount=stake.as_wei()
+            ),
+        )
+        await self._backend_session.transact(
+            staking_provider_signer,
+            self._app.method.bondOperator(
+                _stakingProvider=staking_provider_address, _operator=operator_address
+            ),
+        )
+
+    async def confirm_operator_address(
+        self,
+        operator_signer: Signer,
+        public_key: FerveoPublicKey,
+    ) -> None:
+        key_bytes = bytes(public_key)
+        await self._backend_session.transact(
+            operator_signer,
+            self._coordinator.method.setProviderPublicKey(
+                _publicKey={
+                    "word0": key_bytes[:32],
+                    "word1": key_bytes[32:64],
+                    "word2": key_bytes[64:],
+                }
+            ),
+        )

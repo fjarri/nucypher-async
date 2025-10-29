@@ -37,7 +37,7 @@ _HTTP_STATUS = {
 
 
 class HTTPError(Exception):
-    def __init__(self, message: str, status_code: http.HTTPStatus):
+    def __init__(self, message: JSON, status_code: http.HTTPStatus):
         super().__init__(message, status_code)
         self.message = message
         self.status_code = status_code
@@ -131,7 +131,11 @@ def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
         request_bytes = await request.body()
         return await binary_api_call(logger, ursula_server.endpoint_reencrypt(request_bytes))
 
-    async def status(_request: Request) -> Response:
+    async def decrypt(request: Request) -> Response:
+        request_bytes = await request.body()
+        return await binary_api_call(logger, ursula_server.endpoint_decrypt(request_bytes))
+
+    async def status(request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
         return await html_call(logger, ursula_server.endpoint_status())
 
@@ -147,6 +151,7 @@ def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
         Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
         Route(f"/{UrsulaRoutes.PUBLIC_INFORMATION}", public_information),
         Route(f"/{UrsulaRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
+        Route(f"/{UrsulaRoutes.DECRYPT}", decrypt, methods=["POST"]),
         Route(f"/{UrsulaRoutes.STATUS}", status),
     ]
 

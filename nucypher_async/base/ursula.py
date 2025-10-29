@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     NodeMetadata,
@@ -19,6 +21,7 @@ class UrsulaRoutes:
     PING = "ping"
     REENCRYPT = "reencrypt"
     STATUS = "status"
+    DECRYPT = "decrypt"
 
 
 class BaseUrsulaServer(ABC):
@@ -42,6 +45,8 @@ class BaseUrsulaServer(ABC):
         self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse: ...
 
+    # TODO: why do we need this separation between typed and untyped methods?
+    # Can't we do serialization/deserialization in the same method?
     async def endpoint_node_metadata_post(
         self, remote_host: str | None, request_bytes: bytes
     ) -> bytes:
@@ -75,5 +80,20 @@ class BaseUrsulaServer(ABC):
     @abstractmethod
     async def endpoint_status(self) -> str: ...
 
+    async def endpoint_decrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = EncryptedThresholdDecryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise InvalidMessage.for_message(EncryptedThresholdDecryptionRequest, exc) from exc
+
+        return bytes(await self.decrypt(request))
+
+    @abstractmethod
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse: ...
+
     @abstractmethod
     def logger(self) -> Logger: ...
+
+    # TODO: /condition_chains route support

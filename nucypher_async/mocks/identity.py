@@ -1,14 +1,15 @@
+import os
 from typing import cast
 
 from ethereum_rpc import Address, Amount
 from pons import Client, ContractABI
 
 from ..domain import Domain
-from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
+from ..drivers.identity import AmountT, IdentityAddress, IdentityClient, _TACO_APP_ABI
 from .eth import MockBackend, MockContract
 
 
-class SimplePREApplication(MockContract):
+class TacoApplication(MockContract):
     def __init__(self, abi: ContractABI):
         super().__init__(abi)
         self._min_stake = Amount.ether(40000)
@@ -21,10 +22,10 @@ class SimplePREApplication(MockContract):
     def authorizedStake(self, staking_provider_address: Address) -> int:  # noqa: N802
         return self._stakes[staking_provider_address].as_wei()
 
-    def stakingProviderFromOperator(self, operator_address: Address) -> Address:  # noqa: N802
+    def operatorToStakingProvider(self, operator_address: Address) -> Address:
         return self._operator_to_staking_provider[operator_address]
 
-    def getOperatorFromStakingProvider(self, staking_provider_address: Address) -> Address:  # noqa: N802
+    def stakingProviderToOperator(self, staking_provider_address: Address) -> Address:
         return self._staking_provider_to_operator[staking_provider_address]
 
     def isAuthorized(self, staking_provider_address: Address) -> bool:  # noqa: N802
@@ -76,14 +77,24 @@ class SimplePREApplication(MockContract):
 class MockIdentityClient(IdentityClient):
     def __init__(self) -> None:
         mock_backend = MockBackend()
-        super().__init__(cast("Client", mock_backend), Domain.MAINNET)
+        mock_client = cast("Client", mock_backend)
 
         self._mock_backend = mock_backend
 
-        self._mock_pre_application = SimplePREApplication(self._pre_application.abi)
-        mock_backend.mock_register_contract(
-            self._pre_application.address, self._mock_pre_application
-        )
+        mock_taco_application_address = IdentityAddress(os.urandom(20))
+        self._mock_taco_application = TacoApplication(_TACO_APP_ABI)
+        mock_backend.mock_register_contract(mock_taco_application_address, self._mock_taco_application)
+
+        staking_address = IdentityAddress(os.urandom(20))
+        # TODO: add the staking contract
+
+        coordinator_address = IdentityAddress(os.urandom(20))
+        # TODO: add the coordinator contract
+
+        super().__init__(mock_client,
+            taco_application_address=mock_taco_application_address,
+            staking_address=staking_address,
+            coordinator_address=coordinator_address)
 
     def mock_set_up(
         self,
@@ -106,6 +117,4 @@ class MockIdentityClient(IdentityClient):
         operator_address_ = Address(bytes(operator_address))
         amount_t_ = Amount.wei(amount_t.as_wei())
 
-        self._mock_pre_application.mock_set_up(
-            staking_provider_address_, operator_address_, amount_t_
-        )
+        self._mock_taco_application.mock_set_up(staking_provider_address_, operator_address_, amount_t_)
