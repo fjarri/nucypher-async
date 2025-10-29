@@ -8,20 +8,14 @@ import trio
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
-from .drivers.peer import UrsulaHTTPServer
+from .drivers.peer import NodeHTTPServer
 from .master_key import EncryptedMasterKey, MasterKey
-from .server import (
-    PeerServerConfig,
-    PorterServer,
-    PorterServerConfig,
-    UrsulaServer,
-    UrsulaServerConfig,
-)
+from .server import NodeServer, NodeServerConfig, PeerServerConfig, PorterServer, PorterServerConfig
 
 
 async def make_ursula_server(
     config_path: str, nucypher_password: str, geth_password: str
-) -> UrsulaServer:
+) -> NodeServer:
     async with await trio.Path(config_path).open(encoding="utf-8") as file:
         config = json.loads(await file.read())
 
@@ -51,7 +45,7 @@ async def make_ursula_server(
         ssl_ca_chain_path=config.get("ssl_ca_chain", None),
     )
 
-    config = UrsulaServerConfig.from_config_values(
+    config = NodeServerConfig.from_config_values(
         profile_name=config.get("profile_name", "ursula-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
@@ -62,7 +56,7 @@ async def make_ursula_server(
         debug=config.get("debug", False),
     )
 
-    return await UrsulaServer.async_init(
+    return await NodeServer.async_init(
         reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
     )
 
@@ -100,7 +94,7 @@ def main() -> None:
 @click.argument("geth_password")
 def ursula(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_ursula_server, config_path, nucypher_password, geth_password)
-    handle = HTTPServerHandle(UrsulaHTTPServer(server))
+    handle = HTTPServerHandle(NodeHTTPServer(server))
     trio.run(handle.startup)
 
 

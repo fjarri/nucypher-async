@@ -94,7 +94,7 @@ class VerifiedNodeInfo(NodeInfo):
         contact: Contact,
         domain: Domain,
     ) -> "VerifiedNodeInfo":
-        # TODO: use Ursula instead of several arguments
+        # TODO: use the character instead of several arguments?
         public_key = peer_public_key or PeerPublicKey.generate(peer_private_key, clock, contact)
         payload = NodeMetadataPayload(
             staking_provider_address=Address(bytes(staking_provider_address)),
@@ -191,4 +191,4 @@ class VerifiedNodeInfo(NodeInfo):
         return cls(node_info.metadata)
 
     def __str__(self) -> str:
-        return f"RemoteUrsula({self.staking_provider_address.checksum})"
+        return f"VerifiedNodeInfo({self.staking_provider_address.checksum})"

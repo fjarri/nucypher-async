@@ -160,7 +160,7 @@ async def retrieve_via_learner(
     context: Context | None = None,
 ) -> list[RetrievalState]:
     # TODO: the simlpest implementation
-    # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
+    # Need to use batch reencryptions, and not query the nodes that have already been queried.
     new_states = []
     for state in retrieval_states:
         vcfrags = await retrieve(

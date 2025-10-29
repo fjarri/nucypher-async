@@ -8,7 +8,7 @@ import trio
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAddress
-from nucypher_async.drivers.peer import Contact, UrsulaHTTPServer
+from nucypher_async.drivers.peer import Contact, NodeHTTPServer
 from nucypher_async.mocks import (
     MockClock,
     MockHTTPServerHandle,
@@ -18,11 +18,11 @@ from nucypher_async.mocks import (
     MockPREClient,
 )
 from nucypher_async.server import (
+    NodeServer,
+    NodeServerConfig,
     PeerServerConfig,
     PorterServer,
     PorterServerConfig,
-    UrsulaServer,
-    UrsulaServerConfig,
 )
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils import logging
@@ -68,7 +68,7 @@ async def lonely_ursulas(
     reencryptors: list[Reencryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
-) -> list[tuple[MockHTTPServerHandle, UrsulaServer]]:
+) -> list[tuple[MockHTTPServerHandle, NodeServer]]:
     servers = []
 
     for i in range(10):
@@ -86,7 +86,7 @@ async def lonely_ursulas(
             ssl_ca_chain=None,
         )
 
-        config = UrsulaServerConfig(
+        config = NodeServerConfig(
             domain=Domain.MAINNET,
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
@@ -98,10 +98,10 @@ async def lonely_ursulas(
             clock=mock_clock,
         )
 
-        server = await UrsulaServer.async_init(
+        server = await NodeServer.async_init(
             reencryptor=reencryptors[i], peer_server_config=peer_server_config, config=config
         )
-        handle = mock_network.add_server(UrsulaHTTPServer(server))
+        handle = mock_network.add_server(NodeHTTPServer(server))
         servers.append((handle, server))
 
     return servers
@@ -109,9 +109,9 @@ async def lonely_ursulas(
 
 @pytest.fixture
 async def chain_seeded_ursulas(
-    lonely_ursulas: list[tuple[MockHTTPServerHandle, UrsulaServer]],
-) -> AsyncIterator[list[UrsulaServer]]:
-    # Each Ursula knows only about one other Ursula,
+    lonely_ursulas: list[tuple[MockHTTPServerHandle, NodeServer]],
+) -> AsyncIterator[list[NodeServer]]:
+    # Each node knows only about one other node,
     # but the graph is fully connected.
     for (_handle1, server1), (_handle2, server2) in itertools.pairwise(lonely_ursulas):
         server2.learner._test_set_seed_contacts([server1.secure_contact().contact])
@@ -128,16 +128,16 @@ async def chain_seeded_ursulas(
 @pytest.fixture
 async def fully_learned_ursulas(
     mock_identity_client: MockIdentityClient,
-    lonely_ursulas: list[tuple[MockHTTPServerHandle, UrsulaServer]],
-) -> AsyncIterator[list[UrsulaServer]]:
-    # Each Ursula knows only about one other Ursula,
+    lonely_ursulas: list[tuple[MockHTTPServerHandle, NodeServer]],
+) -> AsyncIterator[list[NodeServer]]:
+    # Each node knows only about one other node,
     # but the graph is fully connected.
     for _handle, server in lonely_ursulas:
         for _other_handle, other_server in lonely_ursulas:
             if other_server is server:
                 continue
 
-            peer_info = other_server._node  # TODO: add a proper method to UrsulaServer
+            peer_info = other_server._node  # TODO: add a proper method to NodeServer
             async with mock_identity_client.session() as session:
                 stake = await session.get_staked_amount(peer_info.staking_provider_address)
             server.learner._test_add_verified_node(peer_info, stake)
@@ -155,7 +155,7 @@ async def fully_learned_ursulas(
 async def porter_server(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    fully_learned_ursulas: list[UrsulaServer],
+    fully_learned_ursulas: list[NodeServer],
     logger: logging.Logger,
     mock_clock: MockClock,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001

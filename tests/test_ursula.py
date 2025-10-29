@@ -1,12 +1,12 @@
 import trio
 import trio.testing
 
-from nucypher_async.server import UrsulaServer
+from nucypher_async.server import NodeServer
 
 
 async def test_learning(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    chain_seeded_ursulas: list[UrsulaServer],
+    chain_seeded_ursulas: list[NodeServer],
 ) -> None:
     while True:
         # Wait multiple learning cycles
@@ -20,6 +20,6 @@ async def test_learning(
             for server in chain_seeded_ursulas
         }
 
-        # Each Ursula should know about every other Ursula by now.
+        # Each node should know about every other node by now.
         if all(len(nodes) == 10 for nodes in known_nodes.values()):
             break

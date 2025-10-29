@@ -18,12 +18,12 @@ import httpx
 import trio
 
 from ..base.http_server import ASGIFramework, BaseHTTPServer
+from ..base.node import BaseNodeServer
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
-from ..base.ursula import BaseUrsulaServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .asgi_app import make_ursula_asgi_app
+from .asgi_app import make_node_asgi_app
 
 
 class PeerConnectionError(PeerError):
@@ -236,13 +236,13 @@ class BasePeerServer(ABC):
     def peer_private_key(self) -> PeerPrivateKey: ...
 
 
-class BasePeerAndUrsulaServer(BasePeerServer, BaseUrsulaServer): ...
+class BasePeerAndNodeServer(BasePeerServer, BaseNodeServer): ...
 
 
-class UrsulaHTTPServer(BaseHTTPServer):
+class NodeHTTPServer(BaseHTTPServer):
     """An adapter from peer server to HTTP server."""
 
-    def __init__(self, server: BasePeerAndUrsulaServer):
+    def __init__(self, server: BasePeerAndNodeServer):
         self.server = server
 
     def host_and_port(self) -> tuple[str, int]:
@@ -259,4 +259,4 @@ class UrsulaHTTPServer(BaseHTTPServer):
         return None
 
     def into_asgi_app(self) -> ASGIFramework:
-        return make_ursula_asgi_app(self.server)
+        return make_node_asgi_app(self.server)

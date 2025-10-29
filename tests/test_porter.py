@@ -14,12 +14,12 @@ from nucypher_async.mocks import (
     MockPREClient,
 )
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.server import PorterServer, UrsulaServer
+from nucypher_async.server import NodeServer, PorterServer
 
 
 async def test_get_ursulas(
     mock_network: MockNetwork,
-    fully_learned_ursulas: list[UrsulaServer],
+    fully_learned_ursulas: list[NodeServer],
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
@@ -44,7 +44,7 @@ async def test_retrieve_cfrags(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
-    fully_learned_ursulas: list[UrsulaServer],
+    fully_learned_ursulas: list[NodeServer],
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:

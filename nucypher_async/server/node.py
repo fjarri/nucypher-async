@@ -11,25 +11,25 @@ from nucypher_core import (
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
+from ..drivers.peer import BasePeerAndNodeServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .config import PeerServerConfig, UrsulaServerConfig
+from .config import NodeServerConfig, PeerServerConfig
 from .status import render_status
 
 
-class UrsulaServer(BasePeerAndUrsulaServer):
+class NodeServer(BasePeerAndNodeServer):
     @classmethod
     async def async_init(
         cls,
         reencryptor: Reencryptor,
         peer_server_config: PeerServerConfig,
-        config: UrsulaServerConfig,
-    ) -> "UrsulaServer":
+        config: NodeServerConfig,
+    ) -> "NodeServer":
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(
                 session, reencryptor.operator_address
@@ -46,13 +46,13 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         self,
         reencryptor: Reencryptor,
         peer_server_config: PeerServerConfig,
-        config: UrsulaServerConfig,
+        config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
         self.reencryptor = reencryptor
 
         self._clock = config.clock
-        self._logger = config.parent_logger.get_child("UrsulaServer")
+        self._logger = config.parent_logger.get_child("NodeServer")
         self._storage = config.storage
 
         node_info = self._storage.get_my_node_info()

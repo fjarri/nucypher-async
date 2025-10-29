@@ -1,11 +1,11 @@
-from .config import PeerServerConfig, PorterServerConfig, UrsulaServerConfig
+from .config import NodeServerConfig, PeerServerConfig, PorterServerConfig
+from .node import NodeServer
 from .porter import PorterServer
-from .ursula import UrsulaServer
 
 __all__ = [
+    "NodeServer",
+    "NodeServerConfig",
     "PeerServerConfig",
     "PorterServer",
     "PorterServerConfig",
-    "UrsulaServer",
-    "UrsulaServerConfig",
 ]

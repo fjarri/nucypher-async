@@ -7,17 +7,17 @@ from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.peer import Contact, NodeHTTPServer, PeerClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPREClient
 from nucypher_async.p2p.node_info import UrsulaClient
-from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
+from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
 @pytest.fixture
-def ursula_server() -> UrsulaServer:
+def ursula_server() -> NodeServer:
     peer_server_config = PeerServerConfig(
         bind_as="127.0.0.1",
         contact=Contact("127.0.0.1", 9151),
@@ -25,7 +25,7 @@ def ursula_server() -> UrsulaServer:
         ssl_private_key=None,
         ssl_ca_chain=None,
     )
-    config = UrsulaServerConfig(
+    config = NodeServerConfig(
         domain=Domain.MAINNET,
         identity_client=MockIdentityClient(),
         pre_client=MockPREClient(),
@@ -36,7 +36,7 @@ def ursula_server() -> UrsulaServer:
         clock=SystemClock(),
     )
 
-    return UrsulaServer(
+    return NodeServer(
         reencryptor=Reencryptor(),
         peer_server_config=peer_server_config,
         config=config,
@@ -47,9 +47,9 @@ def ursula_server() -> UrsulaServer:
 async def test_client_real_server(
     nursery: trio.Nursery,
     capsys: pytest.CaptureFixture[str],
-    ursula_server: UrsulaServer,
+    ursula_server: NodeServer,
 ) -> None:
-    handle = HTTPServerHandle(UrsulaHTTPServer(ursula_server))
+    handle = HTTPServerHandle(NodeHTTPServer(ursula_server))
     await nursery.start(handle.startup)
 
     client = UrsulaClient(PeerClient())

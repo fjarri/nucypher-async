@@ -29,13 +29,13 @@ from nucypher_async.client.pre import (
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.peer import Contact, NodeHTTPServer, PeerClient
 from nucypher_async.drivers.pre import PREAccount, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
+from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
@@ -86,21 +86,21 @@ async def run_local_ursula_fleet(
             ssl_ca_chain=None,
         )
 
-        config = UrsulaServerConfig(
+        config = NodeServerConfig(
             domain=context.domain,
             identity_client=context.identity_client,
             pre_client=context.pre_client,
             peer_client=PeerClient(),
-            parent_logger=context.logger.get_child(f"Ursula{i + 1}"),
+            parent_logger=context.logger.get_child(f"Node{i + 1}"),
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
             clock=context.clock,
         )
 
-        server = await UrsulaServer.async_init(
+        server = await NodeServer.async_init(
             reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
         )
-        handle = HTTPServerHandle(UrsulaHTTPServer(server))
+        handle = HTTPServerHandle(NodeHTTPServer(server))
         await nursery.start(handle.startup)
         handles.append(handle)
 
@@ -197,7 +197,7 @@ async def main(*, mocked: bool = True) -> None:
 
     async with trio.open_nursery() as nursery:
         if mocked:
-            context.logger.info("Mocked mode - starting Ursulas")
+            context.logger.info("Mocked mode - starting nodes")
             server_handles, seed_contact = await run_local_ursula_fleet(context, nursery)
             # Wait for all the nodes to learn about each other
             await trio.sleep(1)
@@ -244,7 +244,7 @@ async def main(*, mocked: bool = True) -> None:
         context.logger.info("Message decrypted successfully!")
 
         if mocked:
-            context.logger.info("Stopping Ursulas")
+            context.logger.info("Stopping nodes")
             for handle in server_handles:
                 await handle.shutdown()
 

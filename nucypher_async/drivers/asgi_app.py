@@ -22,10 +22,10 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from ..base.http_server import ASGIFramework
+from ..base.node import BaseNodeServer, NodeRoutes
 from ..base.peer_error import InactivePolicy, ServerSidePeerError
 from ..base.porter import BasePorterServer, PorterRoutes
 from ..base.types import JSON
-from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
 from ..utils.logging import Logger
 
 # HTTP status codes don't need to be unique or exhaustive, it's just an additional way
@@ -105,8 +105,8 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
-    """Returns an ASGI app serving as a front-end for a network peer (Ursula)."""
+def make_node_asgi_app(ursula_server: BaseNodeServer) -> ASGIFramework:
+    """Returns an ASGI app serving as a front-end for a network node."""
     logger = ursula_server.logger().get_child("App")
 
     async def ping(request: Request) -> Response:
@@ -142,12 +142,12 @@ def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
         await ursula_server.stop()
 
     routes = [
-        Route(f"/{UrsulaRoutes.PING}", ping),
-        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_get),
-        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
-        Route(f"/{UrsulaRoutes.PUBLIC_INFORMATION}", public_information),
-        Route(f"/{UrsulaRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
-        Route(f"/{UrsulaRoutes.STATUS}", status),
+        Route(f"/{NodeRoutes.PING}", ping),
+        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_get),
+        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
+        Route(f"/{NodeRoutes.PUBLIC_INFORMATION}", public_information),
+        Route(f"/{NodeRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
+        Route(f"/{NodeRoutes.STATUS}", status),
     ]
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)

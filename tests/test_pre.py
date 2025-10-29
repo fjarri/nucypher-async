@@ -8,13 +8,13 @@ from nucypher_async.drivers.pre import PREAmount
 from nucypher_async.mocks import MockIdentityClient, MockNetwork, MockPeerClient, MockPREClient
 from nucypher_async.p2p.algorithms import verified_nodes_iter
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.server import UrsulaServer
+from nucypher_async.server import NodeServer
 from nucypher_async.utils.logging import Logger
 
 
 async def test_verified_nodes_iter(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    fully_learned_ursulas: list[UrsulaServer],
+    fully_learned_ursulas: list[NodeServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
@@ -41,7 +41,7 @@ async def test_verified_nodes_iter(
 
 async def test_granting(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    fully_learned_ursulas: list[UrsulaServer],
+    fully_learned_ursulas: list[NodeServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,

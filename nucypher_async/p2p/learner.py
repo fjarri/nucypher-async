@@ -21,7 +21,7 @@ from .verification import VerifiedNodeInfo, verify_staking_remote
 
 class Learner:
     """
-    The client for P2P network of Ursulas, keeping the metadata of known nodes
+    The client for P2P network of nodes, keeping the metadata of known nodes
     and running the background learning task.
     """
 

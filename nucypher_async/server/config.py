@@ -130,7 +130,7 @@ class PeerServerConfig:
 
 
 @frozen
-class UrsulaServerConfig:
+class NodeServerConfig:
     domain: Domain
     identity_client: IdentityClient
     pre_client: PREClient
@@ -156,7 +156,7 @@ class UrsulaServerConfig:
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
         pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
-    ) -> "UrsulaServerConfig":
+    ) -> "NodeServerConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
         pre_client = pre_client_factory(pre_endpoint, domain_)
