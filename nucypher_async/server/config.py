@@ -7,8 +7,8 @@ from platformdirs import PlatformDirs
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import IdentityClient
-from ..drivers.payment import PaymentClient
 from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
+from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
@@ -133,7 +133,7 @@ class PeerServerConfig:
 class UrsulaServerConfig:
     domain: Domain
     identity_client: IdentityClient
-    payment_client: PaymentClient
+    pre_client: PREClient
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
@@ -145,7 +145,7 @@ class UrsulaServerConfig:
         cls,
         *,
         identity_endpoint: str,
-        payment_endpoint: str,
+        pre_endpoint: str,
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
@@ -155,13 +155,11 @@ class UrsulaServerConfig:
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
-        payment_client_factory: Callable[
-            [str, Domain], PaymentClient
-        ] = PaymentClient.from_endpoint,
+        pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
     ) -> "UrsulaServerConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
-        payment_client = payment_client_factory(payment_endpoint, domain_)
+        pre_client = pre_client_factory(pre_endpoint, domain_)
         logger = make_logger(
             profile_name,
             "ursula",
@@ -176,7 +174,7 @@ class UrsulaServerConfig:
         return cls(
             domain=domain_,
             identity_client=identity_client,
-            payment_client=payment_client,
+            pre_client=pre_client,
             peer_client=peer_client,
             parent_logger=logger,
             storage=storage,

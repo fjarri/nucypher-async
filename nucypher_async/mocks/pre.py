@@ -5,7 +5,7 @@ from ethereum_rpc import Address, Amount
 from pons import Client, ContractABI
 
 from ..domain import Domain
-from ..drivers.payment import AmountMATIC, PaymentAddress, PaymentClient
+from ..drivers.pre import PREAddress, PREAmount, PREClient
 from .eth import MockBackend, MockContract
 
 
@@ -52,7 +52,7 @@ class SubscriptionManager(MockContract):
         self._policies[policy_id] = Policy(policy_id=policy_id, shares=shares, start=start, end=end)
 
 
-class MockPaymentClient(PaymentClient):
+class MockPREClient(PREClient):
     def __init__(self) -> None:
         mock_backend = MockBackend()
         super().__init__(cast("Client", mock_backend), Domain.MAINNET)
@@ -61,5 +61,5 @@ class MockPaymentClient(PaymentClient):
             self._manager.address, SubscriptionManager(self._manager.abi)
         )
 
-    def mock_set_balance(self, address: PaymentAddress, amount: AmountMATIC) -> None:
+    def mock_set_balance(self, address: PREAddress, amount: PREAmount) -> None:
         self._mock_backend.set_balance(address, Amount.wei(amount.as_wei()))

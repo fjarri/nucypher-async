@@ -67,62 +67,62 @@ _SUBSCRIPTION_MANAGER_ABI = ContractABI(
 )
 
 
-class PaymentAddress(Address):
+class PREAddress(Address):
     pass
 
 
 class BaseContracts:
-    SUBSCRIPTION_MANAGER: PaymentAddress
+    SUBSCRIPTION_MANAGER: PREAddress
 
 
 class LynxContracts(BaseContracts):
     """Registry for Polygon-Mumbai."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
+    SUBSCRIPTION_MANAGER = PREAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class TapirContracts(BaseContracts):
     """Registry for Polygon-Mumbai."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
+    SUBSCRIPTION_MANAGER = PREAddress.from_hex("0xb9015d7b35ce7c81dde38ef7136baa3b1044f313")
 
 
 class MainnetContracts(BaseContracts):
     """Registry for Polygon-Mainnet."""
 
     # https://github.com/nucypher/nucypher-contracts/blob/main/contracts/matic/SubscriptionManager.sol
-    SUBSCRIPTION_MANAGER = PaymentAddress.from_hex("0xB0194073421192F6Cf38d72c791Be8729721A0b3")
+    SUBSCRIPTION_MANAGER = PREAddress.from_hex("0xB0194073421192F6Cf38d72c791Be8729721A0b3")
 
 
-class AmountMATIC(Amount):
+class PREAmount(Amount):
     def __str__(self) -> str:
-        return f"{self.as_ether()} MATIC"
+        return f"{self.as_ether()} PRE"
 
 
-class PaymentAccount:
+class PREAccount:
     @classmethod
-    def random(cls) -> "PaymentAccount":
+    def random(cls) -> "PREAccount":
         return cls(Account.create())
 
     def __init__(self, account: LocalAccount):
         self._account = account
-        self.address = PaymentAddress.from_hex(account.address)
+        self.address = PREAddress.from_hex(account.address)
 
 
-class PaymentAccountSigner(AccountSigner):
-    def __init__(self, payment_account: PaymentAccount):
-        super().__init__(payment_account._account)  # noqa: SLF001
+class PREAccountSigner(AccountSigner):
+    def __init__(self, pre_account: PREAccount):
+        super().__init__(pre_account._account)  # noqa: SLF001
 
     @property
-    def address(self) -> PaymentAddress:
-        return PaymentAddress(bytes(super().address))
+    def address(self) -> PREAddress:
+        return PREAddress(bytes(super().address))
 
 
-class PaymentClient:
+class PREClient:
     @classmethod
-    def from_endpoint(cls, url: str, domain: Domain) -> "PaymentClient":
+    def from_endpoint(cls, url: str, domain: Domain) -> "PREClient":
         assert url.startswith("https://")
         provider = HTTPProvider(url)
         client = Client(provider)
@@ -146,16 +146,16 @@ class PaymentClient:
         )
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator["PaymentClientSession"]:
+    async def session(self) -> AsyncIterator["PREClientSession"]:
         async with self._client.session() as backend_session:
-            yield PaymentClientSession(self, backend_session)
+            yield PREClientSession(self, backend_session)
 
 
-class PaymentClientSession:
-    def __init__(self, payment_client: PaymentClient, backend_session: ClientSession):
-        self._payment_client = payment_client
+class PREClientSession:
+    def __init__(self, pre_client: PREClient, backend_session: ClientSession):
+        self._pre_client = pre_client
         self._backend_session = backend_session
-        self._manager = self._payment_client._manager  # noqa: SLF001
+        self._manager = self._pre_client._manager  # noqa: SLF001
 
     async def is_policy_active(self, hrac: HRAC) -> bool:
         is_active = await self._backend_session.call(
@@ -164,11 +164,11 @@ class PaymentClientSession:
         # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast("bool", is_active)
 
-    async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> AmountMATIC:
+    async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> PREAmount:
         amount = await self._backend_session.call(
             self._manager.method.getPolicyCost(shares, policy_start, policy_end)
         )
-        return AmountMATIC.wei(amount)
+        return PREAmount.wei(amount)
 
     async def create_policy(
         self,

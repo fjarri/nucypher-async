@@ -113,7 +113,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         )
 
         self._peer_private_key = peer_private_key
-        self._payment_client = config.payment_client
+        self._pre_client = config.pre_client
 
         self._started_at = self._clock.utcnow()
 
@@ -199,7 +199,7 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
-        async with self._payment_client.session() as session:
+        async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
                 raise InactivePolicy(f"Policy {hrac} is not active")
 

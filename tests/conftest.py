@@ -14,8 +14,8 @@ from nucypher_async.mocks import (
     MockHTTPServerHandle,
     MockIdentityClient,
     MockNetwork,
-    MockPaymentClient,
     MockPeerClient,
+    MockPREClient,
 )
 from nucypher_async.server import (
     PeerServerConfig,
@@ -56,15 +56,15 @@ def mock_identity_client() -> MockIdentityClient:
 
 
 @pytest.fixture
-def mock_payment_client() -> MockPaymentClient:
-    return MockPaymentClient()
+def mock_pre_client() -> MockPREClient:
+    return MockPREClient()
 
 
 @pytest.fixture
 async def lonely_ursulas(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    mock_payment_client: MockPaymentClient,
+    mock_pre_client: MockPREClient,
     reencryptors: list[Reencryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
@@ -90,7 +90,7 @@ async def lonely_ursulas(
             domain=Domain.MAINNET,
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
-            payment_client=mock_payment_client,
+            pre_client=mock_pre_client,
             peer_client=MockPeerClient(mock_network, "127.0.0.1"),
             parent_logger=logger.get_child(str(i)),
             storage=InMemoryStorage(),

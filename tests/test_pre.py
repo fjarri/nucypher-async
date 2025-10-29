@@ -4,8 +4,8 @@ import trio.testing
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient
 from nucypher_async.client.pre import encrypt, grant, retrieve_and_decrypt
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.payment import AmountMATIC
-from nucypher_async.mocks import MockIdentityClient, MockNetwork, MockPaymentClient, MockPeerClient
+from nucypher_async.drivers.pre import PREAmount
+from nucypher_async.mocks import MockIdentityClient, MockNetwork, MockPeerClient, MockPREClient
 from nucypher_async.p2p.algorithms import verified_nodes_iter
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import UrsulaServer
@@ -44,7 +44,7 @@ async def test_granting(
     fully_learned_ursulas: list[UrsulaServer],
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
-    mock_payment_client: MockPaymentClient,
+    mock_pre_client: MockPREClient,
 ) -> None:
     alice = Delegator.random()
     publisher = Publisher.random()
@@ -59,7 +59,7 @@ async def test_granting(
     )
 
     # Fund Alice
-    mock_payment_client.mock_set_balance(publisher.payment_address, AmountMATIC.ether(1))
+    mock_pre_client.mock_set_balance(publisher.pre_address, PREAmount.ether(1))
 
     policy = alice.make_policy(
         recipient_card=bob.card(),
@@ -74,7 +74,7 @@ async def test_granting(
             recipient_card=bob.card(),
             publisher=publisher,
             learner=alice_learner,
-            payment_client=mock_payment_client,
+            pre_client=mock_pre_client,
             handpicked_addresses=[
                 server._node.staking_provider_address for server in fully_learned_ursulas[:3]
             ],
