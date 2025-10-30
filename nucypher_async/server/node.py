@@ -177,17 +177,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             return remote_host.encode()
         raise GenericPeerError
 
-    async def node_metadata_get(self) -> MetadataResponse:
-        announce_nodes = [
-            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
-        ]
-        response_payload = MetadataResponsePayload(
-            timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
-            announce_nodes=announce_nodes,
-        )
-        return MetadataResponse(self.reencryptor.signer, response_payload)
-
-    async def node_metadata_post(
+    async def node_metadata(
         self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse:
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
@@ -202,7 +192,14 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
-        return await self.node_metadata_get()
+        announce_nodes = [
+            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
+        ]
+        response_payload = MetadataResponsePayload(
+            timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
+            announce_nodes=announce_nodes,
+        )
+        return MetadataResponse(self.reencryptor.signer, response_payload)
 
     async def public_information(self) -> NodeMetadata:
         # TODO: can we just return NodeInfo?

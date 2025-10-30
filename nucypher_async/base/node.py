@@ -32,24 +32,16 @@ class BaseNodeServer(ABC):
     async def endpoint_ping(self, remote_host: str | None) -> bytes: ...
 
     @abstractmethod
-    async def node_metadata_get(self) -> MetadataResponse: ...
-
-    async def endpoint_node_metadata_get(self) -> bytes:
-        return bytes(await self.node_metadata_get())
-
-    @abstractmethod
-    async def node_metadata_post(
+    async def node_metadata(
         self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse: ...
 
-    async def endpoint_node_metadata_post(
-        self, remote_host: str | None, request_bytes: bytes
-    ) -> bytes:
+    async def endpoint_node_metadata(self, remote_host: str | None, request_bytes: bytes) -> bytes:
         try:
             request = MetadataRequest.from_bytes(request_bytes)
         except ValueError as exc:
             raise InvalidMessage.for_message(MetadataRequest, exc) from exc
-        return bytes(await self.node_metadata_post(remote_host, request))
+        return bytes(await self.node_metadata(remote_host, request))
 
     @abstractmethod
     async def public_information(self) -> NodeMetadata: ...
