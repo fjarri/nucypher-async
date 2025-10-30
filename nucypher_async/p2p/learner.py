@@ -1,7 +1,13 @@
 from collections.abc import Iterable
 
 import trio
-from nucypher_core import Conditions, Context, TreasureMap
+from nucypher_core import (
+    Conditions,
+    Context,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
+    TreasureMap,
+)
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
@@ -275,6 +281,13 @@ class Learner:
             conditions=conditions,
             context=context,
         )
+
+    async def decrypt(
+        self,
+        node_info: VerifiedNodeInfo,
+        request: EncryptedThresholdDecryptionRequest,
+    ) -> EncryptedThresholdDecryptionResponse:
+        return await self._node_client.decrypt(node_info=node_info, request=request)
 
     def next_verification_in(self) -> float:
         return self._fleet_sensor.next_verification_in()

@@ -6,11 +6,13 @@ from ipaddress import IPv4Address
 import pytest
 import trio
 
+from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAddress
 from nucypher_async.drivers.peer import Contact
 from nucypher_async.mocks import (
+    MockCBDClient,
     MockClock,
     MockHTTPServerHandle,
     MockIdentityClient,
@@ -47,6 +49,11 @@ def reencryptors() -> list[Reencryptor]:
 
 
 @pytest.fixture
+def decryptors() -> list[Decryptor]:
+    return [Decryptor() for i in range(10)]
+
+
+@pytest.fixture
 def mock_network(nursery: trio.Nursery) -> MockNetwork:
     return MockNetwork(nursery)
 
@@ -62,11 +69,18 @@ def mock_pre_client() -> MockPREClient:
 
 
 @pytest.fixture
+def mock_cbd_client() -> MockCBDClient:
+    return MockCBDClient()
+
+
+@pytest.fixture
 async def lonely_nodes(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
+    mock_cbd_client: MockCBDClient,
     reencryptors: list[Reencryptor],
+    decryptors: list[Decryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
 ) -> list[tuple[MockHTTPServerHandle, NodeServer]]:
@@ -92,6 +106,7 @@ async def lonely_nodes(
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
             pre_client=mock_pre_client,
+            cbd_client=mock_cbd_client,
             peer_client=MockPeerClient(mock_network, "127.0.0.1"),
             parent_logger=logger.get_child(str(i)),
             storage=InMemoryStorage(),
@@ -100,7 +115,10 @@ async def lonely_nodes(
         )
 
         server = await NodeServer.async_init(
-            reencryptor=reencryptors[i], peer_server_config=peer_server_config, config=config
+            reencryptor=reencryptors[i],
+            decryptor=decryptors[i],
+            peer_server_config=peer_server_config,
+            config=config,
         )
         handle = mock_network.add_server(server)
         servers.append((handle, server))

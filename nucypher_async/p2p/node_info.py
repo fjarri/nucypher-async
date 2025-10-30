@@ -6,6 +6,8 @@ from nucypher_core import (
     Address,
     Conditions,
     Context,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     FleetStateChecksum,
     MetadataRequest,
     MetadataResponse,
@@ -190,6 +192,16 @@ class NodeClient:
             raise InvalidMessage(ReencryptionResponse, exc) from exc
 
         return verified_cfrags
+
+    async def decrypt(
+        self,
+        node_info: NodeInfo,
+        request: EncryptedThresholdDecryptionRequest,
+    ) -> EncryptedThresholdDecryptionResponse:
+        response_bytes = await self._peer_client.communicate(
+            node_info.secure_contact, NodeRoutes.DECRYPT, bytes(request)
+        )
+        return unwrap_bytes(response_bytes, EncryptedThresholdDecryptionResponse)
 
     async def status(self, secure_contact: SecureContact) -> str:
         response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.STATUS)

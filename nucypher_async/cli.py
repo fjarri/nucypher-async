@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 import trio
 
+from .characters.cbd import Decryptor
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
@@ -34,6 +35,7 @@ async def make_node_server(
     key = encrypted_key.decrypt(nucypher_password)
 
     reencryptor = Reencryptor(master_key=key, identity_account=acc)
+    decryptor = Decryptor(master_key=key)
 
     # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
     peer_server_config = PeerServerConfig.from_config_values(
@@ -49,6 +51,7 @@ async def make_node_server(
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
         pre_endpoint=config["pre_provider"],
+        cbd_endpoint=config["cbd_provider"],
         log_to_console=True,
         log_to_file=True,
         persistent_storage=True,
@@ -56,7 +59,10 @@ async def make_node_server(
     )
 
     return await NodeServer.async_init(
-        reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
+        reencryptor=reencryptor,
+        decryptor=decryptor,
+        peer_server_config=peer_server_config,
+        config=config,
     )
 
 

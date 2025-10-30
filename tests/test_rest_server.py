@@ -4,13 +4,14 @@ from ipaddress import IPv4Address
 import pytest
 import trio
 
+from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.time import SystemClock
-from nucypher_async.mocks import MockIdentityClient, MockPREClient
+from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.node_info import NodeClient
 from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
@@ -30,6 +31,7 @@ def node_server() -> NodeServer:
         domain=Domain.MAINNET,
         identity_client=MockIdentityClient(),
         pre_client=MockPREClient(),
+        cbd_client=MockCBDClient(),
         peer_client=PeerClient(),
         parent_logger=NULL_LOGGER,
         storage=InMemoryStorage(),
@@ -39,6 +41,7 @@ def node_server() -> NodeServer:
 
     return NodeServer(
         reencryptor=Reencryptor(),
+        decryptor=Decryptor(),
         peer_server_config=peer_server_config,
         config=config,
         staking_provider_address=IdentityAddress(os.urandom(20)),

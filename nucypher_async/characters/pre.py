@@ -169,9 +169,6 @@ class Reencryptor:
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
 
-        self._dkg_keypair = self.__master_key.make_dkg_keypair()
-        self.dkg_key = self._dkg_keypair.public_key()
-
         self.operator_address = identity_account_.address
         self.operator_signature = RecoverableSignature.from_be_bytes(
             identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
