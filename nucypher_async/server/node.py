@@ -2,6 +2,8 @@ from ipaddress import IPv4Address
 
 import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     MetadataResponsePayload,
@@ -13,6 +15,7 @@ from nucypher_core import (
 from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.server import ServerWrapper
+from ..base.types import JSON
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
@@ -231,6 +234,14 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             signer=self.reencryptor.signer,
             capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
         )
+
+    async def endpoint_condition_chains(self) -> JSON:
+        raise NotImplementedError
+
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse:
+        raise NotImplementedError
 
     async def endpoint_status(self) -> str:
         return render_status(
