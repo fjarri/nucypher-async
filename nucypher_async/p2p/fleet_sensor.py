@@ -16,13 +16,13 @@ from sortedcontainers import SortedKeyList
 from ..base.time import BaseClock
 from ..drivers.identity import AmountT, IdentityAddress
 from ..drivers.peer import Contact
-from .ursula import UrsulaInfo
-from .verification import VerifiedUrsulaInfo
+from .node_info import NodeInfo
+from .verification import VerifiedNodeInfo
 
 
 @frozen
 class NodeEntry:
-    node: VerifiedUrsulaInfo
+    node: VerifiedNodeInfo
     verified_at: arrow.Arrow
     staked_amount: AmountT
 
@@ -75,7 +75,7 @@ class VerifiedNodesDB:
 
     def add_node(
         self,
-        node: VerifiedUrsulaInfo,
+        node: VerifiedNodeInfo,
         staked_amount: AmountT,
         verified_at: arrow.Arrow,
         verify_at: arrow.Arrow,
@@ -93,18 +93,18 @@ class VerifiedNodesDB:
             VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
         )
 
-    def _del_verify_at(self, node: UrsulaInfo) -> None:
+    def _del_verify_at(self, node: NodeInfo) -> None:
         # TODO: we really need a SortedDict type
         for i in range(len(self._verify_at)):
             if self._verify_at[i].address == node.staking_provider_address:
                 del self._verify_at[i]
                 break
 
-    def get_verified_at(self, node: VerifiedUrsulaInfo) -> arrow.Arrow:
+    def get_verified_at(self, node: VerifiedNodeInfo) -> arrow.Arrow:
         return self._nodes[node.staking_provider_address].verified_at
 
     def update_verify_at(
-        self, node: VerifiedUrsulaInfo, verified_at: arrow.Arrow, verify_at: arrow.Arrow
+        self, node: VerifiedNodeInfo, verified_at: arrow.Arrow, verify_at: arrow.Arrow
     ) -> None:
         if node.staking_provider_address not in self._nodes:
             raise ValueError(f"The address {node.staking_provider_address} is not a known node")
@@ -117,7 +117,7 @@ class VerifiedNodesDB:
             VerifyAtEntry(address=node.staking_provider_address, verify_at=verify_at)
         )
 
-    def remove_node(self, node: UrsulaInfo) -> None:
+    def remove_node(self, node: NodeInfo) -> None:
         del self._nodes[node.staking_provider_address]
         self._del_verify_at(node)
 
@@ -128,7 +128,7 @@ class VerifiedNodesDB:
                 self._del_verify_at(entry.node)
                 break
 
-    def all_nodes(self) -> list[VerifiedUrsulaInfo]:
+    def all_nodes(self) -> list[VerifiedNodeInfo]:
         return [entry.node for entry in self._nodes.values()]
 
     def has_contact(self, contact: Contact) -> bool:
@@ -258,7 +258,7 @@ class FleetSensor:
     def __init__(
         self,
         clock: BaseClock,
-        this_node: VerifiedUrsulaInfo | None,
+        this_node: VerifiedNodeInfo | None,
     ):
         self._clock = clock
 
@@ -274,7 +274,7 @@ class FleetSensor:
 
         self._locked_contacts_for_learning: dict[Contact, BroadcastValue[None]] = {}
         self._locked_contacts_for_verification: dict[
-            Contact, BroadcastValue[VerifiedUrsulaInfo | None]
+            Contact, BroadcastValue[VerifiedNodeInfo | None]
         ] = {}
 
         self.new_verified_nodes_event = trio.Event()
@@ -282,7 +282,7 @@ class FleetSensor:
 
     def _calculate_next_verification(
         self,
-        node: VerifiedUrsulaInfo,
+        node: VerifiedNodeInfo,
         verified_at: arrow.Arrow,
         previously_verified_at: arrow.Arrow | None = None,
     ) -> arrow.Arrow:
@@ -316,7 +316,7 @@ class FleetSensor:
         self._verified_nodes_db.remove_by_contact(contact)
 
     @_next_verification_time_may_change
-    def report_verified_node(self, node: VerifiedUrsulaInfo, staked_amount: AmountT) -> None:
+    def report_verified_node(self, node: VerifiedNodeInfo, staked_amount: AmountT) -> None:
         if (
             self._my_staking_provider_address
             and node.staking_provider_address == self._my_staking_provider_address
@@ -358,7 +358,7 @@ class FleetSensor:
 
     @_next_verification_time_may_change
     def report_active_learning_results(
-        self, teacher_node: UrsulaInfo, metadatas: Iterable[UrsulaInfo]
+        self, teacher_node: NodeInfo, metadatas: Iterable[NodeInfo]
     ) -> None:
         for metadata in metadatas:
             if metadata.contact == teacher_node.contact and bytes(metadata) != bytes(teacher_node):
@@ -367,7 +367,7 @@ class FleetSensor:
 
     @_next_verification_time_may_change
     def report_passive_learning_results(
-        self, sender_host: str | None, metadatas: Iterable[UrsulaInfo]
+        self, sender_host: str | None, metadatas: Iterable[NodeInfo]
     ) -> None:
         # Filter out only the contact(s) with `remote_address`.
         # We're not going to trust all this metadata anyway.
@@ -381,12 +381,12 @@ class FleetSensor:
         self._staking_providers = providers
         self._staking_providers_updated = self._clock.utcnow()
 
-    def verified_metadata(self) -> list[VerifiedUrsulaInfo]:
+    def verified_metadata(self) -> list[VerifiedNodeInfo]:
         return self._verified_nodes_db.all_nodes()
 
     def _add_node(
         self,
-        node: VerifiedUrsulaInfo,
+        node: VerifiedNodeInfo,
         staked_amount: AmountT,
         verified_at: arrow.Arrow,
         verify_at: arrow.Arrow,
@@ -395,7 +395,7 @@ class FleetSensor:
         self.new_verified_nodes_event.set()
         self.new_verified_nodes_event = trio.Event()
 
-    def _add_contacts(self, metadatas: Iterable[UrsulaInfo]) -> None:
+    def _add_contacts(self, metadatas: Iterable[NodeInfo]) -> None:
         for metadata in metadatas:
             contact = metadata.contact
             address = metadata.staking_provider_address
@@ -453,12 +453,12 @@ class FleetSensor:
     @contextmanager
     def try_lock_contact_for_verification(
         self, contact: Contact
-    ) -> Iterator[tuple[Contact | None, BroadcastValue[VerifiedUrsulaInfo | None]]]:
+    ) -> Iterator[tuple[Contact | None, BroadcastValue[VerifiedNodeInfo | None]]]:
         if contact in self._locked_contacts_for_verification:
             yield None, self._locked_contacts_for_verification[contact]
             return
 
-        bval: BroadcastValue[VerifiedUrsulaInfo | None] = BroadcastValue()
+        bval: BroadcastValue[VerifiedNodeInfo | None] = BroadcastValue()
         self._locked_contacts_for_verification[contact] = bval
         try:
             yield contact, bval
@@ -476,7 +476,7 @@ class FleetSensor:
             now, contacts_num, exclude=self._locked_contacts_for_verification.keys()
         )
 
-    def get_nodes_to_learn_from(self, nodes_num: int) -> list[VerifiedUrsulaInfo]:
+    def get_nodes_to_learn_from(self, nodes_num: int) -> list[VerifiedNodeInfo]:
         entries = [
             entry
             for entry in self._verified_nodes_db._nodes.values()  # noqa: SLF001

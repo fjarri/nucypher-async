@@ -13,7 +13,7 @@ from ..utils import wait_for_any
 from ..utils.producer import producer
 from .fleet_sensor import NodeEntry
 from .learner import Learner
-from .verification import VerifiedUrsulaInfo
+from .verification import VerifiedNodeInfo
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
 
@@ -99,7 +99,7 @@ async def staker_query_task(stop_event: trio.Event, learner: Learner) -> None:
 
 @producer
 async def verified_nodes_iter(
-    yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
+    yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     addresses: Iterable[IdentityAddress],
     verified_within: float | None = None,
@@ -150,12 +150,12 @@ async def verified_nodes_iter(
 
 @producer
 async def random_verified_nodes_iter(  # noqa: C901
-    yield_: Callable[[VerifiedUrsulaInfo], Awaitable[None]],
+    yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
     overhead: int = 0,
     verified_within: float | None = None,
-    exclude_ursulas: Iterable[IdentityAddress] | None = None,
+    exclude_nodes: Iterable[IdentityAddress] | None = None,
 ) -> None:
     if learner.is_empty():
         await learner.seed_round()
@@ -165,7 +165,7 @@ async def random_verified_nodes_iter(  # noqa: C901
     providers = learner.get_available_staking_providers()
     reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
-    exclude_ursulas = set(exclude_ursulas) if exclude_ursulas else set()
+    exclude_nodes = set(exclude_nodes) if exclude_nodes else set()
 
     def is_usable(
         address: IdentityAddress, node_entries: Mapping[IdentityAddress, NodeEntry]
@@ -182,7 +182,7 @@ async def random_verified_nodes_iter(  # noqa: C901
     drawn = 0
     failed = 0
 
-    send_channel, receive_channel = trio.open_memory_channel[VerifiedUrsulaInfo | None](0)
+    send_channel, receive_channel = trio.open_memory_channel[VerifiedNodeInfo | None](0)
 
     async def verify_and_yield(contact: Contact) -> None:
         node = await learner.verify_contact_and_report(contact)
@@ -194,7 +194,7 @@ async def random_verified_nodes_iter(  # noqa: C901
 
             while drawn < amount + failed + overhead and reservoir:
                 drawn_address = reservoir.draw().address
-                if drawn_address in exclude_ursulas:
+                if drawn_address in exclude_nodes:
                     continue
                 if drawn_address not in node_entries:
                     continue
@@ -222,18 +222,18 @@ async def random_verified_nodes_iter(  # noqa: C901
                     return
 
 
-async def get_ursulas(
+async def get_nodes(
     learner: Learner,
     quantity: int,
-    include_ursulas: Iterable[IdentityAddress] | None = None,
-    exclude_ursulas: Iterable[IdentityAddress] | None = None,
-) -> list[VerifiedUrsulaInfo]:
+    include_nodes: Iterable[IdentityAddress] | None = None,
+    exclude_nodes: Iterable[IdentityAddress] | None = None,
+) -> list[VerifiedNodeInfo]:
     nodes = []
 
-    include = set(include_ursulas) if include_ursulas else set()
-    exclude = set(exclude_ursulas) if exclude_ursulas else set()
+    include = set(include_nodes) if include_nodes else set()
+    exclude = set(exclude_nodes) if exclude_nodes else set()
 
-    # Note: include_ursulas takes priority over exclude_ursulas
+    # Note: include_nodes takes priority over exclude_nodes
     async with verified_nodes_iter(learner, include, verified_within=60) as node_iter:
         async for node in node_iter:
             nodes.append(node)
@@ -246,7 +246,7 @@ async def get_ursulas(
             amount=quantity_remaining,
             overhead=overhead,
             verified_within=60,
-            exclude_ursulas=exclude | include,
+            exclude_nodes=exclude | include,
         ) as node_iter:
             async for node in node_iter:
                 nodes.append(node)

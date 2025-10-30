@@ -17,15 +17,15 @@ from nucypher_core import (
 )
 from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
+from ..base.node import NodeRoutes
 from ..base.peer_error import InvalidMessage
-from ..base.ursula import UrsulaRoutes
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
 
 
-class UrsulaInfo:
+class NodeInfo:
     def __init__(self, metadata: NodeMetadata):
         self.metadata = metadata
 
@@ -77,7 +77,7 @@ class UrsulaInfo:
         return bytes(self.metadata)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "UrsulaInfo":
+    def from_bytes(cls, data: bytes) -> "NodeInfo":
         return cls(NodeMetadata.from_bytes(data))
 
 
@@ -100,7 +100,7 @@ def unwrap_bytes(
     return message
 
 
-class UrsulaClient:
+class NodeClient:
     def __init__(self, peer_client: PeerClient):
         self._peer_client = peer_client
 
@@ -108,60 +108,60 @@ class UrsulaClient:
         return await self._peer_client.handshake(contact)
 
     async def ping(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.PING)
+        response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.PING)
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:
             raise InvalidMessage.for_message(str, exc) from exc
 
-    async def get_ursulas_info(
+    async def get_node_info(
         self,
-        ursula: UrsulaInfo,
-    ) -> list[UrsulaInfo]:
+        node_info: NodeInfo,
+    ) -> list[NodeInfo]:
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, UrsulaRoutes.NODE_METADATA
+            node_info.secure_contact, NodeRoutes.NODE_METADATA
         )
         response = unwrap_bytes(response_bytes, MetadataResponse)
 
         try:
-            payload = response.verify(ursula.verifying_key)
+            payload = response.verify(node_info.verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
 
-        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+        return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
-    async def exchange_ursulas_info(
+    async def exchange_node_info(
         self,
-        ursula: UrsulaInfo,
+        node_info: NodeInfo,
         fleet_state_checksum: FleetStateChecksum,
-        this_ursula: UrsulaInfo,
-    ) -> list[UrsulaInfo]:
-        # TODO: should `this_ursula` be narrowed down to VerifiedUrsulaInfo?
-        request = MetadataRequest(fleet_state_checksum, [this_ursula.metadata])
+        this_node_info: NodeInfo,
+    ) -> list[NodeInfo]:
+        # TODO: should `this_node_info` be narrowed down to VerifiedNodeInfo?
+        request = MetadataRequest(fleet_state_checksum, [this_node_info.metadata])
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, UrsulaRoutes.NODE_METADATA, bytes(request)
+            node_info.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
         )
         response = unwrap_bytes(response_bytes, MetadataResponse)
 
         try:
-            payload = response.verify(ursula.verifying_key)
+            payload = response.verify(node_info.verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise InvalidMessage(MetadataResponse, exc) from exc
 
-        return [UrsulaInfo(metadata) for metadata in payload.announce_nodes]
+        return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
-    async def public_information(self, secure_contact: SecureContact) -> UrsulaInfo:
+    async def public_information(self, secure_contact: SecureContact) -> NodeInfo:
         response_bytes = await self._peer_client.communicate(
-            secure_contact, UrsulaRoutes.PUBLIC_INFORMATION
+            secure_contact, NodeRoutes.PUBLIC_INFORMATION
         )
         metadata = unwrap_bytes(response_bytes, NodeMetadata)
-        return UrsulaInfo(metadata)
+        return NodeInfo(metadata)
 
     async def reencrypt(
         self,
-        ursula: UrsulaInfo,
+        node_info: NodeInfo,
         capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
@@ -169,12 +169,12 @@ class UrsulaClient:
         conditions: Conditions | None = None,
         context: Context | None = None,
     ) -> list[VerifiedCapsuleFrag]:
-        # TODO: should we narrow down `ursula` to `VerifiedUrsulaInfo`?
+        # TODO: should we narrow down `node_info` to `VerifiedNodeInfo`?
         try:
-            ekfrag = treasure_map.destinations[Address(bytes(ursula.staking_provider_address))]
+            ekfrag = treasure_map.destinations[Address(bytes(node_info.staking_provider_address))]
         except KeyError as exc:
             raise ValueError(
-                f"The provided treasure map does not list Ursula {ursula.staking_provider_address}"
+                f"The provided treasure map does not list node {node_info.staking_provider_address}"
             ) from exc
 
         request = ReencryptionRequest(
@@ -187,7 +187,7 @@ class UrsulaClient:
             context=context,
         )
         response_bytes = await self._peer_client.communicate(
-            ursula.secure_contact, UrsulaRoutes.REENCRYPT, bytes(request)
+            node_info.secure_contact, NodeRoutes.REENCRYPT, bytes(request)
         )
 
         response = unwrap_bytes(response_bytes, ReencryptionResponse)
@@ -196,7 +196,7 @@ class UrsulaClient:
             verified_cfrags = response.verify(
                 capsules=capsules,
                 alice_verifying_key=delegator_card.verifying_key,
-                ursula_verifying_key=ursula.verifying_key,
+                ursula_verifying_key=node_info.verifying_key,
                 policy_encrypting_key=treasure_map.policy_encrypting_key,
                 bob_encrypting_key=recipient_card.encrypting_key,
             )
@@ -207,7 +207,7 @@ class UrsulaClient:
         return verified_cfrags
 
     async def status(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self._peer_client.communicate(secure_contact, UrsulaRoutes.STATUS)
+        response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.STATUS)
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:

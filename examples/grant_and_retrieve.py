@@ -2,6 +2,7 @@
 
 import functools
 import os
+from ipaddress import IPv4Address
 from typing import NamedTuple
 
 import trio
@@ -17,7 +18,7 @@ from nucypher_async.characters.pre import (
     PublisherCard,
     Recipient,
     RecipientCard,
-    Ursula,
+    Reencryptor,
 )
 from nucypher_async.client.pre import (
     EnactedPolicy,
@@ -29,13 +30,13 @@ from nucypher_async.client.pre import (
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.payment import PaymentAccount, PaymentClient
-from nucypher_async.drivers.peer import Contact, PeerClient, UrsulaHTTPServer
+from nucypher_async.drivers.peer import Contact, PeerClient
+from nucypher_async.drivers.pre import PREAccount, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
-from nucypher_async.mocks import MockClock, MockIdentityClient, MockPaymentClient
+from nucypher_async.mocks import MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.learner import Learner
-from nucypher_async.server import PeerServerConfig, UrsulaServer, UrsulaServerConfig
+from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
@@ -53,17 +54,17 @@ class Context(NamedTuple):
     logger: Logger
     domain: Domain
     identity_client: IdentityClient
-    payment_client: PaymentClient
+    pre_client: PREClient
     clock: BaseClock
 
 
-async def run_local_ursula_fleet(
+async def run_local_node_fleet(
     context: Context, nursery: trio.Nursery
 ) -> tuple[list[HTTPServerHandle], Contact]:
     handles = []
     for i in range(3):
         # Since private keys are not given explicitly, they will be created at random
-        ursula = Ursula()
+        reencryptor = Reencryptor()
 
         # Make the first node the dedicated teacher of the other nodes
         seed_contacts = [Contact(LOCALHOST, PORT_BASE)] if i > 0 else []
@@ -74,33 +75,33 @@ async def run_local_ursula_fleet(
         staking_provider_account = IdentityAccount.random()
         context.identity_client.mock_set_up(
             staking_provider_account.address,
-            ursula.operator_address,
+            reencryptor.operator_address,
             AmountT.ether(40000),
         )
 
         peer_server_config = PeerServerConfig(
-            bind_as="127.0.0.1",
+            bind_to=IPv4Address("127.0.0.1"),
             contact=Contact(LOCALHOST, PORT_BASE + i),
             ssl_certificate=None,
             ssl_private_key=None,
             ssl_ca_chain=None,
         )
 
-        config = UrsulaServerConfig(
+        config = NodeServerConfig(
             domain=context.domain,
             identity_client=context.identity_client,
-            payment_client=context.payment_client,
+            pre_client=context.pre_client,
             peer_client=PeerClient(),
-            parent_logger=context.logger.get_child(f"Ursula{i + 1}"),
+            parent_logger=context.logger.get_child(f"Node{i + 1}"),
             storage=InMemoryStorage(),
             seed_contacts=seed_contacts,
             clock=context.clock,
         )
 
-        server = await UrsulaServer.async_init(
-            ursula, peer_server_config=peer_server_config, config=config
+        server = await NodeServer.async_init(
+            reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
         )
-        handle = HTTPServerHandle(UrsulaHTTPServer(server))
+        handle = HTTPServerHandle(server)
         await nursery.start(handle.startup)
         handles.append(handle)
 
@@ -141,7 +142,7 @@ async def alice_grants(
         recipient_card=recipient_card,
         publisher=publisher,
         learner=learner,
-        payment_client=context.payment_client,
+        pre_client=context.pre_client,
     )
 
 
@@ -183,7 +184,7 @@ async def main(*, mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=MockIdentityClient(),
-            payment_client=MockPaymentClient(),
+            pre_client=MockPREClient(),
             clock=MockClock(),
         )
     else:
@@ -191,14 +192,14 @@ async def main(*, mocked: bool = True) -> None:
             logger=logger,
             domain=domain,
             identity_client=IdentityClient.from_endpoint(RINKEBY_ENDPOINT, Domain.TAPIR),
-            payment_client=PaymentClient.from_endpoint(MUMBAI_ENDPOINT, Domain.TAPIR),
+            pre_client=PREClient.from_endpoint(MUMBAI_ENDPOINT, Domain.TAPIR),
             clock=SystemClock(),
         )
 
     async with trio.open_nursery() as nursery:
         if mocked:
-            context.logger.info("Mocked mode - starting Ursulas")
-            server_handles, seed_contact = await run_local_ursula_fleet(context, nursery)
+            context.logger.info("Mocked mode - starting nodes")
+            server_handles, seed_contact = await run_local_node_fleet(context, nursery)
             # Wait for all the nodes to learn about each other
             await trio.sleep(1)
         else:
@@ -208,7 +209,7 @@ async def main(*, mocked: bool = True) -> None:
         bob = Recipient(bob_keys)
 
         if mocked:
-            payment_account = PaymentAccount.random()
+            pre_account = PREAccount.random()
         else:
             # TODO: don't expose eth_account.Account
             acc = Account.from_key(
@@ -216,12 +217,12 @@ async def main(*, mocked: bool = True) -> None:
                     b"$\x88O\xf4\xaf\xc13Ol\xce\xe6\x89\xcc\xeb.\x9bD)Zu\xb3\x95I\xce\xa4\xc4-\xfd\x85+\x9an"
                 )
             )
-            payment_account = PaymentAccount(acc)
+            pre_account = PREAccount(acc)
 
         alice_keys = MasterKey.random()
         alice = Delegator(alice_keys)
         publisher_keys = MasterKey.random()
-        publisher = Publisher(publisher_keys, payment_account)
+        publisher = Publisher(publisher_keys, pre_account)
 
         context.logger.info("Alice grants")
         policy = await alice_grants(context, seed_contact, alice, publisher, bob.card())
@@ -244,7 +245,7 @@ async def main(*, mocked: bool = True) -> None:
         context.logger.info("Message decrypted successfully!")
 
         if mocked:
-            context.logger.info("Stopping Ursulas")
+            context.logger.info("Stopping nodes")
             for handle in server_handles:
                 await handle.shutdown()
 

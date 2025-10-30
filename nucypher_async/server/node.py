@@ -1,3 +1,5 @@
+from ipaddress import IPv4Address
+
 import trio
 from nucypher_core import (
     MetadataRequest,
@@ -8,30 +10,38 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
+from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
-from ..characters.pre import PublisherCard, Ursula
+from ..base.server import ServerWrapper
+from ..characters.pre import PublisherCard, Reencryptor
+from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import BasePeerAndUrsulaServer, PeerPrivateKey, SecureContact
+from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
-from ..p2p.ursula import UrsulaInfo
-from ..p2p.verification import PeerVerificationError, VerifiedUrsulaInfo, verify_staking_local
+from ..p2p.node_info import NodeInfo
+from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .config import PeerServerConfig, UrsulaServerConfig
+from .config import NodeServerConfig, PeerServerConfig
 from .status import render_status
 
 
-class UrsulaServer(BasePeerAndUrsulaServer):
+class NodeServer(BasePeerServer, BaseNodeServer):
     @classmethod
     async def async_init(
-        cls, ursula: Ursula, peer_server_config: PeerServerConfig, config: UrsulaServerConfig
-    ) -> "UrsulaServer":
+        cls,
+        reencryptor: Reencryptor,
+        peer_server_config: PeerServerConfig,
+        config: NodeServerConfig,
+    ) -> "NodeServer":
         async with config.identity_client.session() as session:
-            staking_provider_address = await verify_staking_local(session, ursula.operator_address)
+            staking_provider_address = await verify_staking_local(
+                session, reencryptor.operator_address
+            )
 
         return cls(
-            ursula=ursula,
+            reencryptor=reencryptor,
             peer_server_config=peer_server_config,
             config=config,
             staking_provider_address=staking_provider_address,
@@ -39,30 +49,32 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
     def __init__(
         self,
-        ursula: Ursula,
+        reencryptor: Reencryptor,
         peer_server_config: PeerServerConfig,
-        config: UrsulaServerConfig,
+        config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
-        self.ursula = ursula
+        self.reencryptor = reencryptor
 
         self._clock = config.clock
-        self._logger = config.parent_logger.get_child("UrsulaServer")
+        self._logger = config.parent_logger.get_child("NodeServer")
         self._storage = config.storage
 
-        ursula_info = self._storage.get_my_ursula_info()
-        maybe_node: VerifiedUrsulaInfo | None = None
+        node_info = self._storage.get_my_node_info()
+        maybe_node: VerifiedNodeInfo | None = None
 
-        peer_private_key = peer_server_config.peer_private_key or ursula.make_peer_private_key()
+        peer_private_key = (
+            peer_server_config.peer_private_key or reencryptor.make_peer_private_key()
+        )
 
-        if ursula_info is not None:
+        if node_info is not None:
             self._logger.debug("Found existing metadata, verifying")
 
             try:
-                maybe_node = VerifiedUrsulaInfo.checked_local(
+                maybe_node = VerifiedNodeInfo.checked_local(
                     clock=self._clock,
-                    ursula_info=ursula_info,
-                    ursula=self.ursula,
+                    node_info=node_info,
+                    reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
                     contact=peer_server_config.contact,
                     domain=config.domain,
@@ -78,19 +90,19 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
         if maybe_node is None:
             self._logger.debug("Generating new metadata")
-            self._node = VerifiedUrsulaInfo.generate(
+            self._node = VerifiedNodeInfo.generate(
                 clock=self._clock,
                 peer_private_key=peer_private_key,
                 peer_public_key=peer_server_config.peer_public_key,
-                signer=self.ursula.signer,
-                operator_signature=self.ursula.operator_signature,
-                encrypting_key=self.ursula.encrypting_key,
-                dkg_key=self.ursula.dkg_key,
+                signer=self.reencryptor.signer,
+                operator_signature=self.reencryptor.operator_signature,
+                encrypting_key=self.reencryptor.encrypting_key,
+                dkg_key=self.reencryptor.dkg_key,
                 staking_provider_address=staking_provider_address,
                 contact=peer_server_config.contact,
                 domain=config.domain,
             )
-            self._storage.set_my_ursula_info(self._node)
+            self._storage.set_my_node_info(self._node)
         else:
             self._node = maybe_node
 
@@ -106,7 +118,9 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         )
 
         self._peer_private_key = peer_private_key
-        self._payment_client = config.payment_client
+        self._bind_to = peer_server_config.bind_to
+
+        self._pre_client = config.pre_client
 
         self._started_at = self._clock.utcnow()
 
@@ -126,6 +140,12 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
     def peer_private_key(self) -> PeerPrivateKey:
         return self._peer_private_key
+
+    def bind_to(self) -> IPv4Address:
+        return self._bind_to
+
+    def into_servable(self) -> ServerWrapper:
+        return make_node_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger
@@ -159,13 +179,13 @@ class UrsulaServer(BasePeerAndUrsulaServer):
 
     async def node_metadata_get(self) -> MetadataResponse:
         announce_nodes = [
-            m.metadata for m in self.learner.get_verified_ursulas(include_this_node=True)
+            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
         ]
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
-        return MetadataResponse(self.ursula.signer, response_payload)
+        return MetadataResponse(self.reencryptor.signer, response_payload)
 
     async def node_metadata_post(
         self, remote_host: str | None, request: MetadataRequest
@@ -176,28 +196,28 @@ class UrsulaServer(BasePeerAndUrsulaServer):
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
-            return MetadataResponse(self.ursula.signer, response_payload)
+            return MetadataResponse(self.reencryptor.signer, response_payload)
 
-        new_metadatas = [UrsulaInfo(m) for m in request.announce_nodes]
+        new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
         return await self.node_metadata_get()
 
     async def public_information(self) -> NodeMetadata:
-        # TODO: can we just return UrsulaInfo?
+        # TODO: can we just return NodeInfo?
         return self._node.metadata
 
     async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
-        async with self._payment_client.session() as session:
+        async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
                 raise InactivePolicy(f"Policy {hrac} is not active")
 
         # TODO: catch decryption errors and raise RPC error here
-        verified_kfrag = self.ursula.decrypt_kfrag(
+        verified_kfrag = self.reencryptor.decrypt_kfrag(
             encrypted_kfrag=request.encrypted_kfrag,
             hrac=hrac,
             publisher_card=PublisherCard(request.publisher_verifying_key),
@@ -206,10 +226,12 @@ class UrsulaServer(BasePeerAndUrsulaServer):
         # TODO: check conditions here
 
         # TODO: catch reencryption errors (if any) and raise RPC error here
-        vcfrags = self.ursula.reencrypt(verified_kfrag=verified_kfrag, capsules=request.capsules)
+        vcfrags = self.reencryptor.reencrypt(
+            verified_kfrag=verified_kfrag, capsules=request.capsules
+        )
 
         return ReencryptionResponse(
-            signer=self.ursula.signer,
+            signer=self.reencryptor.signer,
             capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
         )
 

@@ -21,11 +21,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from ..base.http_server import ASGIFramework
+from ..base.node import BaseNodeServer, NodeRoutes
 from ..base.peer_error import InactivePolicy, ServerSidePeerError
 from ..base.porter import BasePorterServer, PorterRoutes
+from ..base.server import ServerWrapper
 from ..base.types import JSON
-from ..base.ursula import BaseUrsulaServer, UrsulaRoutes
 from ..utils.logging import Logger
 
 # HTTP status codes don't need to be unique or exhaustive, it's just an additional way
@@ -105,59 +105,59 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_ursula_asgi_app(ursula_server: BaseUrsulaServer) -> ASGIFramework:
-    """Returns an ASGI app serving as a front-end for a network peer (Ursula)."""
-    logger = ursula_server.logger().get_child("App")
+def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
+    """Returns an ASGI app serving as a front-end for a network node."""
+    logger = node_server.logger().get_child("App")
 
     async def ping(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
-        return await binary_api_call(logger, ursula_server.endpoint_ping(remote_host))
+        return await binary_api_call(logger, node_server.endpoint_ping(remote_host))
 
     async def node_metadata_get(_request: Request) -> Response:
-        return await binary_api_call(logger, ursula_server.endpoint_node_metadata_get())
+        return await binary_api_call(logger, node_server.endpoint_node_metadata_get())
 
     async def node_metadata_post(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await binary_api_call(
             logger,
-            ursula_server.endpoint_node_metadata_post(remote_host, request_bytes),
+            node_server.endpoint_node_metadata_post(remote_host, request_bytes),
         )
 
     async def public_information(_request: Request) -> Response:
-        return await binary_api_call(logger, ursula_server.endpoint_public_information())
+        return await binary_api_call(logger, node_server.endpoint_public_information())
 
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
-        return await binary_api_call(logger, ursula_server.endpoint_reencrypt(request_bytes))
+        return await binary_api_call(logger, node_server.endpoint_reencrypt(request_bytes))
 
     async def status(_request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
-        return await html_call(logger, ursula_server.endpoint_status())
+        return await html_call(logger, node_server.endpoint_status())
 
     async def on_startup(nursery: trio.Nursery) -> None:
-        await ursula_server.start(nursery)
+        await node_server.start(nursery)
 
     async def on_shutdown(_nursery: trio.Nursery) -> None:
-        await ursula_server.stop()
+        await node_server.stop()
 
     routes = [
-        Route(f"/{UrsulaRoutes.PING}", ping),
-        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_get),
-        Route(f"/{UrsulaRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
-        Route(f"/{UrsulaRoutes.PUBLIC_INFORMATION}", public_information),
-        Route(f"/{UrsulaRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
-        Route(f"/{UrsulaRoutes.STATUS}", status),
+        Route(f"/{NodeRoutes.PING}", ping),
+        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_get),
+        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
+        Route(f"/{NodeRoutes.PUBLIC_INFORMATION}", public_information),
+        Route(f"/{NodeRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
+        Route(f"/{NodeRoutes.STATUS}", status),
     ]
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast("ASGIFramework", app)
+    return cast("ServerWrapper", app)
 
 
-def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
+def make_porter_asgi_app(porter_server: BasePorterServer) -> ServerWrapper:
     """Returns an ASGI app serving as a front-end for a Porter."""
     logger = porter_server.logger().get_child("App")
 
@@ -191,4 +191,4 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast("ASGIFramework", app)
+    return cast("ServerWrapper", app)

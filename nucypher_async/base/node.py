@@ -13,7 +13,7 @@ from ..utils.logging import Logger
 from .peer_error import InvalidMessage
 
 
-class UrsulaRoutes:
+class NodeRoutes:
     NODE_METADATA = "node_metadata"
     PUBLIC_INFORMATION = "public_information"
     PING = "ping"
@@ -21,7 +21,7 @@ class UrsulaRoutes:
     STATUS = "status"
 
 
-class BaseUrsulaServer(ABC):
+class BaseNodeServer(ABC):
     @abstractmethod
     async def start(self, nursery: trio.Nursery) -> None: ...
 

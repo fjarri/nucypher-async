@@ -22,10 +22,10 @@ from ..characters.pre import (
     RecipientCard,
 )
 from ..drivers.identity import IdentityAddress
-from ..drivers.payment import PaymentClient
-from ..p2p.algorithms import get_ursulas, verified_nodes_iter
+from ..drivers.pre import PREClient
+from ..p2p.algorithms import get_nodes, verified_nodes_iter
 from ..p2p.learner import Learner
-from ..p2p.verification import VerifiedUrsulaInfo
+from ..p2p.verification import VerifiedNodeInfo
 from .porter import PorterClient
 
 
@@ -42,20 +42,20 @@ async def grant(
     recipient_card: RecipientCard,
     publisher: Publisher,
     learner: Learner,
-    payment_client: PaymentClient,
+    pre_client: PREClient,
     handpicked_addresses: Iterable[IdentityAddress] | None = None,
 ) -> EnactedPolicy:
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         if await session.is_policy_active(policy.hrac):
             raise RuntimeError(f"Policy {policy.hrac} is already active")
 
     handpicked_addresses = set(handpicked_addresses) if handpicked_addresses else set()
     shares = len(policy.key_frags)
 
-    nodes = await get_ursulas(
+    nodes = await get_nodes(
         learner=learner,
         quantity=shares,
-        include_ursulas=handpicked_addresses,
+        include_nodes=handpicked_addresses,
     )
 
     assigned_kfrags = {
@@ -70,9 +70,9 @@ async def grant(
     policy_start = learner.clock.utcnow()
     policy_end = policy_start.shift(days=30)  # TODO: make adjustable
 
-    async with payment_client.session() as session:
+    async with pre_client.session() as session:
         await session.create_policy(
-            publisher.payment_signer,
+            publisher.pre_signer,
             policy.hrac,
             shares,
             int(policy_start.timestamp()),
@@ -124,9 +124,9 @@ async def retrieve(
 ) -> dict[IdentityAddress, VerifiedCapsuleFrag]:
     responses: dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
-    async def reencrypt(nursery: trio.Nursery, node: VerifiedUrsulaInfo) -> None:
+    async def reencrypt(nursery: trio.Nursery, node_info: VerifiedNodeInfo) -> None:
         verified_cfrags = await learner.reencrypt(
-            ursula=node,
+            node_info=node_info,
             capsules=[retrieval_kit.capsule],
             treasure_map=treasure_map,
             delegator_card=delegator_card,
@@ -134,7 +134,7 @@ async def retrieve(
             conditions=retrieval_kit.conditions,
             context=context,
         )
-        responses[node.staking_provider_address] = verified_cfrags[0]
+        responses[node_info.staking_provider_address] = verified_cfrags[0]
         if len(responses) == treasure_map.threshold:
             nursery.cancel_scope.cancel()
 
@@ -146,8 +146,8 @@ async def retrieve(
         trio.open_nursery() as nursery,
         verified_nodes_iter(learner, destinations) as node_iter,
     ):
-        async for node in node_iter:
-            nursery.start_soon(reencrypt, nursery, node)
+        async for node_info in node_iter:
+            nursery.start_soon(reencrypt, nursery, node_info)
     return responses
 
 
@@ -160,7 +160,7 @@ async def retrieve_via_learner(
     context: Context | None = None,
 ) -> list[RetrievalState]:
     # TODO: the simlpest implementation
-    # Need to use batch reencryptions, and not query the Ursulas that have already been queried.
+    # Need to use batch reencryptions, and not query the nodes that have already been queried.
     new_states = []
     for state in retrieval_states:
         vcfrags = await retrieve(

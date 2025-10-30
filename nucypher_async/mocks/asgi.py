@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 import httpx
 import trio
 from hypercorn.typing import (
+    ASGIFramework,
     ASGIReceiveEvent,
     ASGISendEvent,
     LifespanScope,
@@ -11,7 +12,7 @@ from hypercorn.typing import (
     LifespanStartupEvent,
 )
 
-from ..base.http_server import ASGIFramework, BaseHTTPServer
+from ..drivers.peer import BasePeerServer
 from ..utils.ssl import SSLCertificate
 
 
@@ -62,11 +63,12 @@ class MockNetwork:
         self._known_servers: dict[tuple[str, int], tuple[SSLCertificate, LifespanManager]] = {}
         self._nursery = nursery
 
-    def add_server(self, server: BaseHTTPServer) -> MockHTTPServerHandle:
-        app = server.into_asgi_app()
+    def add_server(self, server: BasePeerServer) -> MockHTTPServerHandle:
+        app = server.into_servable()
         manager = LifespanManager(app)
-        certificate = server.ssl_certificate()
-        host, port = server.host_and_port()
+        certificate = server.secure_contact().public_key._as_ssl_certificate()  # noqa: SLF001
+        contact = server.secure_contact().contact
+        host, port = contact.host, contact.port
         assert (host, port) not in self._known_servers
         self._known_servers[(host, port)] = (certificate, manager)
         return MockHTTPServerHandle(self, host, port)

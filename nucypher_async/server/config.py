@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from ipaddress import IPv4Address
 from pathlib import Path
 
 from attrs import frozen
@@ -7,8 +8,8 @@ from platformdirs import PlatformDirs
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import IdentityClient
-from ..drivers.payment import PaymentClient
 from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
+from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
@@ -65,7 +66,7 @@ def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseS
 
 @frozen
 class PeerServerConfig:
-    bind_as: str
+    bind_to: IPv4Address
     contact: Contact
     ssl_certificate: SSLCertificate | None
     ssl_private_key: SSLPrivateKey | None
@@ -75,7 +76,7 @@ class PeerServerConfig:
     def from_config_values(
         cls,
         *,
-        bind_as: str = "127.0.0.1",
+        bind_to: str = "127.0.0.1",
         external_host: str,
         port: int,
         ssl_private_key_path: str | Path | None,
@@ -113,7 +114,7 @@ class PeerServerConfig:
         contact = Contact(external_host, port)
 
         return cls(
-            bind_as=bind_as,
+            bind_to=IPv4Address(bind_to),
             contact=contact,
             ssl_private_key=ssl_private_key,
             ssl_certificate=ssl_certificate,
@@ -130,10 +131,10 @@ class PeerServerConfig:
 
 
 @frozen
-class UrsulaServerConfig:
+class NodeServerConfig:
     domain: Domain
     identity_client: IdentityClient
-    payment_client: PaymentClient
+    pre_client: PREClient
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
@@ -145,26 +146,24 @@ class UrsulaServerConfig:
         cls,
         *,
         identity_endpoint: str,
-        payment_endpoint: str,
+        pre_endpoint: str,
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
         persistent_storage: bool = True,
         debug: bool = False,
-        profile_name: str = "ursula",
+        profile_name: str = "node",
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
-        payment_client_factory: Callable[
-            [str, Domain], PaymentClient
-        ] = PaymentClient.from_endpoint,
-    ) -> "UrsulaServerConfig":
+        pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
+    ) -> "NodeServerConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
-        payment_client = payment_client_factory(payment_endpoint, domain_)
+        pre_client = pre_client_factory(pre_endpoint, domain_)
         logger = make_logger(
             profile_name,
-            "ursula",
+            "node",
             log_to_console=log_to_console,
             log_to_file=log_to_file,
             debug=debug,
@@ -176,7 +175,7 @@ class UrsulaServerConfig:
         return cls(
             domain=domain_,
             identity_client=identity_client,
-            payment_client=payment_client,
+            pre_client=pre_client,
             peer_client=peer_client,
             parent_logger=logger,
             storage=storage,

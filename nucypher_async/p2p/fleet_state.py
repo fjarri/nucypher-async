@@ -5,8 +5,8 @@ from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
 from ..drivers.peer import Contact
-from .ursula import UrsulaInfo
-from .verification import VerifiedUrsulaInfo
+from .node_info import NodeInfo
+from .verification import VerifiedNodeInfo
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..drivers.identity import IdentityAddress
@@ -18,22 +18,22 @@ class FleetState:
     (of questionable usefulness, see https://github.com/nucypher/nucypher/issues/2876).
     """
 
-    def __init__(self, clock: BaseClock, this_node: VerifiedUrsulaInfo | None):
+    def __init__(self, clock: BaseClock, this_node: VerifiedNodeInfo | None):
         self._clock = clock
         self._my_address = this_node.staking_provider_address if this_node else None
         self._my_metadata = this_node.metadata if this_node else None
-        self._metadatas: dict[IdentityAddress, UrsulaInfo] = {}
+        self._metadatas: dict[IdentityAddress, NodeInfo] = {}
         self._contacts: dict[Contact, IdentityAddress] = {}
         self._checksum: FleetStateChecksum | None = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
 
-    def _add_metadata(self, metadata: UrsulaInfo) -> None:
+    def _add_metadata(self, metadata: NodeInfo) -> None:
         address = metadata.staking_provider_address
         contact = metadata.contact
         self._metadatas[address] = metadata
         self._contacts[contact] = address
 
-    def add_metadatas(self, metadatas: Iterable[UrsulaInfo]) -> None:
+    def add_metadatas(self, metadatas: Iterable[NodeInfo]) -> None:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address

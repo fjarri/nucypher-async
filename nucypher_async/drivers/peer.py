@@ -8,22 +8,20 @@ or that its transport key is a SSL certificate).
 import http
 import ssl
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from functools import cached_property
-from ipaddress import ip_address
+from ipaddress import IPv4Address, ip_address
 
 import arrow
 import httpx
 import trio
 
-from ..base.http_server import ASGIFramework, BaseHTTPServer
 from ..base.peer_error import PeerError
+from ..base.server import ServerWrapper
 from ..base.time import BaseClock
-from ..base.ursula import BaseUrsulaServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .asgi_app import make_ursula_asgi_app
 
 
 class PeerConnectionError(PeerError):
@@ -81,12 +79,15 @@ class PeerPublicKey:
         )
         return cls(certificate)
 
-    def __init__(self, certificate: SSLCertificate):
+    def __init__(
+        self, certificate: SSLCertificate, ca_chain: Iterable[SSLCertificate] | None = None
+    ):
         # Not checking the certificate signature at this level.
-        # For all we care it's just a public key, and if it is signed by the blockchain address,
-        # and the other side has the corresponding private key, that's enough.
+        # For all we care it's just a public key.
         # The HTTP client can do additional verification (possibly following the CA chain).
         self._certificate = certificate
+        # TODO: check that the chain is valid?
+        self._ca_chain = list(ca_chain) if ca_chain else []
         self.declared_host = self._certificate.declared_host
 
     @cached_property
@@ -100,7 +101,12 @@ class PeerPublicKey:
     def _as_ssl_certificate(self) -> SSLCertificate:
         return self._certificate
 
+    def _as_ssl_ca_chain(self) -> list[SSLCertificate]:
+        return self._ca_chain
+
     def __eq__(self, other: object) -> bool:
+        # TODO: should we compare the chains too?
+        # Is it possible to have two equal certificates and valid but different chains?
         return isinstance(other, PeerPublicKey) and self._certificate == other._certificate
 
     def __hash__(self) -> int:
@@ -235,28 +241,12 @@ class BasePeerServer(ABC):
     @abstractmethod
     def peer_private_key(self) -> PeerPrivateKey: ...
 
+    @abstractmethod
+    def into_servable(self) -> ServerWrapper: ...
 
-class BasePeerAndUrsulaServer(BasePeerServer, BaseUrsulaServer): ...
+    # TODO: abstraction leak, can this be made more general?
+    @abstractmethod
+    def bind_to(self) -> IPv4Address: ...
 
-
-class UrsulaHTTPServer(BaseHTTPServer):
-    """An adapter from peer server to HTTP server."""
-
-    def __init__(self, server: BasePeerAndUrsulaServer):
-        self.server = server
-
-    def host_and_port(self) -> tuple[str, int]:
-        contact = self.server.secure_contact().contact
-        return contact.host, contact.port
-
-    def ssl_certificate(self) -> SSLCertificate:
-        return self.server.secure_contact().public_key._as_ssl_certificate()  # noqa: SLF001
-
-    def ssl_private_key(self) -> SSLPrivateKey:
-        return self.server.peer_private_key()._as_ssl_private_key()  # noqa: SLF001
-
-    def ssl_ca_chain(self) -> list[SSLCertificate] | None:
-        return None
-
-    def into_asgi_app(self) -> ASGIFramework:
-        return make_ursula_asgi_app(self.server)
+    def bind_pair(self) -> tuple[IPv4Address, int]:
+        return self.bind_to(), self.secure_contact().contact.port

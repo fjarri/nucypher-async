@@ -10,7 +10,7 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.asgi_app import HTTPError
 from ..p2p.fleet_sensor import FleetSensorSnapshot
-from ..p2p.verification import VerifiedUrsulaInfo
+from ..p2p.verification import VerifiedNodeInfo
 from ..utils.logging import Logger
 from ..version import CodeInfo
 
@@ -24,7 +24,7 @@ def render_status(
     snapshot: FleetSensorSnapshot,
     started_at: arrow.Arrow,
     domain: Domain,
-    node: VerifiedUrsulaInfo | None = None,
+    node: VerifiedNodeInfo | None = None,
 ) -> str:
     code_info = CodeInfo.collect()
 

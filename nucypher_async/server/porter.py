@@ -1,16 +1,18 @@
 import http
+from ipaddress import IPv4Address
 
 import attrs
 import trio
 
 from .. import schema
-from ..base.http_server import ASGIFramework, BaseHTTPServer
 from ..base.porter import BasePorterServer
+from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..client.pre import RetrievalState, retrieve_via_learner
 from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..p2p.algorithms import get_ursulas, learning_task, staker_query_task, verification_task
+from ..drivers.peer import BasePeerServer, PeerPrivateKey, PeerPublicKey, SecureContact
+from ..p2p.algorithms import get_nodes, learning_task, staker_query_task, verification_task
 from ..p2p.learner import Learner
 from ..schema.porter import (
     GetUrsulasRequest,
@@ -24,12 +26,11 @@ from ..schema.porter import (
 )
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from .config import PeerServerConfig, PorterServerConfig
 from .status import render_status
 
 
-class PorterServer(BaseHTTPServer, BasePorterServer):
+class PorterServer(BasePeerServer, BasePorterServer):
     def __init__(self, peer_server_config: PeerServerConfig, config: PorterServerConfig):
         self._clock = config.clock
         self._config = config
@@ -48,16 +49,19 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         # TODO: generate self-signed ones if these are missing in the config
         if peer_server_config.ssl_private_key is not None:
-            self._ssl_private_key = peer_server_config.ssl_private_key
+            self._peer_private_key = PeerPrivateKey(peer_server_config.ssl_private_key)
         else:
             raise NotImplementedError
 
         if peer_server_config.ssl_certificate is not None:
-            self._ssl_certificate = peer_server_config.ssl_certificate
+            self._peer_public_key = PeerPublicKey(
+                peer_server_config.ssl_certificate, peer_server_config.ssl_ca_chain
+            )
         else:
             raise NotImplementedError
 
-        self._ssl_ca_chain = peer_server_config.ssl_ca_chain
+        self._secure_contact = SecureContact(peer_server_config.contact, self._peer_public_key)
+        self._bind_to = peer_server_config.bind_to
 
         self._domain = config.domain
 
@@ -78,19 +82,16 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         self.started = False
 
-    def host_and_port(self) -> tuple[str, int]:
-        return self._contact.host, self._contact.port
+    def secure_contact(self) -> SecureContact:
+        return self._secure_contact
 
-    def ssl_certificate(self) -> SSLCertificate:
-        return self._ssl_certificate
+    def peer_private_key(self) -> PeerPrivateKey:
+        return self._peer_private_key
 
-    def ssl_ca_chain(self) -> list[SSLCertificate] | None:
-        return self._ssl_ca_chain
+    def bind_to(self) -> IPv4Address:
+        return self._bind_to
 
-    def ssl_private_key(self) -> SSLPrivateKey:
-        return self._ssl_private_key
-
-    def into_asgi_app(self) -> ASGIFramework:
+    def into_servable(self) -> ServerWrapper:
         return make_porter_asgi_app(self)
 
     def logger(self) -> Logger:
@@ -148,11 +149,11 @@ class PorterServer(BaseHTTPServer, BasePorterServer):
 
         try:
             with trio.fail_after(5):
-                nodes = await get_ursulas(
+                nodes = await get_nodes(
                     learner=self.learner,
                     quantity=request.quantity,
-                    include_ursulas=request.include_ursulas,
-                    exclude_ursulas=request.exclude_ursulas,
+                    include_nodes=request.include_ursulas,
+                    exclude_nodes=request.exclude_ursulas,
                 )
         except trio.TooSlowError as exc:
             raise HTTPError(

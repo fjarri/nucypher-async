@@ -21,19 +21,19 @@ class PorterClient:
         self._host = host
         self._port = port
 
-    async def get_ursulas(
+    async def get_nodes(
         self,
         quantity: int,
-        include_ursulas: Iterable[IdentityAddress] | None = None,
-        exclude_ursulas: Iterable[IdentityAddress] | None = None,
+        include_nodes: Iterable[IdentityAddress] | None = None,
+        exclude_nodes: Iterable[IdentityAddress] | None = None,
     ) -> dict[IdentityAddress, tuple[str, PublicKey]]:
-        include_ursulas = list(include_ursulas) if include_ursulas else []
-        exclude_ursulas = list(exclude_ursulas) if exclude_ursulas else []
+        include_nodes = list(include_nodes) if include_nodes else []
+        exclude_nodes = list(exclude_nodes) if exclude_nodes else []
 
         request = dict(
             quantity=str(quantity),
-            include_ursulas=",".join(address.checksum for address in include_ursulas),
-            exclude_ursulas=",".join(address.checksum for address in exclude_ursulas),
+            include_ursulas=",".join(address.checksum for address in include_nodes),
+            exclude_ursulas=",".join(address.checksum for address in exclude_nodes),
         )
 
         response = await self._http_client.get(
@@ -48,8 +48,8 @@ class PorterClient:
         parsed_response = schema.from_json(GetUrsulasResponse, response_json)
 
         return {
-            ursula.checksum_address: (ursula.uri, ursula.encrypting_key)
-            for ursula in parsed_response.result.ursulas
+            node.checksum_address: (node.uri, node.encrypting_key)
+            for node in parsed_response.result.ursulas
         }
 
     async def retrieve_cfrags(

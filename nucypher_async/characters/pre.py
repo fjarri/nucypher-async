@@ -20,8 +20,8 @@ from nucypher_core.umbral import (
 )
 
 from ..drivers.identity import IdentityAccount
-from ..drivers.payment import PaymentAccount, PaymentAccountSigner
 from ..drivers.peer import PeerPrivateKey
+from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
 
 
@@ -84,14 +84,14 @@ class DelegatorCard:
 class Publisher:
     @classmethod
     def random(cls) -> "Publisher":
-        return cls(MasterKey.random(), PaymentAccount.random())
+        return cls(MasterKey.random(), PREAccount.random())
 
-    def __init__(self, master_key: MasterKey, payment_account: PaymentAccount):
+    def __init__(self, master_key: MasterKey, pre_account: PREAccount):
         self.__master_key = master_key
         self._signer = self.__master_key.make_signer()
-        self._payment_account = payment_account
-        self.payment_signer = PaymentAccountSigner(self._payment_account)
-        self.payment_address = self._payment_account.address
+        self._pre_account = pre_account
+        self.pre_signer = PREAccountSigner(self._pre_account)
+        self.pre_address = self._pre_account.address
         self.verifying_key = self._signer.verifying_key()
 
     def make_treasure_map(
@@ -156,7 +156,7 @@ class RecipientCard:
         self.verifying_key = verifying_key
 
 
-class Ursula:
+class Reencryptor:
     def __init__(
         self,
         master_key: MasterKey | None = None,
@@ -195,4 +195,4 @@ class Ursula:
 
     def __str__(self) -> str:
         operator_short = self.operator_address.checksum[:10]
-        return f"Ursula(operator={operator_short})"
+        return f"Reencryptor(operator={operator_short})"
