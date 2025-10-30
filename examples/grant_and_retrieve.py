@@ -2,6 +2,7 @@
 
 import functools
 import os
+from ipaddress import IPv4Address
 from typing import NamedTuple
 
 import trio
@@ -29,7 +30,7 @@ from nucypher_async.client.pre import (
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.peer import Contact, NodeHTTPServer, PeerClient
+from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.pre import PREAccount, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
@@ -79,7 +80,7 @@ async def run_local_node_fleet(
         )
 
         peer_server_config = PeerServerConfig(
-            bind_as="127.0.0.1",
+            bind_to=IPv4Address("127.0.0.1"),
             contact=Contact(LOCALHOST, PORT_BASE + i),
             ssl_certificate=None,
             ssl_private_key=None,
@@ -100,7 +101,7 @@ async def run_local_node_fleet(
         server = await NodeServer.async_init(
             reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
         )
-        handle = HTTPServerHandle(NodeHTTPServer(server))
+        handle = HTTPServerHandle(server)
         await nursery.start(handle.startup)
         handles.append(handle)
 

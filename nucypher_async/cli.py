@@ -8,7 +8,6 @@ import trio
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
-from .drivers.peer import NodeHTTPServer
 from .master_key import EncryptedMasterKey, MasterKey
 from .server import NodeServer, NodeServerConfig, PeerServerConfig, PorterServer, PorterServerConfig
 
@@ -94,7 +93,7 @@ def main() -> None:
 @click.argument("geth_password")
 def node(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_node_server, config_path, nucypher_password, geth_password)
-    handle = HTTPServerHandle(NodeHTTPServer(server))
+    handle = HTTPServerHandle(server)
     trio.run(handle.startup)
 
 

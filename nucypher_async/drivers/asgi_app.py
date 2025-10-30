@@ -21,10 +21,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from ..base.http_server import ASGIFramework
 from ..base.node import BaseNodeServer, NodeRoutes
 from ..base.peer_error import InactivePolicy, ServerSidePeerError
 from ..base.porter import BasePorterServer, PorterRoutes
+from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..utils.logging import Logger
 
@@ -105,7 +105,7 @@ def make_lifespan(
     return lifespan_context
 
 
-def make_node_asgi_app(node_server: BaseNodeServer) -> ASGIFramework:
+def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
     """Returns an ASGI app serving as a front-end for a network node."""
     logger = node_server.logger().get_child("App")
 
@@ -154,10 +154,10 @@ def make_node_asgi_app(node_server: BaseNodeServer) -> ASGIFramework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast("ASGIFramework", app)
+    return cast("ServerWrapper", app)
 
 
-def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
+def make_porter_asgi_app(porter_server: BasePorterServer) -> ServerWrapper:
     """Returns an ASGI app serving as a front-end for a Porter."""
     logger = porter_server.logger().get_child("App")
 
@@ -191,4 +191,4 @@ def make_porter_asgi_app(porter_server: BasePorterServer) -> ASGIFramework:
 
     # We don't have a typing package shared between Starlette and Hypercorn,
     # so this will have to do
-    return cast("ASGIFramework", app)
+    return cast("ServerWrapper", app)

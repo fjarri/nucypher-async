@@ -1,6 +1,7 @@
 import itertools
 import os
 from collections.abc import AsyncIterator
+from ipaddress import IPv4Address
 
 import pytest
 import trio
@@ -8,7 +9,7 @@ import trio
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAddress
-from nucypher_async.drivers.peer import Contact, NodeHTTPServer
+from nucypher_async.drivers.peer import Contact
 from nucypher_async.mocks import (
     MockClock,
     MockHTTPServerHandle,
@@ -79,7 +80,7 @@ async def lonely_nodes(
         )
 
         peer_server_config = PeerServerConfig(
-            bind_as="127.0.0.1",
+            bind_to=IPv4Address("127.0.0.1"),
             contact=Contact("127.0.0.1", 9150 + i),
             ssl_certificate=None,
             ssl_private_key=None,
@@ -101,7 +102,7 @@ async def lonely_nodes(
         server = await NodeServer.async_init(
             reencryptor=reencryptors[i], peer_server_config=peer_server_config, config=config
         )
-        handle = mock_network.add_server(NodeHTTPServer(server))
+        handle = mock_network.add_server(server)
         servers.append((handle, server))
 
     return servers
@@ -166,7 +167,7 @@ async def porter_server(
     ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
 
     peer_server_config = PeerServerConfig(
-        bind_as="127.0.0.1",
+        bind_to=IPv4Address("127.0.0.1"),
         contact=Contact(host, port),
         ssl_certificate=ssl_certificate,
         ssl_private_key=ssl_private_key,

@@ -1,3 +1,5 @@
+from ipaddress import IPv4Address
+
 import trio
 from nucypher_core import (
     MetadataRequest,
@@ -8,10 +10,13 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
+from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
+from ..base.server import ServerWrapper
 from ..characters.pre import PublisherCard, Reencryptor
+from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import BasePeerAndNodeServer, PeerPrivateKey, SecureContact
+from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
@@ -22,7 +27,7 @@ from .config import NodeServerConfig, PeerServerConfig
 from .status import render_status
 
 
-class NodeServer(BasePeerAndNodeServer):
+class NodeServer(BasePeerServer, BaseNodeServer):
     @classmethod
     async def async_init(
         cls,
@@ -113,6 +118,8 @@ class NodeServer(BasePeerAndNodeServer):
         )
 
         self._peer_private_key = peer_private_key
+        self._bind_to = peer_server_config.bind_to
+
         self._pre_client = config.pre_client
 
         self._started_at = self._clock.utcnow()
@@ -133,6 +140,12 @@ class NodeServer(BasePeerAndNodeServer):
 
     def peer_private_key(self) -> PeerPrivateKey:
         return self._peer_private_key
+
+    def bind_to(self) -> IPv4Address:
+        return self._bind_to
+
+    def into_servable(self) -> ServerWrapper:
+        return make_node_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger

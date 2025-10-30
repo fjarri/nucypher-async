@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from ipaddress import IPv4Address
 from pathlib import Path
 
 from attrs import frozen
@@ -65,7 +66,7 @@ def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseS
 
 @frozen
 class PeerServerConfig:
-    bind_as: str
+    bind_to: IPv4Address
     contact: Contact
     ssl_certificate: SSLCertificate | None
     ssl_private_key: SSLPrivateKey | None
@@ -75,7 +76,7 @@ class PeerServerConfig:
     def from_config_values(
         cls,
         *,
-        bind_as: str = "127.0.0.1",
+        bind_to: str = "127.0.0.1",
         external_host: str,
         port: int,
         ssl_private_key_path: str | Path | None,
@@ -113,7 +114,7 @@ class PeerServerConfig:
         contact = Contact(external_host, port)
 
         return cls(
-            bind_as=bind_as,
+            bind_to=IPv4Address(bind_to),
             contact=contact,
             ssl_private_key=ssl_private_key,
             ssl_certificate=ssl_certificate,

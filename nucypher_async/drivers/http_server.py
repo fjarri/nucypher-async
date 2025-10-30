@@ -8,9 +8,9 @@ import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
 
-from ..base.http_server import BaseHTTPServer
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
+from .peer import BasePeerServer
 
 
 class InMemoryCertificateConfig(Config):
@@ -68,14 +68,14 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server: BaseHTTPServer) -> InMemoryCertificateConfig:
+def make_config(server: BasePeerServer) -> InMemoryCertificateConfig:
     config = InMemoryCertificateConfig(
-        ssl_certificate=server.ssl_certificate(),
-        ssl_private_key=server.ssl_private_key(),
-        ssl_ca_chain=server.ssl_ca_chain(),
+        ssl_certificate=server.secure_contact().public_key._as_ssl_certificate(),  # noqa: SLF001
+        ssl_private_key=server.peer_private_key()._as_ssl_private_key(),  # noqa: SLF001
+        ssl_ca_chain=server.secure_contact().public_key._as_ssl_ca_chain(),  # noqa: SLF001
     )
 
-    host, port = server.host_and_port()
+    host, port = server.bind_pair()
 
     config.bind = [f"{host}:{port}"]
     config.worker_class = "trio"
@@ -89,9 +89,9 @@ class HTTPServerHandle:
     Can be used to shut it down.
     """
 
-    def __init__(self, server: BaseHTTPServer):
+    def __init__(self, server: BasePeerServer):
         self.server = server
-        self.app = server.into_asgi_app()
+        self.app = server.into_servable()
         self._shutdown_event = trio.Event()
         self._shutdown_finished = trio.Event()
 

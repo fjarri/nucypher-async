@@ -23,7 +23,9 @@ async def test_get_nodes(
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
-    mock_client = MockHTTPClient(mock_network, "127.0.0.1", porter_server.ssl_certificate())
+    mock_client = MockHTTPClient(
+        mock_network, "127.0.0.1", porter_server.secure_contact().public_key._as_ssl_certificate()
+    )
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient("127.0.0.1", 9000, http_client)
 
@@ -48,7 +50,9 @@ async def test_retrieve_cfrags(
     porter_server: PorterServer,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
-    mock_client = MockHTTPClient(mock_network, "127.0.0.1", porter_server.ssl_certificate())
+    mock_client = MockHTTPClient(
+        mock_network, "127.0.0.1", porter_server.secure_contact().public_key._as_ssl_certificate()
+    )
     http_client = mock_client.as_httpx_async_client()
     porter_client = PorterClient("127.0.0.1", 9000, http_client)
 

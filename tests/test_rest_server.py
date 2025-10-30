@@ -1,4 +1,5 @@
 import os
+from ipaddress import IPv4Address
 
 import pytest
 import trio
@@ -7,7 +8,7 @@ from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.peer import Contact, NodeHTTPServer, PeerClient
+from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.mocks import MockIdentityClient, MockPREClient
 from nucypher_async.p2p.node_info import NodeClient
@@ -19,7 +20,7 @@ from nucypher_async.utils.logging import NULL_LOGGER
 @pytest.fixture
 def node_server() -> NodeServer:
     peer_server_config = PeerServerConfig(
-        bind_as="127.0.0.1",
+        bind_to=IPv4Address("127.0.0.1"),
         contact=Contact("127.0.0.1", 9151),
         ssl_certificate=None,
         ssl_private_key=None,
@@ -49,7 +50,7 @@ async def test_client_real_server(
     capsys: pytest.CaptureFixture[str],
     node_server: NodeServer,
 ) -> None:
-    handle = HTTPServerHandle(NodeHTTPServer(node_server))
+    handle = HTTPServerHandle(node_server)
     await nursery.start(handle.startup)
 
     client = NodeClient(PeerClient())
