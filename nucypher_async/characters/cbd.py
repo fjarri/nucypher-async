@@ -48,9 +48,9 @@ class Encryptor:
 class Decryptor:
     def __init__(
         self,
-        master_key: MasterKey | None = None,
+        master_key: MasterKey,
     ):
-        self.__master_key = master_key or MasterKey.random()
+        self.__master_key = master_key
         self.__dkg_keypair = self.__master_key.make_dkg_keypair()
         self.ritual_public_key = self.__dkg_keypair.public_key()
 

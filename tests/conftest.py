@@ -7,10 +7,12 @@ import pytest
 import trio
 
 from nucypher_async.characters.cbd import Decryptor
+from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.identity import AmountT, IdentityAddress
+from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityAddress
 from nucypher_async.drivers.peer import Contact
+from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,
     MockClock,
@@ -44,13 +46,33 @@ async def mock_clock() -> MockClock:
 
 
 @pytest.fixture
-def reencryptors() -> list[Reencryptor]:
-    return [Reencryptor() for i in range(10)]
+def master_keys() -> list[MasterKey]:
+    return [MasterKey.random() for _ in range(10)]
 
 
 @pytest.fixture
-def decryptors() -> list[Decryptor]:
-    return [Decryptor() for i in range(10)]
+def identity_accounts() -> list[IdentityAccount]:
+    return [IdentityAccount.random() for _ in range(10)]
+
+
+@pytest.fixture
+def operators(
+    master_keys: list[MasterKey], identity_accounts: list[IdentityAccount]
+) -> list[Operator]:
+    return [
+        Operator(master_key, identity_account)
+        for master_key, identity_account in zip(master_keys, identity_accounts, strict=True)
+    ]
+
+
+@pytest.fixture
+def reencryptors(master_keys: list[MasterKey]) -> list[Reencryptor]:
+    return [Reencryptor(master_key) for master_key in master_keys]
+
+
+@pytest.fixture
+def decryptors(master_keys: list[MasterKey]) -> list[Decryptor]:
+    return [Decryptor(master_key) for master_key in master_keys]
 
 
 @pytest.fixture
@@ -79,6 +101,7 @@ async def lonely_nodes(
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     mock_cbd_client: MockCBDClient,
+    operators: list[Operator],
     reencryptors: list[Reencryptor],
     decryptors: list[Decryptor],
     logger: logging.Logger,
@@ -90,7 +113,7 @@ async def lonely_nodes(
         staking_provider_address = IdentityAddress(os.urandom(20))
 
         mock_identity_client.mock_set_up(
-            staking_provider_address, reencryptors[i].operator_address, AmountT.ether(40000)
+            staking_provider_address, operators[i].address, AmountT.ether(40000)
         )
 
         peer_server_config = PeerServerConfig(
@@ -115,6 +138,7 @@ async def lonely_nodes(
         )
 
         server = await NodeServer.async_init(
+            operator=operators[i],
             reencryptor=reencryptors[i],
             decryptor=decryptors[i],
             peer_server_config=peer_server_config,

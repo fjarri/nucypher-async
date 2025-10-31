@@ -12,6 +12,7 @@ from hexbytes import HexBytes
 
 from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.cbd import Decryptor
+from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import (
     Delegator,
     DelegatorCard,
@@ -66,11 +67,11 @@ async def run_local_node_fleet(
 ) -> tuple[list[HTTPServerHandle], Contact]:
     handles = []
     for i in range(3):
-        # Since private keys are not given explicitly, they will be created at random
-        reencryptor = Reencryptor()
-
-        # TODO: can we avoid mentioning CBD stuff in this example?
-        decryptor = Decryptor()
+        master_key = MasterKey.random()
+        identity_account = IdentityAccount.random()
+        operator = Operator(master_key, identity_account)
+        reencryptor = Reencryptor(master_key)
+        decryptor = Decryptor(master_key)
 
         # Make the first node the dedicated teacher of the other nodes
         seed_contacts = [Contact(LOCALHOST, PORT_BASE)] if i > 0 else []
@@ -81,7 +82,7 @@ async def run_local_node_fleet(
         staking_provider_account = IdentityAccount.random()
         context.identity_client.mock_set_up(
             staking_provider_account.address,
-            reencryptor.operator_address,
+            operator.address,
             AmountT.ether(40000),
         )
 
@@ -106,6 +107,7 @@ async def run_local_node_fleet(
         )
 
         server = await NodeServer.async_init(
+            operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
             peer_server_config=peer_server_config,

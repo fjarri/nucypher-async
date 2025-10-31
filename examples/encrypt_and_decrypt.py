@@ -9,12 +9,13 @@ import trio.testing
 
 from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.cbd import Decryptor, Encryptor
+from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.client.cbd import ThresholdMessageKit, cbd_decrypt, initiate_ritual
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.cbd import CBDClient
 from nucypher_async.drivers.http_server import HTTPServerHandle
-from nucypher_async.drivers.identity import IdentityClient
+from nucypher_async.drivers.identity import IdentityAccount, IdentityClient
 from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.pre import PREClient
 from nucypher_async.drivers.time import SystemClock
@@ -48,8 +49,11 @@ async def run_local_node_fleet(
 ) -> tuple[list[HTTPServerHandle], Contact]:
     handles = []
     for i in range(3):
-        reencryptor = Reencryptor()
-        decryptor = Decryptor()
+        master_key = MasterKey.random()
+        identity_account = IdentityAccount.random()
+        operator = Operator(master_key, identity_account)
+        reencryptor = Reencryptor(master_key)
+        decryptor = Decryptor(master_key)
 
         # Make the first node the dedicated teacher of the other nodes
         seed_contacts = [Contact(LOCALHOST, PORT_BASE)] if i > 0 else []
@@ -77,6 +81,7 @@ async def run_local_node_fleet(
         )
 
         server = await NodeServer.async_init(
+            operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
             peer_server_config=peer_server_config,

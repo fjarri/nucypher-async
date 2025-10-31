@@ -12,14 +12,12 @@ from nucypher_core import (
 from nucypher_core.umbral import (
     Capsule,
     PublicKey,
-    RecoverableSignature,
     VerifiedCapsuleFrag,
     VerifiedKeyFrag,
     generate_kfrags,
     reencrypt,
 )
 
-from ..drivers.identity import IdentityAccount
 from ..drivers.peer import PeerPrivateKey
 from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
@@ -159,20 +157,11 @@ class RecipientCard:
 class Reencryptor:
     def __init__(
         self,
-        master_key: MasterKey | None = None,
-        identity_account: IdentityAccount | None = None,
+        master_key: MasterKey,
     ):
-        self.__master_key = master_key or MasterKey.random()
-        identity_account_ = identity_account or IdentityAccount.random()
-
-        self.signer = self.__master_key.make_signer()
+        self.__master_key = master_key
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
-
-        self.operator_address = identity_account_.address
-        self.operator_signature = RecoverableSignature.from_be_bytes(
-            identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
-        )
 
     def make_peer_private_key(self) -> PeerPrivateKey:
         return self.__master_key.make_peer_private_key()
@@ -189,7 +178,3 @@ class Reencryptor:
         self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
     ) -> list[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
-
-    def __str__(self) -> str:
-        operator_short = self.operator_address.checksum[:10]
-        return f"Reencryptor(operator={operator_short})"

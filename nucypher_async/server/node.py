@@ -19,6 +19,7 @@ from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..characters.cbd import Decryptor
+from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
@@ -37,17 +38,17 @@ class NodeServer(BasePeerServer, BaseNodeServer):
     @classmethod
     async def async_init(
         cls,
+        operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
         peer_server_config: PeerServerConfig,
         config: NodeServerConfig,
     ) -> "NodeServer":
         async with config.identity_client.session() as session:
-            staking_provider_address = await verify_staking_local(
-                session, reencryptor.operator_address
-            )
+            staking_provider_address = await verify_staking_local(session, operator.address)
 
         return cls(
+            operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
             peer_server_config=peer_server_config,
@@ -57,12 +58,14 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
     def __init__(
         self,
+        operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
         peer_server_config: PeerServerConfig,
         config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
+        self.operator = operator
         self.reencryptor = reencryptor
         self.decryptor = decryptor
 
@@ -84,6 +87,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 maybe_node = VerifiedNodeInfo.checked_local(
                     clock=self._clock,
                     node_info=node_info,
+                    operator=operator,
                     reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
                     contact=peer_server_config.contact,
@@ -104,8 +108,8 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 clock=self._clock,
                 peer_private_key=peer_private_key,
                 peer_public_key=peer_server_config.peer_public_key,
-                signer=self.reencryptor.signer,
-                operator_signature=self.reencryptor.operator_signature,
+                signer=self.operator.signer,
+                operator_signature=self.operator.signature,
                 encrypting_key=self.reencryptor.encrypting_key,
                 dkg_key=self.decryptor.ritual_public_key,
                 staking_provider_address=staking_provider_address,
@@ -197,7 +201,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
-            return MetadataResponse(self.reencryptor.signer, response_payload)
+            return MetadataResponse(self.operator.signer, response_payload)
 
         new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
 
@@ -210,7 +214,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
-        return MetadataResponse(self.reencryptor.signer, response_payload)
+        return MetadataResponse(self.operator.signer, response_payload)
 
     async def public_information(self) -> NodeMetadata:
         # TODO: can we just return NodeInfo?
@@ -239,7 +243,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         )
 
         return ReencryptionResponse(
-            signer=self.reencryptor.signer,
+            signer=self.operator.signer,
             capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
         )
 
