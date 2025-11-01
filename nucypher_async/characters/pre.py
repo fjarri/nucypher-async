@@ -18,6 +18,7 @@ from nucypher_core.umbral import (
     reencrypt,
 )
 
+from ..drivers.identity import IdentityAddress
 from ..drivers.peer import PeerPrivateKey
 from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
@@ -74,9 +75,9 @@ class Delegator:
         )
 
 
+@frozen
 class DelegatorCard:
-    def __init__(self, verifying_key: PublicKey):
-        self.verifying_key = verifying_key
+    verifying_key: PublicKey
 
 
 class Publisher:
@@ -96,13 +97,16 @@ class Publisher:
         self,
         policy: Policy,
         recipient_card: "RecipientCard",
-        assigned_kfrags: Mapping[Address, tuple[PublicKey, VerifiedKeyFrag]],
+        assigned_kfrags: Mapping[IdentityAddress, tuple["ReencryptorCard", VerifiedKeyFrag]],
     ) -> EncryptedTreasureMap:
         treasure_map = TreasureMap(
             signer=self._signer,
             hrac=policy.hrac,
             policy_encrypting_key=policy.encrypting_key,
-            assigned_kfrags=dict(assigned_kfrags),
+            assigned_kfrags={
+                Address(bytes(address)): (reencryptor.encrypting_key, vkfrag)
+                for address, (reencryptor, vkfrag) in assigned_kfrags.items()
+            },
             threshold=policy.threshold,
         )
         return treasure_map.encrypt(self._signer, recipient_card.encrypting_key)
@@ -111,9 +115,9 @@ class Publisher:
         return PublisherCard(verifying_key=self.verifying_key)
 
 
+@frozen
 class PublisherCard:
-    def __init__(self, verifying_key: PublicKey):
-        self.verifying_key = verifying_key
+    verifying_key: PublicKey
 
 
 class Recipient:
@@ -148,10 +152,10 @@ class Recipient:
         )
 
 
+@frozen
 class RecipientCard:
-    def __init__(self, encrypting_key: PublicKey, verifying_key: PublicKey):
-        self.encrypting_key = encrypting_key
-        self.verifying_key = verifying_key
+    encrypting_key: PublicKey
+    verifying_key: PublicKey
 
 
 class Reencryptor:
@@ -178,3 +182,11 @@ class Reencryptor:
         self, verified_kfrag: VerifiedKeyFrag, capsules: Iterable[Capsule]
     ) -> list[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
+
+    def card(self) -> "ReencryptorCard":
+        return ReencryptorCard(encrypting_key=self.encrypting_key)
+
+
+@frozen
+class ReencryptorCard:
+    encrypting_key: PublicKey

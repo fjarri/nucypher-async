@@ -1,6 +1,7 @@
+from attrs import frozen
 from nucypher_core.umbral import RecoverableSignature
 
-from ..drivers.identity import IdentityAccount
+from ..drivers.identity import IdentityAccount, IdentityAddress
 from ..master_key import MasterKey
 
 
@@ -14,3 +15,11 @@ class Operator:
         self.signature = RecoverableSignature.from_be_bytes(
             identity_account.sign_message(self.verifying_key.to_compressed_bytes())
         )
+
+    def card(self) -> "OperatorCard":
+        return OperatorCard(address=self.address)
+
+
+@frozen
+class OperatorCard:
+    address: IdentityAddress

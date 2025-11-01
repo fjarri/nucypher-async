@@ -4,7 +4,7 @@ from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
 from ..characters.node import Operator
-from ..characters.pre import Reencryptor
+from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
@@ -191,6 +191,9 @@ class VerifiedNodeInfo(NodeInfo):
             )
 
         return cls(node_info.metadata)
+
+    def reencryptor_card(self) -> ReencryptorCard:
+        return ReencryptorCard(encrypting_key=self.encrypting_key)
 
     def __str__(self) -> str:
         return f"VerifiedNodeInfo({self.staking_provider_address.checksum})"

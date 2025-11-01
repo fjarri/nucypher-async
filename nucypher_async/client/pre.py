@@ -59,7 +59,7 @@ async def grant(
     )
 
     assigned_kfrags = {
-        Address(bytes(node.staking_provider_address)): (node.encrypting_key, key_frag)
+        node.staking_provider_address: (node.reencryptor_card(), key_frag)
         for node, key_frag in zip(nodes, policy.key_frags, strict=True)
     }
 
