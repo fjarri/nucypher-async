@@ -4,11 +4,12 @@ from attrs import frozen
 from nucypher_core import (
     HRAC,
     Address,
+    Conditions,
     EncryptedKeyFrag,
     EncryptedTreasureMap,
-    MessageKit,
     TreasureMap,
 )
+from nucypher_core import MessageKit as CoreMessageKit
 from nucypher_core.umbral import (
     Capsule,
     PublicKey,
@@ -115,9 +116,37 @@ class Publisher:
         return PublisherCard(verifying_key=self.verifying_key)
 
 
+class MessageKit:
+    def __init__(self, policy: Policy, message: bytes, conditions: Conditions | None = None):
+        self.core_message_kit = CoreMessageKit(
+            policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=conditions
+        )
+
+
+class Encryptor:
+    @staticmethod
+    def encrypt(policy: Policy, message: bytes, conditions: Conditions | None = None) -> MessageKit:
+        return MessageKit(policy, message, conditions=conditions)
+
+
 @frozen
 class PublisherCard:
     verifying_key: PublicKey
+
+
+class DecryptionKit:
+    encrypted_kfrags: dict[IdentityAddress, EncryptedKeyFrag]
+
+    capsule: Capsule
+
+    def __init__(self, message_kit: MessageKit, treasure_map: TreasureMap):
+        self.core_message_kit = message_kit.core_message_kit
+        self.core_treasure_map = treasure_map
+        self.capsule = self.core_message_kit.capsule
+        self.encrypted_kfrags = {
+            IdentityAddress(bytes(address)): ekfrag
+            for address, ekfrag in self.core_treasure_map.destinations.items()
+        }
 
 
 class Recipient:
@@ -141,14 +170,15 @@ class Recipient:
     ) -> TreasureMap:
         return encrypted_tmap.decrypt(self._decrypting_key, publisher_card.verifying_key)
 
-    def decrypt_message_kit(
+    def decrypt(
         self,
-        message_kit: MessageKit,
-        treasure_map: TreasureMap,
+        decryption_kit: DecryptionKit,
         vcfrags: Iterable[VerifiedCapsuleFrag],
     ) -> bytes:
-        return message_kit.decrypt_reencrypted(
-            self._decrypting_key, treasure_map.policy_encrypting_key, list(vcfrags)
+        return decryption_kit.core_message_kit.decrypt_reencrypted(
+            self._decrypting_key,
+            decryption_kit.core_treasure_map.policy_encrypting_key,
+            list(vcfrags),
         )
 
 

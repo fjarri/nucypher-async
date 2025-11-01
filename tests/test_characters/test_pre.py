@@ -1,9 +1,14 @@
 import os
 from dataclasses import dataclass
 
-from nucypher_core import Address, MessageKit, RetrievalKit
-
-from nucypher_async.characters.pre import Delegator, Publisher, Recipient, Reencryptor
+from nucypher_async.characters.pre import (
+    DecryptionKit,
+    Delegator,
+    Encryptor,
+    Publisher,
+    Recipient,
+    Reencryptor,
+)
 from nucypher_async.drivers.identity import IdentityAddress
 from nucypher_async.drivers.pre import PREAccount
 from nucypher_async.master_key import MasterKey
@@ -55,37 +60,33 @@ def test_grant_and_retrieve() -> None:
     # Someone encrypts a message
 
     message = b"a secret message"
-    message_kit = MessageKit(
-        policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=None
-    )
+    message_kit = Encryptor.encrypt(policy, message)
 
     # Bob decrypts
 
     treasure_map = bob.decrypt_treasure_map(encrypted_treasure_map, publisher.card())
-    retrieval_kit = RetrievalKit.from_message_kit(message_kit)
+    decryption_kit = DecryptionKit(message_kit, treasure_map)
     vcfrags = []
 
     for node in nodes:
-        # Bob gets this out of the treasure map and sends it to the node
-        ekfrag = treasure_map.destinations[Address(bytes(node.identity))]
+        # Bob gets this out of the treasure map and sends it to the node, along with the capsule
+        ekfrag_sent = decryption_kit.encrypted_kfrags[node.identity]
+        capsule_sent = decryption_kit.capsule
 
         # The node reencrypts
         vkfrag = node.reencryptor.decrypt_kfrag(
-            encrypted_kfrag=ekfrag,
+            encrypted_kfrag=ekfrag_sent,
             hrac=policy.hrac,
             publisher_card=publisher.card(),
         )
-        vcfrag = node.reencryptor.reencrypt(
-            verified_kfrag=vkfrag, capsules=[retrieval_kit.capsule]
-        )[0]
+        vcfrag = node.reencryptor.reencrypt(verified_kfrag=vkfrag, capsules=[capsule_sent])[0]
 
         # `vcfrag` is sent in the response to Bob
         vcfrags.append(vcfrag)
 
     # `threshold` cfrags is enough to decrypt
-    decrypted = bob.decrypt_message_kit(
-        message_kit=message_kit,
-        treasure_map=treasure_map,
+    decrypted = bob.decrypt(
+        decryption_kit=decryption_kit,
         vcfrags=vcfrags[: policy.threshold],
     )
 

@@ -3,18 +3,13 @@ from collections.abc import Iterable, Mapping
 import arrow
 import trio
 from attrs import frozen
-from nucypher_core import (
-    Address,
-    Context,
-    EncryptedTreasureMap,
-    MessageKit,
-    RetrievalKit,
-    TreasureMap,
-)
+from nucypher_core import Address, Context, EncryptedTreasureMap, RetrievalKit, TreasureMap
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from ..characters.pre import (
+    DecryptionKit,
     DelegatorCard,
+    MessageKit,
     Policy,
     Publisher,
     PublisherCard,
@@ -31,6 +26,7 @@ from .porter import PorterClient
 
 @frozen
 class EnactedPolicy:
+    policy: Policy
     encrypted_treasure_map: EncryptedTreasureMap
     encrypting_key: PublicKey
     start: arrow.Arrow
@@ -80,6 +76,7 @@ async def grant(
         )
 
     return EnactedPolicy(
+        policy=policy,
         start=policy_start,
         end=policy_end,
         encrypted_treasure_map=encrypted_treasure_map,
@@ -88,9 +85,8 @@ async def grant(
 
 
 def encrypt(policy: Policy | EnactedPolicy, message: bytes) -> MessageKit:
-    return MessageKit(
-        policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=None
-    )
+    policy_ = policy.policy if isinstance(policy, EnactedPolicy) else policy
+    return MessageKit(policy_, message, conditions=None)
 
 
 @frozen
@@ -100,7 +96,7 @@ class RetrievalState:
 
     @classmethod
     def from_message_kit(cls, message_kit: MessageKit) -> "RetrievalState":
-        return cls(RetrievalKit.from_message_kit(message_kit), {})
+        return cls(RetrievalKit.from_message_kit(message_kit.core_message_kit), {})
 
     def with_vcfrags(
         self, vcfrags: Mapping[IdentityAddress, VerifiedCapsuleFrag]
@@ -238,9 +234,8 @@ async def retrieve_and_decrypt(
     # TODO: check that we have enough vcfrags
 
     return [
-        recipient.decrypt_message_kit(
-            message_kit=message_kit,
-            treasure_map=treasure_map,
+        recipient.decrypt(
+            decryption_kit=DecryptionKit(message_kit, treasure_map),
             vcfrags=state.vcfrags.values(),
         )
         for state, message_kit in zip(retrieval_states, message_kits, strict=True)
