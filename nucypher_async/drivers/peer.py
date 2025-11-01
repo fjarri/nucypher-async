@@ -130,11 +130,16 @@ async def get_alternative_contact(contact: Contact) -> Contact | None:
     except ValueError:
         pass
     else:
-        # The host is already and IP address, nothing to do.
+        # The host is already an IP address, nothing to do.
         return None
 
-    # TODO: what does it raise? Intercept and re-raise ConnectionError
-    addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+    try:
+        # Note that with some providers it can give some kind of a default IP
+        # for any hostname that doesn't actually exist.
+        # Doesn't seem like we can do much about it.
+        addrinfo = await trio.socket.getaddrinfo(contact.host, contact.port)
+    except trio.socket.gaierror:
+        return None
 
     # TODO: or should we select a specific entry?
     _family, _type, _proto, _canonname, sockaddr = addrinfo[0]

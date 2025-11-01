@@ -7,6 +7,7 @@ from platformdirs import PlatformDirs
 
 from ..base.time import BaseClock
 from ..domain import Domain
+from ..drivers.cbd import CBDClient
 from ..drivers.identity import IdentityClient
 from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
 from ..drivers.pre import PREClient
@@ -135,6 +136,7 @@ class NodeServerConfig:
     domain: Domain
     identity_client: IdentityClient
     pre_client: PREClient
+    cbd_client: CBDClient
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
@@ -147,6 +149,7 @@ class NodeServerConfig:
         *,
         identity_endpoint: str,
         pre_endpoint: str,
+        cbd_endpoint: str,
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
@@ -157,10 +160,12 @@ class NodeServerConfig:
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
         pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
+        cbd_client_factory: Callable[[str, Domain], CBDClient] = CBDClient.from_endpoint,
     ) -> "NodeServerConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
         pre_client = pre_client_factory(pre_endpoint, domain_)
+        cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         logger = make_logger(
             profile_name,
             "node",
@@ -176,6 +181,7 @@ class NodeServerConfig:
             domain=domain_,
             identity_client=identity_client,
             pre_client=pre_client,
+            cbd_client=cbd_client,
             peer_client=peer_client,
             parent_logger=logger,
             storage=storage,

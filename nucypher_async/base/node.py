@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     NodeMetadata,
@@ -11,6 +13,7 @@ from nucypher_core import (
 
 from ..utils.logging import Logger
 from .peer_error import InvalidMessage
+from .types import JSON
 
 
 class NodeRoutes:
@@ -18,6 +21,8 @@ class NodeRoutes:
     PUBLIC_INFORMATION = "public_information"
     PING = "ping"
     REENCRYPT = "reencrypt"
+    CONDITION_CHAINS = "condition_chains"
+    DECRYPT = "decrypt"
     STATUS = "status"
 
 
@@ -32,24 +37,16 @@ class BaseNodeServer(ABC):
     async def endpoint_ping(self, remote_host: str | None) -> bytes: ...
 
     @abstractmethod
-    async def node_metadata_get(self) -> MetadataResponse: ...
-
-    async def endpoint_node_metadata_get(self) -> bytes:
-        return bytes(await self.node_metadata_get())
-
-    @abstractmethod
-    async def node_metadata_post(
+    async def node_metadata(
         self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse: ...
 
-    async def endpoint_node_metadata_post(
-        self, remote_host: str | None, request_bytes: bytes
-    ) -> bytes:
+    async def endpoint_node_metadata(self, remote_host: str | None, request_bytes: bytes) -> bytes:
         try:
             request = MetadataRequest.from_bytes(request_bytes)
         except ValueError as exc:
             raise InvalidMessage.for_message(MetadataRequest, exc) from exc
-        return bytes(await self.node_metadata_post(remote_host, request))
+        return bytes(await self.node_metadata(remote_host, request))
 
     @abstractmethod
     async def public_information(self) -> NodeMetadata: ...
@@ -67,6 +64,22 @@ class BaseNodeServer(ABC):
             raise InvalidMessage.for_message(ReencryptionRequest, exc) from exc
 
         return bytes(await self.reencrypt(request))
+
+    @abstractmethod
+    async def endpoint_condition_chains(self) -> JSON: ...
+
+    @abstractmethod
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse: ...
+
+    async def endpoint_decrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = EncryptedThresholdDecryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise InvalidMessage.for_message(EncryptedThresholdDecryptionRequest, exc) from exc
+
+        return bytes(await self.decrypt(request))
 
     # NOTE: This method really does not belong in the PeerAPI, because it is strictly HTTP,
     # while peers can theoretically use gRPC, or Noise, or something else.

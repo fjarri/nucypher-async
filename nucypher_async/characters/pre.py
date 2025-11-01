@@ -4,22 +4,22 @@ from attrs import frozen
 from nucypher_core import (
     HRAC,
     Address,
+    Conditions,
     EncryptedKeyFrag,
     EncryptedTreasureMap,
-    MessageKit,
     TreasureMap,
 )
+from nucypher_core import MessageKit as CoreMessageKit
 from nucypher_core.umbral import (
     Capsule,
     PublicKey,
-    RecoverableSignature,
     VerifiedCapsuleFrag,
     VerifiedKeyFrag,
     generate_kfrags,
     reencrypt,
 )
 
-from ..drivers.identity import IdentityAccount
+from ..drivers.identity import IdentityAddress
 from ..drivers.peer import PeerPrivateKey
 from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
@@ -76,9 +76,9 @@ class Delegator:
         )
 
 
+@frozen
 class DelegatorCard:
-    def __init__(self, verifying_key: PublicKey):
-        self.verifying_key = verifying_key
+    verifying_key: PublicKey
 
 
 class Publisher:
@@ -98,13 +98,16 @@ class Publisher:
         self,
         policy: Policy,
         recipient_card: "RecipientCard",
-        assigned_kfrags: Mapping[Address, tuple[PublicKey, VerifiedKeyFrag]],
+        assigned_kfrags: Mapping[IdentityAddress, tuple["ReencryptorCard", VerifiedKeyFrag]],
     ) -> EncryptedTreasureMap:
         treasure_map = TreasureMap(
             signer=self._signer,
             hrac=policy.hrac,
             policy_encrypting_key=policy.encrypting_key,
-            assigned_kfrags=dict(assigned_kfrags),
+            assigned_kfrags={
+                Address(bytes(address)): (reencryptor.encrypting_key, vkfrag)
+                for address, (reencryptor, vkfrag) in assigned_kfrags.items()
+            },
             threshold=policy.threshold,
         )
         return treasure_map.encrypt(self._signer, recipient_card.encrypting_key)
@@ -113,9 +116,37 @@ class Publisher:
         return PublisherCard(verifying_key=self.verifying_key)
 
 
+class MessageKit:
+    def __init__(self, policy: Policy, message: bytes, conditions: Conditions | None = None):
+        self.core_message_kit = CoreMessageKit(
+            policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=conditions
+        )
+
+
+class Encryptor:
+    @staticmethod
+    def encrypt(policy: Policy, message: bytes, conditions: Conditions | None = None) -> MessageKit:
+        return MessageKit(policy, message, conditions=conditions)
+
+
+@frozen
 class PublisherCard:
-    def __init__(self, verifying_key: PublicKey):
-        self.verifying_key = verifying_key
+    verifying_key: PublicKey
+
+
+class DecryptionKit:
+    encrypted_kfrags: dict[IdentityAddress, EncryptedKeyFrag]
+
+    capsule: Capsule
+
+    def __init__(self, message_kit: MessageKit, treasure_map: TreasureMap):
+        self.core_message_kit = message_kit.core_message_kit
+        self.core_treasure_map = treasure_map
+        self.capsule = self.core_message_kit.capsule
+        self.encrypted_kfrags = {
+            IdentityAddress(bytes(address)): ekfrag
+            for address, ekfrag in self.core_treasure_map.destinations.items()
+        }
 
 
 class Recipient:
@@ -139,43 +170,32 @@ class Recipient:
     ) -> TreasureMap:
         return encrypted_tmap.decrypt(self._decrypting_key, publisher_card.verifying_key)
 
-    def decrypt_message_kit(
+    def decrypt(
         self,
-        message_kit: MessageKit,
-        treasure_map: TreasureMap,
+        decryption_kit: DecryptionKit,
         vcfrags: Iterable[VerifiedCapsuleFrag],
     ) -> bytes:
-        return message_kit.decrypt_reencrypted(
-            self._decrypting_key, treasure_map.policy_encrypting_key, list(vcfrags)
+        return decryption_kit.core_message_kit.decrypt_reencrypted(
+            self._decrypting_key,
+            decryption_kit.core_treasure_map.policy_encrypting_key,
+            list(vcfrags),
         )
 
 
+@frozen
 class RecipientCard:
-    def __init__(self, encrypting_key: PublicKey, verifying_key: PublicKey):
-        self.encrypting_key = encrypting_key
-        self.verifying_key = verifying_key
+    encrypting_key: PublicKey
+    verifying_key: PublicKey
 
 
 class Reencryptor:
     def __init__(
         self,
-        master_key: MasterKey | None = None,
-        identity_account: IdentityAccount | None = None,
+        master_key: MasterKey,
     ):
-        self.__master_key = master_key or MasterKey.random()
-        identity_account_ = identity_account or IdentityAccount.random()
-
-        self.signer = self.__master_key.make_signer()
+        self.__master_key = master_key
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
-
-        self._dkg_keypair = self.__master_key.make_dkg_keypair()
-        self.dkg_key = self._dkg_keypair.public_key()
-
-        self.operator_address = identity_account_.address
-        self.operator_signature = RecoverableSignature.from_be_bytes(
-            identity_account_.sign_message(self.signer.verifying_key().to_compressed_bytes())
-        )
 
     def make_peer_private_key(self) -> PeerPrivateKey:
         return self.__master_key.make_peer_private_key()
@@ -193,6 +213,10 @@ class Reencryptor:
     ) -> list[VerifiedCapsuleFrag]:
         return [reencrypt(capsule, verified_kfrag) for capsule in capsules]
 
-    def __str__(self) -> str:
-        operator_short = self.operator_address.checksum[:10]
-        return f"Reencryptor(operator={operator_short})"
+    def card(self) -> "ReencryptorCard":
+        return ReencryptorCard(encrypting_key=self.encrypting_key)
+
+
+@frozen
+class ReencryptorCard:
+    encrypting_key: PublicKey
