@@ -10,15 +10,13 @@ from nucypher_core import (
     NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
-    ThresholdDecryptionResponse,
 )
-from nucypher_core.ferveo import AggregatedTranscript, Validator
 
 from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.server import ServerWrapper
 from ..base.types import JSON
-from ..characters.cbd import Decryptor
+from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
@@ -111,7 +109,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 signer=self.operator.signer,
                 operator_signature=self.operator.signature,
                 encrypting_key=self.reencryptor.encrypting_key,
-                dkg_key=self.decryptor.ritual_public_key,
+                dkg_key=self.decryptor.public_key,
                 staking_provider_address=staking_provider_address,
                 contact=peer_server_config.contact,
                 domain=config.domain,
@@ -276,57 +274,28 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         # TODO: evaluate and check conditions here
 
         async with self._cbd_client.session() as session:
-            ritual = await session.get_ritual(decryption_request.ritual_id)  # TODO: can be cached
+            on_chain_ritual = await session.get_ritual(
+                decryption_request.ritual_id
+            )  # TODO: can be cached
 
-            validators = []
-            for i, staking_provider_address in enumerate(ritual.providers):
+            validators = {}
+            for staking_provider_address in on_chain_ritual.providers:
                 if staking_provider_address == self._node.staking_provider_address:
                     # Local
-                    public_key = self.decryptor.ritual_public_key
+                    public_key = self.decryptor.public_key
                 else:
                     # Remote
                     # TODO: optimize rpc calls by obtaining public keys altogether
                     #  instead of one-by-one?
                     public_key = await session.get_provider_public_key(
-                        provider=staking_provider_address, ritual_id=ritual.id
+                        provider=staking_provider_address, ritual_id=on_chain_ritual.id
                     )
-                validator = Validator(
-                    address=staking_provider_address.checksum,
-                    public_key=public_key,
-                    share_index=i,
-                )
-                validators.append(validator)
+                validators[staking_provider_address] = public_key
 
-        # TODO: Workaround: add serialized public key to aggregated transcript.
-        # Since we use serde/bincode in rust, we need a metadata field for the public key,
-        # which is the field size,
-        # as 8 bytes in little-endian. See ferveo#209
-        public_key_metadata = b"0\x00\x00\x00\x00\x00\x00\x00"
-        transcript = (
-            bytes(ritual.aggregated_transcript) + public_key_metadata + bytes(ritual.public_key)
-        )
-        aggregated_transcript = AggregatedTranscript.from_bytes(transcript)
-        me = next(
-            (node for node in validators if node.address == self._node.staking_provider_address),
-            None,
-        )
-        assert me is not None
-        decryption_share = self.decryptor.produce_decryption_share(
-            me=me,
-            nodes=validators,
-            threshold=ritual.threshold,
-            shares=ritual.shares,
-            ritual_id=ritual.id,
-            aggregated_transcript=aggregated_transcript,
-            ciphertext_header=ciphertext_header,
-            aad=decryption_request.acp.aad(),
-            variant=decryption_request.variant,
-        )
-
-        # return the decryption share
-        decryption_response = ThresholdDecryptionResponse(
-            ritual_id=ritual.id,
-            decryption_share=bytes(decryption_share),
+        ritual = ActiveRitual.from_on_chain_ritual(on_chain_ritual, validators)
+        decryption_share = self.decryptor.make_decryption_share(ritual, decryption_request)
+        decryption_response = self.decryptor.make_threshold_decryption_response(
+            ritual, decryption_share
         )
         return self.decryptor.encrypt_threshold_decryption_response(
             response=decryption_response,

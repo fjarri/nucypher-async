@@ -9,7 +9,7 @@ from nucypher_core.ferveo import (
 )
 from pons import AccountSigner
 
-from ..drivers.cbd import CBDAddress, CBDClient, Ritual
+from ..drivers.cbd import CBDAddress, CBDClient, OnChainRitual
 from ..drivers.identity import IdentityAddress
 from ..p2p.algorithms import get_nodes, verified_nodes_iter
 from ..p2p.learner import Learner
@@ -21,7 +21,7 @@ async def initiate_ritual(
     cbd_client: CBDClient,
     shares: int,
     duration: int = 60 * 60 * 24,  # 24 hours
-) -> Ritual:
+) -> OnChainRitual:
     nodes = await get_nodes(learner=learner, quantity=shares)
 
     # TODO: this should be the ritual initiator character
@@ -76,7 +76,7 @@ async def cbd_decrypt(
 async def get_decryption_shares(
     learner: Learner,
     decryption_request: ThresholdDecryptionRequest,
-    participants: Sequence[Ritual.Participant],
+    participants: Sequence[OnChainRitual.Participant],
     threshold: int,
 ) -> list[DecryptionShareSimple]:
     # Currently only the simple variant is supported in the reference

@@ -122,8 +122,11 @@ class MasterKey:
         randomness = self.__skf.make_secret(b"NuCypher/ritualistic")[:size]
         return FerveoKeypair.from_secure_randomness(randomness)
 
+    def make_session_static_key(self, ritual_id: int) -> SessionStaticKey:
+        return self.__ssf.make_key(ritual_id.to_bytes(4, "big")).public_key()
+
     def make_shared_secret(
-        self, ritual_id: int, requester_public_key: SessionStaticKey
+        self, ritual_id: int, other_public_key: SessionStaticKey
     ) -> SessionSharedSecret:
         static_secret = self.__ssf.make_key(ritual_id.to_bytes(4, "big"))
-        return static_secret.derive_shared_secret(requester_public_key)
+        return static_secret.derive_shared_secret(other_public_key)

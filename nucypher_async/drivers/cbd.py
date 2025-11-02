@@ -138,7 +138,7 @@ class CBDAddress(Address):
 
 
 @frozen
-class Ritual:
+class OnChainRitual:
     id: int
     initiator: CBDAddress
     init_timestamp: arrow.Arrow
@@ -152,13 +152,14 @@ class Ritual:
     access_controller: CBDAddress
     public_key: DkgPublicKey
     aggregated_transcript: AggregatedTranscript
-    participant: "list[Ritual.Participant]"
+    participant: "list[OnChainRitual.Participant]"
 
     @frozen
     class Participant:
         """Ritual participant."""
 
         provider: IdentityAddress
+        share_index: int
         aggregated: bool
         transcript: Transcript | None
         decryption_request_static_key: SessionStaticKey
@@ -177,14 +178,6 @@ class Ritual:
     @property
     def providers(self) -> list[IdentityAddress]:
         return [p.provider for p in self.participant]
-
-    @property
-    def transcripts(self) -> list[Transcript | None]:
-        return [p.transcript for p in self.participant]
-
-    @property
-    def shares(self) -> int:
-        return len(self.participant)
 
 
 class BaseContracts:
@@ -285,10 +278,23 @@ class CBDClientSession:
         # TODO: this comes from the access controller contract
         raise NotImplementedError
 
-    async def get_ritual(self, ritual_id: int) -> "Ritual":
+    async def get_ritual(self, ritual_id: int) -> "OnChainRitual":
         call = self._coordinator.method.rituals(ritual_id)
         ritual = await self._backend_session.call(call)
-        return Ritual(
+
+        # TODO: workaround for https://github.com/nucypher/ferveo/issues/209
+        # The `AggregatedTranscript` in `ferveo` has an additional field (dkg public key)
+        # compared to the aggregated transcript saved on chain.
+        # Since we use serde/bincode in rust, we need a metadata field for the public key,
+        # which is the field size, as 8 bytes in little-endian.
+        public_key = DkgPublicKey.from_bytes(
+            ritual["publicKey"]["word0"] + ritual["publicKey"]["word1"]
+        )
+        public_key_metadata = b"0\x00\x00\x00\x00\x00\x00\x00"
+        transcript = ritual["aggregatedTranscript"] + public_key_metadata + bytes(public_key)
+        aggregated_transcript = AggregatedTranscript.from_bytes(transcript)
+
+        return OnChainRitual(
             id=ritual_id,
             initiator=CBDAddress(bytes(ritual["initiator"])),
             init_timestamp=arrow.get(ritual["initTimestamp"]),
@@ -300,11 +306,14 @@ class CBDClientSession:
             threshold=ritual["threshold"],
             aggregation_mismatch=ritual["aggregationMismatch"],
             access_controller=CBDAddress(bytes(ritual["accessController"])),
-            public_key=DkgPublicKey.from_bytes(
-                ritual["publicKey"]["word0"] + ritual["publicKey"]["word1"]
-            ),
-            aggregated_transcript=AggregatedTranscript.from_bytes(ritual["aggregatedTranscript"]),
-            participant=[Ritual.Participant(**struct) for struct in ritual["participants"]],
+            public_key=public_key,
+            aggregated_transcript=aggregated_transcript,
+            # The contract assumes the share id is equal to the index
+            # of the participant in the list.
+            participant=[
+                OnChainRitual.Participant(share_index=idx, **struct)
+                for idx, struct in enumerate(ritual["participants"])
+            ],
         )
 
     async def get_provider_public_key(
@@ -331,10 +340,10 @@ class CBDClientSession:
         assert len(events[event]) == 1
         return cast("int", events[event][0]["ritualId"])
 
-    async def get_ritual_state(self, ritual_id: int) -> Ritual.State:
+    async def get_ritual_state(self, ritual_id: int) -> OnChainRitual.State:
         call = self._coordinator.method.getRitualState(ritual_id)
         state = await self._backend_session.call(call)
-        return Ritual.State(state)
+        return OnChainRitual.State(state)
 
     async def get_ritual_id_from_public_key(self, public_key: DkgPublicKey) -> int:
         pk_bytes = bytes(public_key)
@@ -345,12 +354,15 @@ class CBDClientSession:
         assert isinstance(ritual_id, int)
         return ritual_id
 
-    async def get_participants(self, ritual_id: int) -> list[Ritual.Participant]:
+    async def get_participants(self, ritual_id: int) -> list[OnChainRitual.Participant]:
         call = self._coordinator.method.getParticipants(ritual_id)
         participants = await self._backend_session.call(call)
         return [
-            Ritual.Participant(
+            OnChainRitual.Participant(
                 provider=IdentityAddress(bytes(participant["provider"])),
+                # The contract assumes the share id is equal to the index
+                # of the participant in the list.
+                share_index=idx,
                 aggregated=participant["aggregated"],
                 transcript=Transcript.from_bytes(participant["transcript"])
                 if participant["transcript"]
@@ -359,5 +371,5 @@ class CBDClientSession:
                     participant["decryption_request_static_key"]
                 ),
             )
-            for participant in participants
+            for idx, participant in enumerate(participants)
         ]
