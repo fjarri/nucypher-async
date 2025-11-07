@@ -25,7 +25,8 @@ from pons.http_provider import HTTPProvider
 
 from ..domain import Domain
 
-_PRE_APP_ABI = ContractABI(
+# nucypher_contracts::TACoApplication.sol
+_TACO_APPLICATION_ABI = ContractABI(
     methods=[
         Method(
             name="authorizedStake",
@@ -34,13 +35,13 @@ _PRE_APP_ABI = ContractABI(
             outputs=abi.uint(96),
         ),
         Method(
-            name="stakingProviderFromOperator",
+            name="operatorToStakingProvider",
             mutability=Mutability.VIEW,
             inputs=dict(_operator=abi.address),
             outputs=abi.address,
         ),
         Method(
-            name="getOperatorFromStakingProvider",
+            name="stakingProviderToOperator",
             mutability=Mutability.VIEW,
             inputs=dict(_stakingProvider=abi.address),
             outputs=abi.address,
@@ -61,7 +62,17 @@ _PRE_APP_ABI = ContractABI(
             name="getActiveStakingProviders",
             mutability=Mutability.VIEW,
             inputs=dict(_start_index=abi.uint(256), _maxStakingProviders=abi.uint(256)),
-            outputs=[abi.uint(256), abi.uint(256)[2][...]],
+            outputs=[abi.uint(256), abi.bytes(32)[...]],
+        ),
+        Method(
+            name="bondOperator",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_stakingProvider=abi.address, _operator=abi.address),
+        ),
+        Method(
+            name="confirmOperatorAddress",
+            mutability=Mutability.NONPAYABLE,
+            inputs=dict(_operator=abi.address),
         ),
     ]
 )
@@ -72,28 +83,28 @@ class IdentityAddress(Address):
 
 
 class BaseContracts:
-    PRE_APPLICATION: IdentityAddress
+    TACO_APPLICATION: IdentityAddress
 
 
 class LynxContracts(BaseContracts):
     """Registry for Lynx on Goerli."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x685b8Fd02aB87d8FfFff7346cB101A5cE4185bf3")
 
 
 class TapirContracts(BaseContracts):
     """Registry for Tapir on Goerli."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
+    TACO_APPLICATION = IdentityAddress.from_hex("0xaF96aa6000ec2B6CF0Fe6B505B6C33fa246967Ca")
 
 
 class MainnetContracts(BaseContracts):
     """Registry for mainnet."""
 
     # https://github.com/nucypher/nucypher/blob/threshold-network/nucypher/blockchain/eth/sol/source/contracts/SimplePREApplication.sol
-    PRE_APPLICATION = IdentityAddress.from_hex("0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd")
+    TACO_APPLICATION = IdentityAddress.from_hex("0x7E01c9c03FD3737294dbD7630a34845B0F70E5Dd")
 
 
 class IdentityAccount:
@@ -147,7 +158,9 @@ class IdentityClient:
         else:
             raise ValueError(f"Unknown domain: {domain}")
 
-        self._pre_application = DeployedContract(address=registry.PRE_APPLICATION, abi=_PRE_APP_ABI)
+        self._taco_application = DeployedContract(
+            address=registry.TACO_APPLICATION, abi=_TACO_APPLICATION_ABI
+        )
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator["IdentityClientSession"]:
@@ -159,11 +172,11 @@ class IdentityClientSession:
     def __init__(self, identity_client: IdentityClient, backend_session: ClientSession):
         self._identity_client = identity_client
         self._backend_session = backend_session
-        self._pre_application = identity_client._pre_application  # noqa: SLF001
+        self._taco_application = identity_client._taco_application  # noqa: SLF001
 
     async def get_staked_amount(self, staking_provider_address: IdentityAddress) -> AmountT:
         staked_amount = await self._backend_session.call(
-            self._pre_application.method.authorizedStake(staking_provider_address)
+            self._taco_application.method.authorizedStake(staking_provider_address)
         )
         return AmountT.wei(staked_amount)
 
@@ -171,7 +184,7 @@ class IdentityClientSession:
         self, operator_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._pre_application.method.stakingProviderFromOperator(operator_address)
+            self._taco_application.method.operatorToStakingProvider(operator_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -179,7 +192,7 @@ class IdentityClientSession:
         self, staking_provider_address: IdentityAddress
     ) -> IdentityAddress:
         address = await self._backend_session.call(
-            self._pre_application.method.getOperatorFromStakingProvider(staking_provider_address)
+            self._taco_application.method.stakingProviderToOperator(staking_provider_address)
         )
         return IdentityAddress(bytes(address))
 
@@ -190,7 +203,7 @@ class IdentityClientSession:
         return cast(
             "bool",
             await self._backend_session.call(
-                self._pre_application.method.isAuthorized(staking_provider_address)
+                self._taco_application.method.isAuthorized(staking_provider_address)
             ),
         )
 
@@ -199,7 +212,7 @@ class IdentityClientSession:
         return cast(
             "bool",
             await self._backend_session.call(
-                self._pre_application.method.isOperatorConfirmed(operator_address)
+                self._taco_application.method.isOperatorConfirmed(operator_address)
             ),
         )
 
@@ -210,12 +223,15 @@ class IdentityClientSession:
     async def get_active_staking_providers(
         self, start_index: int = 0, max_staking_providers: int = 0
     ) -> dict[IdentityAddress, AmountT]:
+        # TODO: implement pagination
         _total_staked, staking_providers_data = await self._backend_session.call(
-            self._pre_application.method.getActiveStakingProviders(
+            self._taco_application.method.getActiveStakingProviders(
                 start_index, max_staking_providers
             )
         )
         return {
-            IdentityAddress(address.to_bytes(20, byteorder="big")): AmountT.wei(amount)
-            for address, amount in staking_providers_data
+            IdentityAddress(address_amount[:20]): AmountT.wei(
+                int.from_bytes(address_amount[20:], byteorder="big")
+            )
+            for address_amount in staking_providers_data
         }

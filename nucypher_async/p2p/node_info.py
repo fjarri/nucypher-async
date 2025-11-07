@@ -6,6 +6,8 @@ from nucypher_core import (
     Address,
     Conditions,
     Context,
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     FleetStateChecksum,
     MetadataRequest,
     MetadataResponse,
@@ -114,31 +116,16 @@ class NodeClient:
         except UnicodeDecodeError as exc:
             raise InvalidMessage.for_message(str, exc) from exc
 
-    async def get_node_info(
-        self,
-        node_info: NodeInfo,
-    ) -> list[NodeInfo]:
-        response_bytes = await self._peer_client.communicate(
-            node_info.secure_contact, NodeRoutes.NODE_METADATA
-        )
-        response = unwrap_bytes(response_bytes, MetadataResponse)
-
-        try:
-            payload = response.verify(node_info.verifying_key)
-        except Exception as exc:  # TODO: can we narrow it down?
-            # TODO: should it be a separate error class?
-            raise InvalidMessage(MetadataResponse, exc) from exc
-
-        return [NodeInfo(metadata) for metadata in payload.announce_nodes]
-
     async def exchange_node_info(
         self,
         node_info: NodeInfo,
         fleet_state_checksum: FleetStateChecksum,
-        this_node_info: NodeInfo,
+        this_node_info: NodeInfo | None,
     ) -> list[NodeInfo]:
         # TODO: should `this_node_info` be narrowed down to VerifiedNodeInfo?
-        request = MetadataRequest(fleet_state_checksum, [this_node_info.metadata])
+        request = MetadataRequest(
+            fleet_state_checksum, [this_node_info.metadata] if this_node_info else []
+        )
         response_bytes = await self._peer_client.communicate(
             node_info.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
         )
@@ -205,6 +192,16 @@ class NodeClient:
             raise InvalidMessage(ReencryptionResponse, exc) from exc
 
         return verified_cfrags
+
+    async def decrypt(
+        self,
+        node_info: NodeInfo,
+        request: EncryptedThresholdDecryptionRequest,
+    ) -> EncryptedThresholdDecryptionResponse:
+        response_bytes = await self._peer_client.communicate(
+            node_info.secure_contact, NodeRoutes.DECRYPT, bytes(request)
+        )
+        return unwrap_bytes(response_bytes, EncryptedThresholdDecryptionResponse)
 
     async def status(self, secure_contact: SecureContact) -> str:
         response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.STATUS)

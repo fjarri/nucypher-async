@@ -3,7 +3,8 @@ from nucypher_core.ferveo import FerveoPublicKey
 from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
-from ..characters.pre import Reencryptor
+from ..characters.node import Operator
+from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
 from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
@@ -142,6 +143,7 @@ class VerifiedNodeInfo(NodeInfo):
         cls,
         clock: BaseClock,
         node_info: NodeInfo,
+        operator: Operator,
         reencryptor: Reencryptor,
         staking_provider_address: IdentityAddress,
         contact: Contact,
@@ -154,7 +156,7 @@ class VerifiedNodeInfo(NodeInfo):
             node_info=node_info,
             expected_contact=contact,
             expected_domain=domain,
-            expected_operator_address=reencryptor.operator_address,
+            expected_operator_address=operator.address,
         )
 
         if not peer_private_key.matches(node_info.public_key):
@@ -176,10 +178,10 @@ class VerifiedNodeInfo(NodeInfo):
                 f"{staking_provider_address} recorded in the blockchain"
             )
 
-        if node_info.verifying_key != reencryptor.signer.verifying_key():
+        if node_info.verifying_key != operator.verifying_key:
             raise PeerVerificationError(
                 f"Verifying key mismatch: {node_info.verifying_key} in the metadata, "
-                f"{reencryptor.signer.verifying_key()} derived from the master key"
+                f"{operator.verifying_key} derived from the master key"
             )
 
         if node_info.encrypting_key != reencryptor.encrypting_key:
@@ -189,6 +191,9 @@ class VerifiedNodeInfo(NodeInfo):
             )
 
         return cls(node_info.metadata)
+
+    def reencryptor_card(self) -> ReencryptorCard:
+        return ReencryptorCard(encrypting_key=self.encrypting_key)
 
     def __str__(self) -> str:
         return f"VerifiedNodeInfo({self.staking_provider_address.checksum})"

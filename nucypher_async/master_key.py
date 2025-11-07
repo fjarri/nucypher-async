@@ -3,6 +3,7 @@ from typing import TypedDict
 
 import arrow
 from mnemonic.mnemonic import Mnemonic
+from nucypher_core import SessionSecretFactory, SessionSharedSecret, SessionStaticKey
 from nucypher_core.ferveo import Keypair as FerveoKeypair
 from nucypher_core.umbral import SecretKey, SecretKeyFactory, Signer
 
@@ -84,6 +85,11 @@ class MasterKey:
         self.__secret = secret
         self.__skf = SecretKeyFactory.from_secure_randomness(secret)
 
+        size = SessionSecretFactory.seed_size()
+        self.__ssf = SessionSecretFactory.from_secure_randomness(
+            self.__skf.make_secret(b"NuCypher/threshold_request_decrypting")[:size]
+        )
+
     def encrypt(self, password: str) -> EncryptedMasterKey:
         password_salt = token_bytes(16)
         key_material = derive_key_material_from_password(
@@ -115,3 +121,12 @@ class MasterKey:
         size = FerveoKeypair.secure_randomness_size()
         randomness = self.__skf.make_secret(b"NuCypher/ritualistic")[:size]
         return FerveoKeypair.from_secure_randomness(randomness)
+
+    def make_session_static_key(self, ritual_id: int) -> SessionStaticKey:
+        return self.__ssf.make_key(ritual_id.to_bytes(4, "big")).public_key()
+
+    def make_shared_secret(
+        self, ritual_id: int, other_public_key: SessionStaticKey
+    ) -> SessionSharedSecret:
+        static_secret = self.__ssf.make_key(ritual_id.to_bytes(4, "big"))
+        return static_secret.derive_shared_secret(other_public_key)

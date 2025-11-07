@@ -2,6 +2,8 @@ from ipaddress import IPv4Address
 
 import trio
 from nucypher_core import (
+    EncryptedThresholdDecryptionRequest,
+    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     MetadataResponsePayload,
@@ -13,6 +15,9 @@ from nucypher_core import (
 from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.server import ServerWrapper
+from ..base.types import JSON
+from ..characters.cbd import ActiveRitual, Decryptor
+from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
@@ -31,17 +36,19 @@ class NodeServer(BasePeerServer, BaseNodeServer):
     @classmethod
     async def async_init(
         cls,
+        operator: Operator,
         reencryptor: Reencryptor,
+        decryptor: Decryptor,
         peer_server_config: PeerServerConfig,
         config: NodeServerConfig,
     ) -> "NodeServer":
         async with config.identity_client.session() as session:
-            staking_provider_address = await verify_staking_local(
-                session, reencryptor.operator_address
-            )
+            staking_provider_address = await verify_staking_local(session, operator.address)
 
         return cls(
+            operator=operator,
             reencryptor=reencryptor,
+            decryptor=decryptor,
             peer_server_config=peer_server_config,
             config=config,
             staking_provider_address=staking_provider_address,
@@ -49,12 +56,16 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
     def __init__(
         self,
+        operator: Operator,
         reencryptor: Reencryptor,
+        decryptor: Decryptor,
         peer_server_config: PeerServerConfig,
         config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
+        self.operator = operator
         self.reencryptor = reencryptor
+        self.decryptor = decryptor
 
         self._clock = config.clock
         self._logger = config.parent_logger.get_child("NodeServer")
@@ -74,6 +85,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 maybe_node = VerifiedNodeInfo.checked_local(
                     clock=self._clock,
                     node_info=node_info,
+                    operator=operator,
                     reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
                     contact=peer_server_config.contact,
@@ -94,10 +106,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 clock=self._clock,
                 peer_private_key=peer_private_key,
                 peer_public_key=peer_server_config.peer_public_key,
-                signer=self.reencryptor.signer,
-                operator_signature=self.reencryptor.operator_signature,
+                signer=self.operator.signer,
+                operator_signature=self.operator.signature,
                 encrypting_key=self.reencryptor.encrypting_key,
-                dkg_key=self.reencryptor.dkg_key,
+                dkg_key=self.decryptor.public_key,
                 staking_provider_address=staking_provider_address,
                 contact=peer_server_config.contact,
                 domain=config.domain,
@@ -121,6 +133,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         self._bind_to = peer_server_config.bind_to
 
         self._pre_client = config.pre_client
+        self._cbd_client = config.cbd_client
 
         self._started_at = self._clock.utcnow()
 
@@ -177,17 +190,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             return remote_host.encode()
         raise GenericPeerError
 
-    async def node_metadata_get(self) -> MetadataResponse:
-        announce_nodes = [
-            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
-        ]
-        response_payload = MetadataResponsePayload(
-            timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
-            announce_nodes=announce_nodes,
-        )
-        return MetadataResponse(self.reencryptor.signer, response_payload)
-
-    async def node_metadata_post(
+    async def node_metadata(
         self, remote_host: str | None, request: MetadataRequest
     ) -> MetadataResponse:
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
@@ -196,13 +199,20 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
-            return MetadataResponse(self.reencryptor.signer, response_payload)
+            return MetadataResponse(self.operator.signer, response_payload)
 
         new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
-        return await self.node_metadata_get()
+        announce_nodes = [
+            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
+        ]
+        response_payload = MetadataResponsePayload(
+            timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
+            announce_nodes=announce_nodes,
+        )
+        return MetadataResponse(self.operator.signer, response_payload)
 
     async def public_information(self) -> NodeMetadata:
         # TODO: can we just return NodeInfo?
@@ -231,8 +241,65 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         )
 
         return ReencryptionResponse(
-            signer=self.reencryptor.signer,
+            signer=self.operator.signer,
             capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
+        )
+
+    async def endpoint_condition_chains(self) -> JSON:
+        raise NotImplementedError
+
+    async def decrypt(
+        self, request: EncryptedThresholdDecryptionRequest
+    ) -> EncryptedThresholdDecryptionResponse:
+        decryption_request = self.decryptor.decrypt_threshold_decryption_request(request)
+        self._logger.info(
+            "Threshold decryption request for ritual ID #{}", decryption_request.ritual_id
+        )
+
+        async with self._cbd_client.session() as session:
+            assert await session.is_ritual_active(decryption_request.ritual_id)
+            assert await session.is_participant(
+                decryption_request.ritual_id, self._node.staking_provider_address
+            )
+
+        ciphertext_header = decryption_request.ciphertext_header
+        authorization = decryption_request.acp.authorization
+        async with self._cbd_client.session() as session:
+            assert await session.is_authorized(
+                ritual_id=decryption_request.ritual_id,
+                evidence=authorization,
+                ciphertext_header=ciphertext_header,
+            )
+
+        # TODO: evaluate and check conditions here
+
+        async with self._cbd_client.session() as session:
+            on_chain_ritual = await session.get_ritual(
+                decryption_request.ritual_id
+            )  # TODO: can be cached
+
+            validators = {}
+            for staking_provider_address in on_chain_ritual.providers:
+                if staking_provider_address == self._node.staking_provider_address:
+                    # Local
+                    public_key = self.decryptor.public_key
+                else:
+                    # Remote
+                    # TODO: optimize rpc calls by obtaining public keys altogether
+                    #  instead of one-by-one?
+                    public_key = await session.get_provider_public_key(
+                        provider=staking_provider_address, ritual_id=on_chain_ritual.id
+                    )
+                validators[staking_provider_address] = public_key
+
+        ritual = ActiveRitual.from_on_chain_ritual(on_chain_ritual, validators)
+        decryption_share = self.decryptor.make_decryption_share(ritual, decryption_request)
+        decryption_response = self.decryptor.make_threshold_decryption_response(
+            ritual, decryption_share
+        )
+        return self.decryptor.encrypt_threshold_decryption_response(
+            response=decryption_response,
+            requester_public_key=request.requester_public_key,
         )
 
     async def endpoint_status(self) -> str:

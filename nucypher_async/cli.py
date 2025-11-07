@@ -5,6 +5,8 @@ from pathlib import Path
 import click
 import trio
 
+from .characters.cbd import Decryptor
+from .characters.node import Operator
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
@@ -25,15 +27,17 @@ async def make_node_server(
     async with await trio.Path(signer).open(encoding="utf-8") as file:
         keyfile = await file.read()
 
-    acc = IdentityAccount.from_payload(keyfile, geth_password)
+    identity_account = IdentityAccount.from_payload(keyfile, geth_password)
 
     async with await trio.Path(config["keystore_path"]).open(encoding="utf-8") as file:
         keystore = json.loads(await file.read())
 
     encrypted_key = EncryptedMasterKey.from_payload(keystore)
-    key = encrypted_key.decrypt(nucypher_password)
+    master_key = encrypted_key.decrypt(nucypher_password)
 
-    reencryptor = Reencryptor(master_key=key, identity_account=acc)
+    operator = Operator(master_key, identity_account)
+    reencryptor = Reencryptor(master_key)
+    decryptor = Decryptor(master_key)
 
     # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
     peer_server_config = PeerServerConfig.from_config_values(
@@ -49,6 +53,7 @@ async def make_node_server(
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
         pre_endpoint=config["pre_provider"],
+        cbd_endpoint=config["cbd_provider"],
         log_to_console=True,
         log_to_file=True,
         persistent_storage=True,
@@ -56,7 +61,11 @@ async def make_node_server(
     )
 
     return await NodeServer.async_init(
-        reencryptor=reencryptor, peer_server_config=peer_server_config, config=config
+        operator=operator,
+        reencryptor=reencryptor,
+        decryptor=decryptor,
+        peer_server_config=peer_server_config,
+        config=config,
     )
 
 

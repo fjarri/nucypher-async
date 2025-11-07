@@ -113,15 +113,12 @@ def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
         remote_host = request.client.host if request.client else None
         return await binary_api_call(logger, node_server.endpoint_ping(remote_host))
 
-    async def node_metadata_get(_request: Request) -> Response:
-        return await binary_api_call(logger, node_server.endpoint_node_metadata_get())
-
-    async def node_metadata_post(request: Request) -> Response:
+    async def node_metadata(request: Request) -> Response:
         remote_host = request.client.host if request.client else None
         request_bytes = await request.body()
         return await binary_api_call(
             logger,
-            node_server.endpoint_node_metadata_post(remote_host, request_bytes),
+            node_server.endpoint_node_metadata(remote_host, request_bytes),
         )
 
     async def public_information(_request: Request) -> Response:
@@ -130,6 +127,13 @@ def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
     async def reencrypt(request: Request) -> Response:
         request_bytes = await request.body()
         return await binary_api_call(logger, node_server.endpoint_reencrypt(request_bytes))
+
+    async def condition_chains(_request: Request) -> Response:
+        return await rest_api_call(logger, node_server.endpoint_condition_chains())
+
+    async def decrypt(request: Request) -> Response:
+        request_bytes = await request.body()
+        return await binary_api_call(logger, node_server.endpoint_decrypt(request_bytes))
 
     async def status(_request: Request) -> Response:
         # This is technically not a peer API, so we need special handling
@@ -143,10 +147,11 @@ def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
 
     routes = [
         Route(f"/{NodeRoutes.PING}", ping),
-        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_get),
-        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata_post, methods=["POST"]),
+        Route(f"/{NodeRoutes.NODE_METADATA}", node_metadata, methods=["POST"]),
         Route(f"/{NodeRoutes.PUBLIC_INFORMATION}", public_information),
         Route(f"/{NodeRoutes.REENCRYPT}", reencrypt, methods=["POST"]),
+        Route(f"/{NodeRoutes.CONDITION_CHAINS}", condition_chains),
+        Route(f"/{NodeRoutes.DECRYPT}", decrypt, methods=["POST"]),
         Route(f"/{NodeRoutes.STATUS}", status),
     ]
 
