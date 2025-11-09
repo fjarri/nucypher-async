@@ -2,8 +2,9 @@
 
 import os
 from ssl import SSLContext
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
+import hypercorn
 import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
@@ -11,6 +12,9 @@ from hypercorn.trio import serve
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from .peer import BasePeerServer
+
+if TYPE_CHECKING:  # pragma: no cover
+    import logging
 
 
 class InMemoryCertificateConfig(Config):
@@ -77,8 +81,21 @@ def make_config(server: BasePeerServer) -> InMemoryCertificateConfig:
 
     host, port = server.bind_pair()
 
+    # Since the config accepts a class and not an instance of a logger,
+    # we have to pass the parent logger through via an ad-hoc class.
+    parent_logger = server.logger()
+
+    class BoundLogger(hypercorn.logging.Logger):
+        def __init__(self, config: Config):
+            super().__init__(config)
+            self.access_logger = None
+            # Our logger has the same subset of `logging.Logger`'s API Hypercorn uses,
+            # so we can safely cast.
+            self.error_logger = cast("logging.Logger", parent_logger.get_child("HTTPServer"))
+
     config.bind = [f"{host}:{port}"]
     config.worker_class = "trio"
+    config.logger_class = BoundLogger
 
     return config
 
@@ -96,7 +113,7 @@ class HTTPServerHandle:
         self._shutdown_finished = trio.Event()
 
     async def startup(
-        self, *, task_status: trio.TaskStatus[None] = trio.TASK_STATUS_IGNORED
+        self, *, task_status: trio.TaskStatus[list[str]] = trio.TASK_STATUS_IGNORED
     ) -> None:
         """
         Starts the server in an external event loop.
@@ -106,11 +123,7 @@ class HTTPServerHandle:
         """
         config = make_config(self.server)
         await serve(
-            self.app,
-            config,
-            shutdown_trigger=self._shutdown_event.wait,
-            # That's what hypercorn API declares, but it's the same type as `trio.TaskStatus`
-            task_status=cast("trio._core._run._TaskStatus", task_status),  # noqa: SLF001
+            self.app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status
         )
         self._shutdown_finished.set()
 

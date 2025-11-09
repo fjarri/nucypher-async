@@ -57,11 +57,7 @@ def node_server() -> NodeServer:
     )
 
 
-async def test_client_real_server(
-    nursery: trio.Nursery,
-    capsys: pytest.CaptureFixture[str],
-    node_server: NodeServer,
-) -> None:
+async def test_client_real_server(nursery: trio.Nursery, node_server: NodeServer) -> None:
     handle = HTTPServerHandle(node_server)
     await nursery.start(handle.startup)
 
@@ -72,4 +68,3 @@ async def test_client_real_server(
     response = await client.status(node_server.secure_contact())
 
     await handle.shutdown()
-    capsys.readouterr()
