@@ -113,7 +113,7 @@ class HTTPServerHandle:
         self._shutdown_finished = trio.Event()
 
     async def startup(
-        self, *, task_status: trio.TaskStatus[None] = trio.TASK_STATUS_IGNORED
+        self, *, task_status: trio.TaskStatus[list[str]] = trio.TASK_STATUS_IGNORED
     ) -> None:
         """
         Starts the server in an external event loop.
@@ -123,11 +123,7 @@ class HTTPServerHandle:
         """
         config = make_config(self.server)
         await serve(
-            self.app,
-            config,
-            shutdown_trigger=self._shutdown_event.wait,
-            # That's what hypercorn API declares, but it's the same type as `trio.TaskStatus`
-            task_status=cast("trio._core._run._TaskStatus", task_status),  # noqa: SLF001
+            self.app, config, shutdown_trigger=self._shutdown_event.wait, task_status=task_status
         )
         self._shutdown_finished.set()
 
