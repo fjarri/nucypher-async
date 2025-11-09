@@ -21,6 +21,7 @@ from ..base.peer_error import PeerError
 from ..base.server import ServerWrapper
 from ..base.time import BaseClock
 from ..utils import temp_file
+from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
 
 
@@ -252,6 +253,9 @@ class BasePeerServer(ABC):
     # TODO: abstraction leak, can this be made more general?
     @abstractmethod
     def bind_to(self) -> IPv4Address: ...
+
+    @abstractmethod
+    def logger(self) -> Logger: ...
 
     def bind_pair(self) -> tuple[IPv4Address, int]:
         return self.bind_to(), self.secure_contact().contact.port

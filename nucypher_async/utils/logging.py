@@ -149,6 +149,9 @@ class Logger:
     def critical(self, message: str, *args: Any, **kwds: Any) -> None:
         self._log(Level.CRITICAL, message, args, **kwds)
 
+    def exception(self, message: str, *args: Any, **kwds: Any) -> None:
+        self._log(Level.ERROR, message, args, exc_info=True, **kwds)
+
 
 NULL_LOGGER = Logger()
 
