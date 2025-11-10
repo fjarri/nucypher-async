@@ -1,7 +1,6 @@
 import itertools
 import os
 from collections.abc import AsyncIterator
-from ipaddress import IPv4Address
 
 import pytest
 import trio
@@ -11,7 +10,6 @@ from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityAddress
-from nucypher_async.drivers.peer import Contact
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,
@@ -116,13 +114,9 @@ async def lonely_nodes(
             staking_provider_address, operators[i].address, AmountT.ether(40000)
         )
 
-        peer_server_config = PeerServerConfig(
-            bind_to_address=IPv4Address("127.0.0.1"),
-            bind_to_port=9150 + i,
-            contact=Contact("127.0.0.1", 9150 + i),
-            ssl_certificate=None,
-            ssl_private_key=None,
-            ssl_ca_chain=None,
+        peer_server_config = PeerServerConfig.from_typed_values(
+            external_host="127.0.0.1",
+            external_port=9150 + i,
         )
 
         config = NodeServerConfig(
@@ -209,13 +203,11 @@ async def porter_server(
     ssl_private_key = SSLPrivateKey.from_seed(b"1231234")
     ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
 
-    peer_server_config = PeerServerConfig(
-        bind_to_address=IPv4Address("127.0.0.1"),
-        bind_to_port=port,
-        contact=Contact(host, port),
+    peer_server_config = PeerServerConfig.from_typed_values(
+        external_host="127.0.0.1",
+        external_port=port,
         ssl_certificate=ssl_certificate,
         ssl_private_key=ssl_private_key,
-        ssl_ca_chain=None,
     )
 
     config = PorterServerConfig(

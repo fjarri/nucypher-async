@@ -2,7 +2,6 @@
 
 import functools
 import os
-from ipaddress import IPv4Address
 from typing import NamedTuple
 
 import trio
@@ -86,13 +85,9 @@ async def run_local_node_fleet(
             AmountT.ether(40000),
         )
 
-        peer_server_config = PeerServerConfig(
-            bind_to_address=IPv4Address(LOCALHOST),
-            bind_to_port=PORT_BASE + i,
-            contact=Contact(LOCALHOST, PORT_BASE + i),
-            ssl_certificate=None,
-            ssl_private_key=None,
-            ssl_ca_chain=None,
+        peer_server_config = PeerServerConfig.from_typed_values(
+            external_host=LOCALHOST,
+            external_port=PORT_BASE + i,
         )
 
         config = NodeServerConfig(
