@@ -11,7 +11,7 @@ from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..client.pre import RetrievalState, retrieve_via_learner
 from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..drivers.peer import BasePeerServer, PeerPrivateKey, PeerPublicKey, SecureContact
+from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
 from ..p2p.algorithms import get_nodes, learning_task, staker_query_task, verification_task
 from ..p2p.learner import Learner
 from ..schema.porter import (
@@ -48,20 +48,14 @@ class PorterServer(BasePeerServer, BasePorterServer):
         self._contact = peer_server_config.contact
 
         # TODO: generate self-signed ones if these are missing in the config
-        if peer_server_config.ssl_private_key is not None:
-            self._peer_private_key = PeerPrivateKey(peer_server_config.ssl_private_key)
-        else:
-            raise NotImplementedError
-
-        if peer_server_config.ssl_certificate is not None:
-            self._peer_public_key = PeerPublicKey(
-                peer_server_config.ssl_certificate, peer_server_config.ssl_ca_chain
-            )
+        peer_key_pair = peer_server_config.peer_key_pair
+        if peer_key_pair is not None:
+            self._peer_private_key, self._peer_public_key = peer_key_pair
         else:
             raise NotImplementedError
 
         self._secure_contact = SecureContact(peer_server_config.contact, self._peer_public_key)
-        self._bind_to = peer_server_config.bind_to
+        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
 
         self._domain = config.domain
 
@@ -88,8 +82,8 @@ class PorterServer(BasePeerServer, BasePorterServer):
     def peer_private_key(self) -> PeerPrivateKey:
         return self._peer_private_key
 
-    def bind_to(self) -> IPv4Address:
-        return self._bind_to
+    def bind_pair(self) -> tuple[IPv4Address, int]:
+        return self._bind_pair
 
     def into_servable(self) -> ServerWrapper:
         return make_porter_asgi_app(self)

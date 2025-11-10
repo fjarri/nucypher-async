@@ -1,5 +1,4 @@
 import os
-from ipaddress import IPv4Address
 
 import pytest
 import trio
@@ -10,7 +9,7 @@ from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAccount, IdentityAddress
-from nucypher_async.drivers.peer import Contact, PeerClient
+from nucypher_async.drivers.peer import PeerClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
@@ -22,12 +21,9 @@ from nucypher_async.utils.logging import NULL_LOGGER
 
 @pytest.fixture
 def node_server() -> NodeServer:
-    peer_server_config = PeerServerConfig(
-        bind_to=IPv4Address("127.0.0.1"),
-        contact=Contact("127.0.0.1", 9151),
-        ssl_certificate=None,
-        ssl_private_key=None,
-        ssl_ca_chain=None,
+    peer_server_config = PeerServerConfig.from_typed_values(
+        external_host="127.0.0.1",
+        external_port=9151,
     )
     config = NodeServerConfig(
         domain=Domain.MAINNET,

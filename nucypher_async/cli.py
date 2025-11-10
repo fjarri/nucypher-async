@@ -42,7 +42,7 @@ async def make_node_server(
     # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
     peer_server_config = PeerServerConfig.from_config_values(
         external_host=config["rest_host"],
-        port=config["rest_port"],
+        external_port=config["rest_port"],
         ssl_certificate_path=config.get("ssl_certificate", None),
         ssl_private_key_path=config.get("ssl_private_key", None),
         ssl_ca_chain_path=config.get("ssl_ca_chain", None),
@@ -75,7 +75,7 @@ def make_porter_server(config_path: str) -> PorterServer:
 
     peer_server_config = PeerServerConfig.from_config_values(
         external_host=config["rest_host"],
-        port=config["rest_port"],
+        external_port=config["rest_port"],
         ssl_certificate_path=config["ssl_certificate"],
         ssl_private_key_path=config["ssl_private_key"],
         ssl_ca_chain_path=config.get("ssl_ca_chain", None),

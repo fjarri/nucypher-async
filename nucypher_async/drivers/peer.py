@@ -250,12 +250,9 @@ class BasePeerServer(ABC):
     @abstractmethod
     def into_servable(self) -> ServerWrapper: ...
 
-    # TODO: abstraction leak, can this be made more general?
-    @abstractmethod
-    def bind_to(self) -> IPv4Address: ...
-
     @abstractmethod
     def logger(self) -> Logger: ...
 
-    def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self.bind_to(), self.secure_contact().contact.port
+    # TODO: abstraction leak, can this be made more general?
+    @abstractmethod
+    def bind_pair(self) -> tuple[IPv4Address, int]: ...
