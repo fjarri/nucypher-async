@@ -74,9 +74,12 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         node_info = self._storage.get_my_node_info()
         maybe_node: VerifiedNodeInfo | None = None
 
-        peer_private_key = (
-            peer_server_config.peer_private_key or reencryptor.make_peer_private_key()
-        )
+        peer_key_pair = peer_server_config.peer_key_pair
+        if peer_key_pair is not None:
+            peer_private_key, peer_public_key = peer_key_pair
+        else:
+            peer_private_key = reencryptor.make_peer_private_key()
+            peer_public_key = None
 
         if node_info is not None:
             self._logger.debug("Found existing metadata, verifying")
@@ -90,7 +93,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                     staking_provider_address=staking_provider_address,
                     contact=peer_server_config.contact,
                     domain=config.domain,
-                    peer_public_key=peer_server_config.peer_public_key,
+                    peer_public_key=peer_public_key,
                     peer_private_key=peer_private_key,
                 )
             except PeerVerificationError as exc:
@@ -105,7 +108,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             self._node = VerifiedNodeInfo.generate(
                 clock=self._clock,
                 peer_private_key=peer_private_key,
-                peer_public_key=peer_server_config.peer_public_key,
+                peer_public_key=peer_public_key,
                 signer=self.operator.signer,
                 operator_signature=self.operator.signature,
                 encrypting_key=self.reencryptor.encrypting_key,

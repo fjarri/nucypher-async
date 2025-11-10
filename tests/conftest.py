@@ -206,8 +206,7 @@ async def porter_server(
     peer_server_config = PeerServerConfig.from_typed_values(
         external_host="127.0.0.1",
         external_port=port,
-        ssl_certificate=ssl_certificate,
-        ssl_private_key=ssl_private_key,
+        ssl_key_pair=(ssl_private_key, ssl_certificate),
     )
 
     config = PorterServerConfig(
