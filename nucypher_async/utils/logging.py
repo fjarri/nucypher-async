@@ -5,7 +5,6 @@ depening on the environment (testing/usage as a library/running a server).
 
 import io
 import sys
-import time
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -14,8 +13,12 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+import arrow
 import trio
 from attr import frozen
+
+from ..base.time import BaseClock
+from ..drivers.time import SystemClock
 
 
 class Level(IntEnum):
@@ -44,7 +47,7 @@ CRITICAL = Level.CRITICAL
 
 @frozen
 class LogRecord:
-    timestamp: float
+    timestamp: arrow.Arrow
     logger_name: str
     level: Level
     message: str
@@ -54,6 +57,7 @@ class LogRecord:
 
     @staticmethod
     def make(
+        clock: BaseClock,
         logger_name: str,
         level: Level,
         message: str,
@@ -73,7 +77,7 @@ class LogRecord:
         task_id = (id(task) % 8999 + 1000) if task is not None else None
 
         return LogRecord(
-            timestamp=time.time(),  # Note: using the local time here, not UTC
+            timestamp=clock.utcnow(),
             logger_name=logger_name,
             level=level,
             message=message,
@@ -100,11 +104,13 @@ class Logger:
         level: Level = Level.DEBUG,
         handlers: Iterable[Handler] | None = None,
         parent: "Logger | None" = None,
+        clock: BaseClock = SystemClock(),
     ):
         self.name = name
         self.level = level
         self.handlers = handlers or []
         self.parent = parent
+        self._clock = clock
 
     def get_child(
         self,
@@ -117,6 +123,7 @@ class Logger:
             level=level or self.level,
             handlers=handlers,
             parent=self,
+            clock=self._clock,
         )
 
     def _emit(self, record: LogRecord) -> None:
@@ -132,7 +139,7 @@ class Logger:
     def _log(
         self, level: Level, message: str, args: tuple[Any, ...], *, exc_info: bool = False
     ) -> None:
-        self._emit(LogRecord.make(self.name, level, message, args, exc_info=exc_info))
+        self._emit(LogRecord.make(self._clock, self.name, level, message, args, exc_info=exc_info))
 
     def debug(self, message: str, *args: Any, **kwds: Any) -> None:
         self._log(Level.DEBUG, message, args, **kwds)
@@ -162,7 +169,9 @@ class DefaultFormatter(Formatter):
 
     def format(self, record: LogRecord) -> str:
         message = record.message.format(*record.args)
-        asctime = time.asctime(time.localtime(record.timestamp))
+        asctime = record.timestamp.to(
+            "local"
+        ).format()  # time.asctime(time.localtime(record.timestamp))
 
         full_message = self.format_str.format(
             task_id=("" if record.task_id is None else ("[" + str(record.task_id) + "] ")),

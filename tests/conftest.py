@@ -35,7 +35,9 @@ from nucypher_async.utils.ssl import SSLCertificate, SSLPrivateKey
 @pytest.fixture(scope="session")
 def logger() -> logging.Logger:
     # TODO: we may add a CLI option to reduce the verbosity of test logging
-    return logging.Logger(level=logging.DEBUG, handlers=[logging.ConsoleHandler(stderr_at=None)])
+    return logging.Logger(
+        level=logging.DEBUG, handlers=[logging.ConsoleHandler(stderr_at=None)], clock=MockClock()
+    )
 
 
 @pytest.fixture
