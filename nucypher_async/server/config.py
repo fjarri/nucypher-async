@@ -67,7 +67,8 @@ def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseS
 
 @frozen
 class PeerServerConfig:
-    bind_to: IPv4Address
+    bind_to_address: IPv4Address
+    bind_to_port: int
     contact: Contact
     ssl_certificate: SSLCertificate | None
     ssl_private_key: SSLPrivateKey | None
@@ -77,12 +78,13 @@ class PeerServerConfig:
     def from_config_values(
         cls,
         *,
-        bind_to: str = "127.0.0.1",
+        bind_to_address: str = "127.0.0.1",
+        bind_to_port: int | None = None,
         external_host: str,
-        port: int,
-        ssl_private_key_path: str | Path | None,
-        ssl_certificate_path: str | Path | None,
-        ssl_ca_chain_path: str | Path | None = None,
+        external_port: int = 9151,
+        ssl_private_key_path: str | None,
+        ssl_certificate_path: str | None,
+        ssl_ca_chain_path: str | None = None,
     ) -> "PeerServerConfig":
         ssl_private_key: SSLPrivateKey | None
         if ssl_private_key_path is not None:
@@ -112,10 +114,12 @@ class PeerServerConfig:
         else:
             ssl_ca_chain = None
 
-        contact = Contact(external_host, port)
+        contact = Contact(external_host, external_port)
+        bind_to_port = bind_to_port if bind_to_port is not None else external_port
 
         return cls(
-            bind_to=IPv4Address(bind_to),
+            bind_to_address=IPv4Address(bind_to_address),
+            bind_to_port=bind_to_port,
             contact=contact,
             ssl_private_key=ssl_private_key,
             ssl_certificate=ssl_certificate,

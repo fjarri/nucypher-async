@@ -117,7 +117,8 @@ async def lonely_nodes(
         )
 
         peer_server_config = PeerServerConfig(
-            bind_to=IPv4Address("127.0.0.1"),
+            bind_to_address=IPv4Address("127.0.0.1"),
+            bind_to_port=9150 + i,
             contact=Contact("127.0.0.1", 9150 + i),
             ssl_certificate=None,
             ssl_private_key=None,
@@ -209,7 +210,8 @@ async def porter_server(
     ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
 
     peer_server_config = PeerServerConfig(
-        bind_to=IPv4Address("127.0.0.1"),
+        bind_to_address=IPv4Address("127.0.0.1"),
+        bind_to_port=port,
         contact=Contact(host, port),
         ssl_certificate=ssl_certificate,
         ssl_private_key=ssl_private_key,

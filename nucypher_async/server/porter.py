@@ -61,7 +61,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
             raise NotImplementedError
 
         self._secure_contact = SecureContact(peer_server_config.contact, self._peer_public_key)
-        self._bind_to = peer_server_config.bind_to
+        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
 
         self._domain = config.domain
 
@@ -88,8 +88,8 @@ class PorterServer(BasePeerServer, BasePorterServer):
     def peer_private_key(self) -> PeerPrivateKey:
         return self._peer_private_key
 
-    def bind_to(self) -> IPv4Address:
-        return self._bind_to
+    def bind_pair(self) -> tuple[IPv4Address, int]:
+        return self._bind_pair
 
     def into_servable(self) -> ServerWrapper:
         return make_porter_asgi_app(self)

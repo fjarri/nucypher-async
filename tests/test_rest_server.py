@@ -23,7 +23,8 @@ from nucypher_async.utils.logging import NULL_LOGGER
 @pytest.fixture
 def node_server() -> NodeServer:
     peer_server_config = PeerServerConfig(
-        bind_to=IPv4Address("127.0.0.1"),
+        bind_to_address=IPv4Address("127.0.0.1"),
+        bind_to_port=9151,
         contact=Contact("127.0.0.1", 9151),
         ssl_certificate=None,
         ssl_private_key=None,

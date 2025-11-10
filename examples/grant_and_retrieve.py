@@ -87,7 +87,8 @@ async def run_local_node_fleet(
         )
 
         peer_server_config = PeerServerConfig(
-            bind_to=IPv4Address("127.0.0.1"),
+            bind_to_address=IPv4Address(LOCALHOST),
+            bind_to_port=PORT_BASE + i,
             contact=Contact(LOCALHOST, PORT_BASE + i),
             ssl_certificate=None,
             ssl_private_key=None,
