@@ -27,7 +27,6 @@ from pons import (
     DeployedContract,
     Method,
     Mutability,
-    Signer,
     abi,
 )
 from pons.http_provider import HTTPProvider
@@ -172,7 +171,7 @@ class PREClientSession:
 
     async def create_policy(
         self,
-        signer: Signer,
+        signer: PREAccountSigner,
         hrac: HRAC,
         shares: int,
         policy_start: int,

@@ -8,12 +8,11 @@ from .. import schema
 from ..base.porter import BasePorterServer
 from ..base.server import ServerWrapper
 from ..base.types import JSON
-from ..characters.pre import DelegatorCard, RecipientCard
-from ..client.pre import RetrievalState, retrieve_via_learner
+from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
+from ..client.network import NetworkClient
+from ..client.pre import LocalPREClient
 from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
 from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..p2p.algorithms import get_nodes, learning_task, staker_query_task, verification_task
-from ..p2p.learner import Learner
 from ..schema.porter import (
     GetUrsulasRequest,
     GetUrsulasResponse,
@@ -35,7 +34,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
         self._clock = config.clock
         self._config = config
         self._logger = config.parent_logger.get_child("PorterServer")
-        self.learner = Learner(
+        self._network_client = NetworkClient(
             peer_client=config.peer_client,
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
@@ -44,6 +43,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
             clock=config.clock,
             storage=config.storage,
         )
+        self._pre_client = config.pre_client
 
         self._contact = peer_server_config.contact
 
@@ -59,18 +59,15 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         self._domain = config.domain
 
-        async def _verification_task(stop_event: trio.Event) -> None:
-            await verification_task(stop_event, self.learner)
-
-        async def _learning_task(stop_event: trio.Event) -> None:
-            await learning_task(stop_event, self.learner)
-
-        async def _staker_query_task(stop_event: trio.Event) -> None:
-            await staker_query_task(stop_event, self.learner)
-
-        self._verification_task = BackgroundTask(worker=_verification_task, logger=self._logger)
-        self._learning_task = BackgroundTask(worker=_learning_task, logger=self._logger)
-        self._staker_query_task = BackgroundTask(worker=_staker_query_task, logger=self._logger)
+        self._verification_task = BackgroundTask(
+            worker=self._network_client.verification_task, logger=self._logger
+        )
+        self._learning_task = BackgroundTask(
+            worker=self._network_client.learning_task, logger=self._logger
+        )
+        self._staker_query_task = BackgroundTask(
+            worker=self._network_client.staker_query_task, logger=self._logger
+        )
 
         self._started_at = self._clock.utcnow()
 
@@ -95,7 +92,8 @@ class PorterServer(BasePeerServer, BasePorterServer):
         if self.started:
             raise RuntimeError("The loop is already started")
 
-        await self.learner.seed_round(must_succeed=True)
+        # TODO: get rid of ._learner access
+        await self._network_client._learner.seed_round(must_succeed=True)  # noqa: SLF001
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
         self._verification_task.start(nursery)
@@ -138,17 +136,15 @@ class PorterServer(BasePeerServer, BasePorterServer):
                 exclude_ursulas=request.exclude_ursulas,
             )
 
-        if request.quantity > len(self.learner.get_available_staking_providers()):
-            raise HTTPError("Not enough stakers", http.HTTPStatus.BAD_REQUEST)
-
         try:
             with trio.fail_after(5):
-                nodes = await get_nodes(
-                    learner=self.learner,
+                nodes = await self._network_client.get_nodes(
                     quantity=request.quantity,
                     include_nodes=request.include_ursulas,
                     exclude_nodes=request.exclude_ursulas,
                 )
+        except RuntimeError as exc:
+            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
         except trio.TooSlowError as exc:
             raise HTTPError(
                 "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
@@ -174,17 +170,17 @@ class PorterServer(BasePeerServer, BasePorterServer):
         except schema.ValidationError as exc:
             raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
 
-        retrieval_states = [RetrievalState(rkit, {}) for rkit in request.retrieval_kits]
+        client = LocalPREClient(self._network_client, self._pre_client)
 
-        new_states = await retrieve_via_learner(
-            learner=self.learner,
-            retrieval_states=retrieval_states,
+        assert len(request.retrieval_kits) == 1  # TODO: support retrieving multiple kits
+        outcome = await client.retrieve(
             treasure_map=request.treasure_map,
+            message_kit=RetrievalKit(request.retrieval_kits[0]),
             delegator_card=DelegatorCard(request.alice_verifying_key),
             recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
         )
 
-        retrieval_results = [ServerRetrievalResult(state.vcfrags) for state in new_states]
+        retrieval_results = [ServerRetrievalResult(outcome.cfrags)]
 
         response = ServerRetrieveCFragsResponse(
             result=ServerRetrieveCFragsResult(retrieval_results=retrieval_results),
@@ -198,7 +194,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
             node=None,
             logger=self._logger,
             clock=self._clock,
-            snapshot=self.learner.get_snapshot(),
+            snapshot=self._network_client.get_snapshot(),
             started_at=self._started_at,
             domain=self._domain,
         )

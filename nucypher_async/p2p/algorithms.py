@@ -149,7 +149,7 @@ async def verified_nodes_iter(
 
 
 @producer
-async def random_verified_nodes_iter(  # noqa: C901
+async def random_verified_nodes_iter(  # noqa: C901, PLR0912
     yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
@@ -160,9 +160,14 @@ async def random_verified_nodes_iter(  # noqa: C901
     if learner.is_empty():
         await learner.seed_round()
 
+    while True:
+        providers = learner.get_available_staking_providers()
+        if len(providers) >= amount:
+            break
+        await learner.verification_round()
+
     now = learner.clock.utcnow()
 
-    providers = learner.get_available_staking_providers()
     reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
     exclude_nodes = set(exclude_nodes) if exclude_nodes else set()
@@ -220,35 +225,3 @@ async def random_verified_nodes_iter(  # noqa: C901
                 if returned == amount:
                     nursery.cancel_scope.cancel()
                     return
-
-
-async def get_nodes(
-    learner: Learner,
-    quantity: int,
-    include_nodes: Iterable[IdentityAddress] | None = None,
-    exclude_nodes: Iterable[IdentityAddress] | None = None,
-) -> list[VerifiedNodeInfo]:
-    nodes = []
-
-    include = set(include_nodes) if include_nodes else set()
-    exclude = set(exclude_nodes) if exclude_nodes else set()
-
-    # Note: include_nodes takes priority over exclude_nodes
-    async with verified_nodes_iter(learner, include, verified_within=60) as node_iter:
-        async for node in node_iter:
-            nodes.append(node)
-
-    if len(nodes) < quantity:
-        quantity_remaining = quantity - len(nodes)
-        overhead = max(1, quantity_remaining // 5)
-        async with random_verified_nodes_iter(
-            learner=learner,
-            amount=quantity_remaining,
-            overhead=overhead,
-            verified_within=60,
-            exclude_nodes=exclude | include,
-        ) as node_iter:
-            async for node in node_iter:
-                nodes.append(node)
-
-    return nodes

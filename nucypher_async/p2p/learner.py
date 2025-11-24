@@ -38,17 +38,14 @@ class Learner:
     def __init__(
         self,
         domain: Domain,
+        peer_client: PeerClient,
         identity_client: IdentityClient,
         this_node: VerifiedNodeInfo | None = None,
-        peer_client: PeerClient | None = None,
         seed_contacts: Iterable[Contact] | None = None,
         parent_logger: Logger = NULL_LOGGER,
         storage: BaseStorage | None = None,
         clock: BaseClock | None = None,
     ):
-        if peer_client is None:
-            peer_client = PeerClient()
-
         self.clock = clock or SystemClock()
 
         self._logger = parent_logger.get_child("Learner")

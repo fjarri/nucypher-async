@@ -11,18 +11,18 @@ from pons import AccountSigner
 
 from ..drivers.cbd import CBDAddress, CBDClient, OnChainRitual
 from ..drivers.identity import IdentityAddress
-from ..p2p.algorithms import get_nodes, verified_nodes_iter
-from ..p2p.learner import Learner
+from ..p2p.algorithms import verified_nodes_iter
 from ..p2p.verification import VerifiedNodeInfo
+from .network import NetworkClient
 
 
 async def initiate_ritual(
-    learner: Learner,
+    network_client: NetworkClient,
     cbd_client: CBDClient,
     shares: int,
     duration: int = 60 * 60 * 24,  # 24 hours
 ) -> OnChainRitual:
-    nodes = await get_nodes(learner=learner, quantity=shares)
+    nodes = await network_client.get_nodes(quantity=shares)
 
     # TODO: this should be the ritual initiator character
     signer = AccountSigner.create()
@@ -46,7 +46,7 @@ async def initiate_ritual(
 
 
 async def cbd_decrypt(
-    learner: Learner, cbd_client: CBDClient, message_kit: ThresholdMessageKit
+    network_client: NetworkClient, cbd_client: CBDClient, message_kit: ThresholdMessageKit
 ) -> bytes:
     async with cbd_client.session() as session:
         ritual_id = await session.get_ritual_id_from_public_key(message_kit.acp.public_key)
@@ -62,7 +62,7 @@ async def cbd_decrypt(
     )
 
     decryption_shares = await get_decryption_shares(
-        learner=learner,
+        network_client,
         decryption_request=decryption_request,
         participants=participants,
         threshold=ritual.threshold,
@@ -74,7 +74,7 @@ async def cbd_decrypt(
 
 
 async def get_decryption_shares(
-    learner: Learner,
+    network_client: NetworkClient,
     decryption_request: ThresholdDecryptionRequest,
     participants: Sequence[OnChainRitual.Participant],
     threshold: int,
@@ -87,6 +87,9 @@ async def get_decryption_shares(
 
     shares = {}
 
+    # TODO: get rid of direct `learner` usage
+    learner = await network_client._get_updated_learner()  # noqa: SLF001
+
     participants_map = {p.provider: p.decryption_request_static_key for p in participants}
 
     async def get_share(nursery: trio.Nursery, node: VerifiedNodeInfo) -> None:
@@ -97,7 +100,10 @@ async def get_decryption_shares(
             requester_public_key=pk,
         )
 
-        encrypted_decryption_response = await learner.decrypt(node, encrypted_decryption_request)
+        # TODO: get rid of direct `learner` usage
+        encrypted_decryption_response = await network_client._learner.decrypt(  # noqa: SLF001
+            node, encrypted_decryption_request
+        )
         decryption_response = encrypted_decryption_response.decrypt(shared_secret=shared_secret)
 
         share = DecryptionShareSimple.from_bytes(decryption_response.decryption_share)

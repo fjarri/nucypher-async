@@ -287,11 +287,15 @@ class FleetSensor:
         previously_verified_at: arrow.Arrow | None = None,
     ) -> arrow.Arrow:
         if previously_verified_at:
-            if verified_at <= previously_verified_at:
+            # TODO: is this sanity check necessary? Can this really happen?
+            # Note that this can be == in tests where we use `trio`'s mock clock.
+            if verified_at < previously_verified_at:
                 raise ValueError("`verified_at` must be after `previously_verified_at`")
-            verify_at = (
-                verified_at + (verified_at - previously_verified_at) * 1.5
-            )  # TODO: remove hardcoding
+
+            # Don't reverify too early
+            previous_gap = max(verified_at - previously_verified_at, datetime.timedelta(hours=1))
+
+            verify_at = verified_at + previous_gap * 1.5  # TODO: remove hardcoding of constants
         else:
             verify_at = verified_at.shift(hours=1)
 

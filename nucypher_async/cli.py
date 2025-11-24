@@ -85,6 +85,7 @@ def make_porter_server(config_path: str) -> PorterServer:
         profile_name=config.get("profile_name", "porter-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
+        pre_endpoint=config["pre_provider_uri"],
         debug=config.get("debug", False),
     )
 

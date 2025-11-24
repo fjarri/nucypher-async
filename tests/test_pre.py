@@ -2,10 +2,17 @@ import trio
 import trio.testing
 
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient
-from nucypher_async.client.pre import encrypt, grant, retrieve_and_decrypt
+from nucypher_async.client.network import NetworkClient
+from nucypher_async.client.pre import LocalPREClient, pre_encrypt
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.pre import PREAmount
-from nucypher_async.mocks import MockIdentityClient, MockNetwork, MockPeerClient, MockPREClient
+from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREAmount
+from nucypher_async.mocks import (
+    MockClock,
+    MockIdentityClient,
+    MockNetwork,
+    MockPeerClient,
+    MockPREClient,
+)
 from nucypher_async.p2p.algorithms import verified_nodes_iter
 from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import NodeServer
@@ -45,21 +52,29 @@ async def test_granting(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
+    mock_clock: MockClock,
+    logger: Logger,
 ) -> None:
     alice = Delegator.random()
     publisher = Publisher.random()
+    publisher_signer = PREAccountSigner(PREAccount.random())
     bob = Recipient.random()
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
 
-    alice_learner = Learner(
-        domain=Domain.MAINNET,
-        peer_client=peer_client,
-        identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
+    publisher_client = LocalPREClient(
+        NetworkClient(
+            peer_client=peer_client,
+            identity_client=mock_identity_client,
+            seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
+            domain=Domain.MAINNET,
+            clock=mock_clock,
+            parent_logger=logger.get_child("Publisher"),
+        ),
+        pre_client=mock_pre_client,
     )
 
-    # Fund Alice
-    mock_pre_client.mock_set_balance(publisher.pre_address, PREAmount.ether(1))
+    # Fund the publisher
+    mock_pre_client.mock_set_balance(publisher_signer.address, PREAmount.ether(1))
 
     policy = alice.make_policy(
         recipient_card=bob.card(),
@@ -69,35 +84,35 @@ async def test_granting(
     )
 
     with trio.fail_after(10):
-        enacted_policy = await grant(
+        enacted_policy = await publisher_client.grant(
+            publisher=publisher,
+            signer=publisher_signer,
             policy=policy,
             recipient_card=bob.card(),
-            publisher=publisher,
-            learner=alice_learner,
-            pre_client=mock_pre_client,
-            handpicked_addresses=[
-                server._node.staking_provider_address for server in fully_learned_nodes[:3]
-            ],
         )
 
     message = b"a secret message"
-    message_kit = encrypt(policy, message)
+    message_kit = pre_encrypt(policy, message)
 
-    bob_learner = Learner(
-        domain=Domain.MAINNET,
-        peer_client=peer_client,
-        identity_client=mock_identity_client,
-        seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
+    bob_client = LocalPREClient(
+        NetworkClient(
+            peer_client=peer_client,
+            identity_client=mock_identity_client,
+            seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
+            domain=Domain.MAINNET,
+            clock=mock_clock,
+            parent_logger=logger.get_child("Recipient"),
+        ),
+        pre_client=mock_pre_client,
     )
 
     with trio.fail_after(10):
-        decrypted = await retrieve_and_decrypt(
-            client=bob_learner,
-            message_kits=[message_kit],
-            enacted_policy=enacted_policy,
-            delegator_card=alice.card(),
+        decrypted = await bob_client.decrypt(
             recipient=bob,
+            enacted_policy=enacted_policy,
+            message_kit=message_kit,
+            delegator_card=alice.card(),
             publisher_card=publisher.card(),
         )
 
-    assert decrypted == [message]
+    assert decrypted == message

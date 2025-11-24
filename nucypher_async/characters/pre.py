@@ -10,6 +10,7 @@ from nucypher_core import (
     TreasureMap,
 )
 from nucypher_core import MessageKit as CoreMessageKit
+from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import (
     Capsule,
     PublicKey,
@@ -21,7 +22,6 @@ from nucypher_core.umbral import (
 
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import PeerPrivateKey
-from ..drivers.pre import PREAccount, PREAccountSigner
 from ..master_key import MasterKey
 
 
@@ -84,14 +84,11 @@ class DelegatorCard:
 class Publisher:
     @classmethod
     def random(cls) -> "Publisher":
-        return cls(MasterKey.random(), PREAccount.random())
+        return cls(MasterKey.random())
 
-    def __init__(self, master_key: MasterKey, pre_account: PREAccount):
+    def __init__(self, master_key: MasterKey):
         self.__master_key = master_key
         self._signer = self.__master_key.make_signer()
-        self._pre_account = pre_account
-        self.pre_signer = PREAccountSigner(self._pre_account)
-        self.pre_address = self._pre_account.address
         self.verifying_key = self._signer.verifying_key()
 
     def make_treasure_map(
@@ -116,11 +113,26 @@ class Publisher:
         return PublisherCard(verifying_key=self.verifying_key)
 
 
+# TODO: rename to `EncryptedMessage` and remove `Encryptor` character?
 class MessageKit:
     def __init__(self, policy: Policy, message: bytes, conditions: Conditions | None = None):
         self.core_message_kit = CoreMessageKit(
             policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=conditions
         )
+        self.capsule = self.core_message_kit.capsule
+        self.conditions = self.core_message_kit.conditions
+
+
+# TODO: rename to something like `EncryptedMessageMetadata`?
+class RetrievalKit:
+    @classmethod
+    def from_message_kit(cls, message_kit: MessageKit) -> "RetrievalKit":
+        return cls(CoreRetrievalKit.from_message_kit(message_kit.core_message_kit))
+
+    def __init__(self, retrieval_kit: CoreRetrievalKit):
+        self.core_retrieval_kit = retrieval_kit
+        self.capsule = self.core_retrieval_kit.capsule
+        self.conditions = self.core_retrieval_kit.conditions
 
 
 class Encryptor:
@@ -166,9 +178,10 @@ class Recipient:
         return RecipientCard(encrypting_key=self.encrypting_key, verifying_key=self.verifying_key)
 
     def decrypt_treasure_map(
-        self, encrypted_tmap: EncryptedTreasureMap, publisher_card: PublisherCard
+        self, encrypted_tmap: EncryptedTreasureMap, publisher_card: PublisherCard | DelegatorCard
     ) -> TreasureMap:
-        return encrypted_tmap.decrypt(self._decrypting_key, publisher_card.verifying_key)
+        verifying_key = publisher_card.verifying_key
+        return encrypted_tmap.decrypt(self._decrypting_key, verifying_key)
 
     def decrypt(
         self,
