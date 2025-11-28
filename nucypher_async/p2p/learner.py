@@ -40,12 +40,9 @@ class Learner:
         clock: BaseClock | None = None,
     ):
         self.clock = clock or SystemClock()
+        self._storage = storage or InMemoryStorage()
 
         self._logger = parent_logger.get_child("Learner")
-
-        if storage is None:
-            storage = InMemoryStorage()
-        self._storage = storage
 
         self._node_client = NodeClient(peer_client)
         self._identity_client = identity_client
@@ -101,17 +98,6 @@ class Learner:
 
         return node, staked
 
-    async def _learn_from_node(self, node: VerifiedNodeInfo) -> list[NodeInfo]:
-        self._logger.debug(
-            "Learning from {} ({})",
-            node.contact,
-            node.staking_provider_address,
-        )
-
-        return await self._node_client.exchange_node_info(
-            node, self.fleet_state.checksum, self._this_node
-        )
-
     async def learn_from_node_and_report(self, node: VerifiedNodeInfo) -> None:
         with self._fleet_sensor.try_lock_contact_for_learning(node.contact) as (
             contact,
@@ -121,9 +107,17 @@ class Learner:
                 await result.wait()
                 return
 
+            self._logger.debug(
+                "Learning from {} ({})",
+                node.contact,
+                node.staking_provider_address,
+            )
+
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
-                    metadatas = await self._learn_from_node(node)
+                    metadatas = await self._node_client.exchange_node_info(
+                        node, self.fleet_state.checksum, self._this_node
+                    )
             except (PeerError, trio.TooSlowError) as exc:
                 message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
@@ -170,7 +164,7 @@ class Learner:
                 self.fleet_state.remove_contact(contact)
             else:
                 self._logger.debug("Verified {}: {}", contact, node)
-                # Assuming here that since the node is verified, `node.contact == contact`
+                # TODO: Assuming here that since the node is verified, `node.contact == contact`
                 # (and we won't try to verify `contact` again).
                 # Is there a way to enforce it more explicitly?
                 self._fleet_sensor.report_verified_node(node, staked_amount)
@@ -181,10 +175,18 @@ class Learner:
         return node
 
     def passive_learning(self, sender_host: str | None, metadatas: Iterable[NodeInfo]) -> None:
+        self._logger.debug("Passive learning from {}", sender_host or "unknown host")
+
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
-        self._logger.debug("Passive learning from {}", sender_host or "unknown host")
-        self._fleet_sensor.report_passive_learning_results(sender_host, metadatas)
+
+        # TODO: `sender_host` is probably an IP address? The contact host may be a hostname.
+        # Need to get an IP from that and use it for the comparison instead.
+
+        # Filter out only the contact(s) with `remote_address`.
+        # We're not going to trust all this metadata anyway.
+        metadatas = [metadata for metadata in metadatas if metadata.contact.host == sender_host]
+        self._fleet_sensor.report_passive_learning_results(metadatas)
 
     async def _load_staking_providers_and_report(self) -> None:
         try:

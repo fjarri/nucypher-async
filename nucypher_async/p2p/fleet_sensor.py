@@ -367,15 +367,8 @@ class FleetSensor:
         self._add_contacts(metadatas)
 
     @_next_verification_time_may_change
-    def report_passive_learning_results(
-        self, sender_host: str | None, metadatas: Iterable[NodeInfo]
-    ) -> None:
-        # Filter out only the contact(s) with `remote_address`.
-        # We're not going to trust all this metadata anyway.
-        sender_metadatas = [
-            metadata for metadata in metadatas if metadata.contact.host == sender_host
-        ]
-        self._add_contacts(sender_metadatas)
+    def report_passive_learning_results(self, metadatas: Iterable[NodeInfo]) -> None:
+        self._add_contacts(metadatas)
 
     @_next_verification_time_may_change
     def report_staking_providers(self, providers: dict[IdentityAddress, AmountT]) -> None:
