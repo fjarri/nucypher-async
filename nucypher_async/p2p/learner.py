@@ -271,11 +271,6 @@ class Learner:
         """
         return self._fleet_sensor.new_verified_nodes_event
 
-    def is_empty(self) -> bool:
-        # TODO: we can hide this method and `seed_round()`, and call them
-        # in `learning_round()` instead, to simplify the API.
-        return self._fleet_sensor.is_empty()
-
     def get_possible_contacts_for(self, address: IdentityAddress) -> set[Contact]:
         return self._fleet_sensor.try_get_possible_contacts_for(address)
 
@@ -311,7 +306,7 @@ class Learner:
 
     async def learning_task(self, stop_event: trio.Event) -> None:
         while True:
-            if self.is_empty():
+            if self._fleet_sensor.is_empty():
                 await self.seed_round(must_succeed=False)
             else:
                 await self.learning_round()

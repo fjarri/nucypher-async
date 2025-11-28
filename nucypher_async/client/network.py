@@ -75,6 +75,7 @@ class NetworkClient:
         addresses: Iterable[IdentityAddress],
         verified_within: float | None = None,
     ) -> AsyncIterator[VerifiedNodeInfo]:
+        await self._ensure_seeded()
         async with _verified_nodes_iter(
             self._learner, addresses=addresses, verified_within=verified_within
         ) as node_iter:
@@ -171,9 +172,6 @@ async def _verified_nodes_iter(
     addresses: Iterable[IdentityAddress],
     verified_within: float | None = None,
 ) -> None:
-    if learner.is_empty():
-        await learner.seed_round()
-
     addresses = set(addresses)
     now = learner.clock.utcnow()
 
@@ -224,9 +222,6 @@ async def _random_verified_nodes_iter(  # noqa: C901, PLR0912
     verified_within: float | None = None,
     exclude_nodes: Iterable[IdentityAddress] | None = None,
 ) -> None:
-    if learner.is_empty():
-        await learner.seed_round()
-
     while True:
         providers = learner.get_available_staking_providers()
         if len(providers) >= amount:
