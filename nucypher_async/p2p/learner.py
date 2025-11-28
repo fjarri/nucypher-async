@@ -2,18 +2,9 @@ import datetime
 from collections.abc import Iterable
 
 import trio
-from nucypher_core import (
-    Conditions,
-    Context,
-    EncryptedThresholdDecryptionRequest,
-    EncryptedThresholdDecryptionResponse,
-    TreasureMap,
-)
-from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
-from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.peer import Contact, PeerClient, get_alternative_contact
@@ -260,33 +251,6 @@ class Learner:
         async with trio.open_nursery() as nursery:
             for node in nodes:
                 nursery.start_soon(self.learn_from_node_and_report, node)
-
-    async def reencrypt(
-        self,
-        node_info: VerifiedNodeInfo,
-        capsules: list[Capsule],
-        treasure_map: TreasureMap,
-        delegator_card: DelegatorCard,
-        recipient_card: RecipientCard,
-        conditions: Conditions | None = None,
-        context: Context | None = None,
-    ) -> list[VerifiedCapsuleFrag]:
-        return await self._node_client.reencrypt(
-            node_info=node_info,
-            capsules=capsules,
-            treasure_map=treasure_map,
-            delegator_card=delegator_card,
-            recipient_card=recipient_card,
-            conditions=conditions,
-            context=context,
-        )
-
-    async def decrypt(
-        self,
-        node_info: VerifiedNodeInfo,
-        request: EncryptedThresholdDecryptionRequest,
-    ) -> EncryptedThresholdDecryptionResponse:
-        return await self._node_client.decrypt(node_info=node_info, request=request)
 
     def _get_verification_rescheduling_event(self) -> trio.Event:
         """

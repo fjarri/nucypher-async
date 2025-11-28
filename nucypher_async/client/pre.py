@@ -104,11 +104,8 @@ class LocalPREClient(BasePREConsumerClient):
     ) -> PRERetrievalOutcome:
         responses: dict[IdentityAddress, VerifiedCapsuleFrag] = {}
 
-        # TODO: get rid of direct `learner` usage
-        learner = await self._network_client._get_updated_learner()  # noqa: SLF001
-
         async def reencrypt(nursery: trio.Nursery, node_info: VerifiedNodeInfo) -> None:
-            verified_cfrags = await learner.reencrypt(
+            verified_cfrags = await self._network_client.node_client.reencrypt(
                 node_info=node_info,
                 # TODO: support retrieving for several capsules at once - REST API allows it
                 capsules=[message_kit.capsule],

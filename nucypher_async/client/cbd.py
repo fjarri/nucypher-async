@@ -96,8 +96,7 @@ async def get_decryption_shares(
             requester_public_key=pk,
         )
 
-        # TODO: get rid of direct `learner` usage
-        encrypted_decryption_response = await network_client._learner.decrypt(  # noqa: SLF001
+        encrypted_decryption_response = await network_client.node_client.decrypt(
             node, encrypted_decryption_request
         )
         decryption_response = encrypted_decryption_response.decrypt(shared_secret=shared_secret)

@@ -14,6 +14,7 @@ from ..drivers.peer import Contact, PeerClient
 from ..drivers.time import SystemClock
 from ..p2p.fleet_sensor import FleetSensorSnapshot, NodeEntry
 from ..p2p.learner import Learner
+from ..p2p.node_info import NodeClient
 from ..p2p.verification import VerifiedNodeInfo
 from ..storage import BaseStorage
 from ..utils.logging import NULL_LOGGER, Logger
@@ -31,8 +32,9 @@ class NetworkClient:
         clock: BaseClock = SystemClock(),
         storage: BaseStorage | None = None,
     ):
+        peer_client = peer_client or PeerClient()
         self._learner = Learner(
-            peer_client=peer_client or PeerClient(),
+            peer_client=peer_client,
             identity_client=identity_client,
             domain=domain,
             parent_logger=parent_logger.get_child("NetworkClient"),
@@ -40,6 +42,7 @@ class NetworkClient:
             clock=clock,
             storage=storage,
         )
+        self.node_client = NodeClient(peer_client)
         self._seeded = False
 
     @property
