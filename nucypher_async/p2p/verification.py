@@ -193,6 +193,7 @@ class VerifiedNodeInfo(NodeInfo):
         return cls(node_info.metadata)
 
     def reencryptor_card(self) -> ReencryptorCard:
+        # TODO: this method seems out of place here?
         return ReencryptorCard(encrypting_key=self.encrypting_key)
 
     def __str__(self) -> str:

@@ -1,6 +1,4 @@
-import json
 from abc import ABC, abstractmethod
-from http import HTTPStatus
 
 import arrow
 import httpx
@@ -9,7 +7,6 @@ from attrs import frozen
 from nucypher_core import Context, EncryptedTreasureMap, TreasureMap
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
-from .. import schema
 from ..characters.pre import (
     DecryptionKit,
     DelegatorCard,
@@ -24,8 +21,8 @@ from ..characters.pre import (
 from ..drivers.identity import IdentityAddress
 from ..drivers.pre import PREAccountSigner, PREClient
 from ..p2p.verification import VerifiedNodeInfo
-from ..schema.porter import ClientRetrieveCFragsResponse, RetrieveCFragsRequest
 from .network import NetworkClient
+from .porter import PorterClient
 
 
 @frozen
@@ -174,10 +171,10 @@ class LocalPREClient(BasePREConsumerClient):
 
 
 class ProxyPREClient(BasePREConsumerClient):
-    def __init__(self, proxy_host: str, proxy_port: int, http_client: httpx.AsyncClient):
-        self._proxy_host = proxy_host
-        self._proxy_port = proxy_port
-        self._http_client = http_client
+    def __init__(
+        self, proxy_host: str, proxy_port: int, http_client: httpx.AsyncClient | None = None
+    ):
+        self._porter_client = PorterClient(proxy_host, proxy_port, http_client=http_client)
 
     async def retrieve(
         self,
@@ -190,40 +187,15 @@ class ProxyPREClient(BasePREConsumerClient):
         # TODO: support multi-step retrieval in Porter
         # (that is, when some parts were already retrieved,
         # we can list those addresses in RetrievalKit)
-        request = RetrieveCFragsRequest(
-            treasure_map=treasure_map,
-            retrieval_kits=[
-                message_kit.core_retrieval_kit
-                if isinstance(message_kit, RetrievalKit)
-                else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
-            ],
-            alice_verifying_key=delegator_card.verifying_key,
-            bob_encrypting_key=recipient_card.encrypting_key,
-            bob_verifying_key=recipient_card.verifying_key,
-            context=context,
+        # TODO: support retrieving multiple kits
+        retrieval_kits = [
+            message_kit.core_retrieval_kit
+            if isinstance(message_kit, RetrievalKit)
+            else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
+        ]
+        cfrags = await self._porter_client.retrieve_cfrags(
+            treasure_map, retrieval_kits, delegator_card, recipient_card, context
         )
 
-        # TODO: use PorterClient
-        response = await self._http_client.post(
-            f"https://{self._proxy_host}:{self._proxy_port}/retrieve_cfrags",
-            content=json.dumps(schema.to_json(request)),
-        )
-        if response.status_code != HTTPStatus.OK:
-            # TODO: a more specialized exception
-            raise RuntimeError(f"/retrieve_cfrags failed with status {response.status_code}")
-
-        response_json = response.json()
-        parsed_response = schema.from_json(ClientRetrieveCFragsResponse, response_json)
-
-        result = parsed_response.result.retrieval_results[0]
-        processed_result = {
-            address: cfrag.verify(
-                message_kit.capsule,
-                verifying_pk=delegator_card.verifying_key,
-                delegating_pk=treasure_map.policy_encrypting_key,
-                receiving_pk=recipient_card.encrypting_key,
-            )
-            for address, cfrag in result.cfrags.items()
-        }
-
-        return PRERetrievalOutcome(cfrags=processed_result, errors={})
+        # TODO: collect errors as well
+        return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

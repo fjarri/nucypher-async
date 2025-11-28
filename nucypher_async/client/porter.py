@@ -13,7 +13,7 @@ from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, Re
 
 
 class PorterClient:
-    def __init__(self, host: str, port: int, http_client: httpx.AsyncClient | None):
+    def __init__(self, host: str, port: int, http_client: httpx.AsyncClient | None = None):
         if http_client is not None:
             self._http_client = http_client
         else:

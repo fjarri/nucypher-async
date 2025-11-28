@@ -214,7 +214,7 @@ async def _verified_nodes_iter(
 
 
 @producer
-async def _random_verified_nodes_iter(  # noqa: C901, PLR0912
+async def _random_verified_nodes_iter(  # noqa: C901
     yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
