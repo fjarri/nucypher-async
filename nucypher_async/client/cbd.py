@@ -11,7 +11,6 @@ from pons import AccountSigner
 
 from ..drivers.cbd import CBDAddress, CBDClient, OnChainRitual
 from ..drivers.identity import IdentityAddress
-from ..p2p.algorithms import verified_nodes_iter
 from ..p2p.verification import VerifiedNodeInfo
 from .network import NetworkClient
 
@@ -87,9 +86,6 @@ async def get_decryption_shares(
 
     shares = {}
 
-    # TODO: get rid of direct `learner` usage
-    learner = await network_client._get_updated_learner()  # noqa: SLF001
-
     participants_map = {p.provider: p.decryption_request_static_key for p in participants}
 
     async def get_share(nursery: trio.Nursery, node: VerifiedNodeInfo) -> None:
@@ -113,11 +109,8 @@ async def get_decryption_shares(
         if len(shares) == threshold:
             nursery.cancel_scope.cancel()
 
-    async with (
-        trio.open_nursery() as nursery,
-        verified_nodes_iter(learner, participants_map) as node_iter,
-    ):
-        async for node in node_iter:
-            nursery.start_soon(get_share, nursery, node)
+    async with trio.open_nursery() as nursery:
+        async for node_info in network_client.verified_nodes_iter(participants_map):
+            nursery.start_soon(get_share, nursery, node_info)
 
     return list(shares.values())

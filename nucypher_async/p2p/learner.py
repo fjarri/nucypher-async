@@ -1,3 +1,4 @@
+import datetime
 from collections.abc import Iterable
 
 import trio
@@ -18,6 +19,7 @@ from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, InMemoryStorage
+from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
@@ -193,7 +195,7 @@ class Learner:
         self._logger.debug("Passive learning from {}", sender_host or "unknown host")
         self._fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
-    async def load_staking_providers_and_report(self) -> None:
+    async def _load_staking_providers_and_report(self) -> None:
         try:
             with trio.fail_after(self.STAKING_PROVIDERS_TIMEOUT):
                 async with self._identity_client.session() as session:
@@ -286,10 +288,7 @@ class Learner:
     ) -> EncryptedThresholdDecryptionResponse:
         return await self._node_client.decrypt(node_info=node_info, request=request)
 
-    def next_verification_in(self) -> float:
-        return self._fleet_sensor.next_verification_in()
-
-    def get_verification_rescheduling_event(self) -> trio.Event:
+    def _get_verification_rescheduling_event(self) -> trio.Event:
         """
         Returns an event that gets set if new information caused the next verification
         to be rescheduled to an earlier time.
@@ -298,9 +297,6 @@ class Learner:
         returns execution to the async runtime.
         """
         return self._fleet_sensor.reschedule_verification_event
-
-    def next_learning_in(self) -> float:
-        return self._fleet_sensor.next_learning_in()
 
     def get_new_verified_nodes_event(self) -> trio.Event:
         """
@@ -331,3 +327,45 @@ class Learner:
 
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()
+
+    async def verification_task(self, stop_event: trio.Event) -> None:
+        while True:
+            await self.verification_round()
+
+            while True:
+                next_event_in = self._fleet_sensor.next_verification_in()
+                verification_resceduled = self._get_verification_rescheduling_event()
+
+                try:
+                    with trio.fail_after(next_event_in):
+                        await wait_for_any([stop_event, verification_resceduled])
+                except trio.TooSlowError:
+                    break
+
+                if stop_event.is_set():
+                    return
+
+    async def learning_task(self, stop_event: trio.Event) -> None:
+        while True:
+            if self.is_empty():
+                await self.seed_round(must_succeed=False)
+            else:
+                await self.learning_round()
+
+            next_event_in = self._fleet_sensor.next_learning_in()
+
+            with trio.move_on_after(next_event_in):
+                await stop_event.wait()
+
+            if stop_event.is_set():
+                return
+
+    async def staker_query_task(self, stop_event: trio.Event) -> None:
+        while True:
+            await self._load_staking_providers_and_report()
+
+            with trio.move_on_after(datetime.timedelta(days=1).total_seconds()):
+                await stop_event.wait()
+
+            if stop_event.is_set():
+                return

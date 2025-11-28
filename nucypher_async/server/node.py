@@ -22,7 +22,6 @@ from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
@@ -140,14 +139,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
         self._started_at = self._clock.utcnow()
 
-        async def _verification_task(stop_event: trio.Event) -> None:
-            await verification_task(stop_event, self.learner)
-
-        async def _learning_task(stop_event: trio.Event) -> None:
-            await learning_task(stop_event, self.learner)
-
-        self._verification_task = BackgroundTask(worker=_verification_task, logger=self._logger)
-        self._learning_task = BackgroundTask(worker=_learning_task, logger=self._logger)
+        self._verification_task = BackgroundTask(
+            worker=self.learner.verification_task, logger=self._logger
+        )
+        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
 
         self.started = False
 

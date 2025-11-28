@@ -13,8 +13,6 @@ from nucypher_async.mocks import (
     MockPeerClient,
     MockPREClient,
 )
-from nucypher_async.p2p.algorithms import verified_nodes_iter
-from nucypher_async.p2p.learner import Learner
 from nucypher_async.server import NodeServer
 from nucypher_async.utils.logging import Logger
 
@@ -25,23 +23,24 @@ async def test_verified_nodes_iter(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
+    mock_clock: MockClock,
 ) -> None:
     peer_client = MockPeerClient(mock_network, "127.0.0.1")
-    learner = Learner(
+    network_client = NetworkClient(
         domain=Domain.MAINNET,
         peer_client=peer_client,
         identity_client=mock_identity_client,
         seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         parent_logger=logger,
+        clock=mock_clock,
     )
 
     addresses = [server._node.staking_provider_address for server in fully_learned_nodes[:3]]
     nodes = []
 
     with trio.fail_after(10):
-        async with verified_nodes_iter(learner, addresses) as verified_nodes:
-            async for node in verified_nodes:
-                nodes.append(node)
+        async for node_info in network_client.verified_nodes_iter(addresses):
+            nodes.append(node_info)
 
     assert len(nodes) == 3
 

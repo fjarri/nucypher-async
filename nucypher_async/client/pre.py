@@ -23,7 +23,6 @@ from ..characters.pre import (
 )
 from ..drivers.identity import IdentityAddress
 from ..drivers.pre import PREAccountSigner, PREClient
-from ..p2p.algorithms import verified_nodes_iter
 from ..p2p.verification import VerifiedNodeInfo
 from ..schema.porter import ClientRetrieveCFragsResponse, RetrieveCFragsRequest
 from .network import NetworkClient
@@ -127,11 +126,8 @@ class LocalPREClient(BasePREConsumerClient):
             IdentityAddress(bytes(address)): ekfrag
             for address, ekfrag in treasure_map.destinations.items()
         }
-        async with (
-            trio.open_nursery() as nursery,
-            verified_nodes_iter(learner, destinations) as node_iter,
-        ):
-            async for node_info in node_iter:
+        async with trio.open_nursery() as nursery:
+            async for node_info in self._network_client.verified_nodes_iter(destinations):
                 nursery.start_soon(reencrypt, nursery, node_info)
         return PRERetrievalOutcome(cfrags=responses, errors={})
 
