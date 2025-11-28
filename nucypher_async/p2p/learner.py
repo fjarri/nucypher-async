@@ -280,9 +280,8 @@ class Learner:
     def get_verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
         return self._fleet_sensor.verified_node_entries
 
-    def get_verified_nodes(self, *, include_this_node: bool = False) -> list[VerifiedNodeInfo]:
-        my_metadata = [self._this_node] if include_this_node and self._this_node else []
-        return my_metadata + self._fleet_sensor.verified_metadata()
+    def get_verified_nodes(self) -> list[VerifiedNodeInfo]:
+        return self._fleet_sensor.verified_metadata()
 
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()

@@ -14,9 +14,7 @@ async def test_learning(
         await trio.sleep(100)
 
         known_nodes = {
-            server._node.staking_provider_address: server.learner.get_verified_nodes(
-                include_this_node=True
-            )
+            server._node.staking_provider_address: server.learner.get_verified_nodes()
             for server in chain_seeded_nodes
         }
 

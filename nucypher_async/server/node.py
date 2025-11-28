@@ -203,9 +203,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
         self.learner.passive_learning(remote_host, new_metadatas)
 
-        announce_nodes = [
-            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
-        ]
+        announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()]
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,

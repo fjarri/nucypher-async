@@ -20,12 +20,12 @@ class FleetState:
 
     def __init__(self, clock: BaseClock, this_node: VerifiedNodeInfo | None):
         self._clock = clock
-        self._my_address = this_node.staking_provider_address if this_node else None
-        self._my_metadata = this_node.metadata if this_node else None
         self._metadatas: dict[IdentityAddress, NodeInfo] = {}
         self._contacts: dict[Contact, IdentityAddress] = {}
         self._checksum: FleetStateChecksum | None = None
         self.timestamp_epoch = int(self._clock.utcnow().timestamp())
+        if this_node is not None:
+            self.add_metadatas([this_node])
 
     def _add_metadata(self, metadata: NodeInfo) -> None:
         address = metadata.staking_provider_address
@@ -37,8 +37,6 @@ class FleetState:
         updated = False
         for metadata in metadatas:
             address = metadata.staking_provider_address
-            if self._my_address and address == self._my_address:
-                continue
 
             if (
                 address not in self._metadatas
@@ -61,7 +59,7 @@ class FleetState:
         if not self._checksum:
             self._checksum = FleetStateChecksum(
                 [m.metadata for m in self._metadatas.values()],
-                self._my_metadata,
+                None,
             )
             self.timestamp_epoch = int(self._clock.utcnow().timestamp())
         return self._checksum

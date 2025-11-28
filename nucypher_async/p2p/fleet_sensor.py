@@ -262,10 +262,7 @@ class FleetSensor:
     ):
         self._clock = clock
 
-        self._my_staking_provider_address = (
-            this_node.staking_provider_address if this_node else None
-        )
-        self._my_contact = this_node.contact if this_node else None
+        self._this_node = this_node
 
         self._verified_nodes_db = VerifiedNodesDB()
         self._contacts_db = ContactsDB()
@@ -322,8 +319,8 @@ class FleetSensor:
     @_next_verification_time_may_change
     def report_verified_node(self, node: VerifiedNodeInfo, staked_amount: AmountT) -> None:
         if (
-            self._my_staking_provider_address
-            and node.staking_provider_address == self._my_staking_provider_address
+            self._this_node is not None
+            and node.staking_provider_address == self._this_node.staking_provider_address
         ):
             return
 
@@ -386,7 +383,9 @@ class FleetSensor:
         self._staking_providers_updated = self._clock.utcnow()
 
     def verified_metadata(self) -> list[VerifiedNodeInfo]:
-        return self._verified_nodes_db.all_nodes()
+        return self._verified_nodes_db.all_nodes() + (
+            [self._this_node] if self._this_node is not None else []
+        )
 
     def _add_node(
         self,
@@ -404,8 +403,9 @@ class FleetSensor:
             contact = metadata.contact
             address = metadata.staking_provider_address
 
-            if self._my_contact and (
-                contact == self._my_contact or address == self._my_staking_provider_address
+            if self._this_node is not None and (
+                contact == self._this_node.contact
+                or address == self._this_node.staking_provider_address
             ):
                 continue
 
@@ -414,6 +414,7 @@ class FleetSensor:
 
             self._contacts_db.add_contact(contact, address)
 
+    # TODO: return the `timedelta` object instead.
     def next_learning_in(self) -> float:
         # TODO: May be adjusted dynamically based on the network state
         return datetime.timedelta(seconds=90).total_seconds()
