@@ -199,11 +199,20 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             )
             return MetadataResponse(self.operator.signer, response_payload)
 
-        new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
+        # Filter out our own metadata
+        node_infos = [NodeInfo(m) for m in request.announce_nodes]
+        node_infos = [
+            node_info
+            for node_info in node_infos
+            if node_info.staking_provider_address != self._node.staking_provider_address
+        ]
 
-        self.learner.passive_learning(remote_host, new_metadatas)
+        self.learner.passive_learning(remote_host, node_infos)
 
-        announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()]
+        announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()] + [
+            self._node.metadata
+        ]
+
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,

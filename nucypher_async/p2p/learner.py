@@ -115,7 +115,7 @@ class Learner:
 
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
-                    metadatas = await self._node_client.exchange_node_info(
+                    node_infos = await self._node_client.exchange_node_info(
                         node, self.fleet_state.checksum, self._this_node
                     )
             except (PeerError, trio.TooSlowError) as exc:
@@ -134,8 +134,18 @@ class Learner:
                     node.contact,
                     node.staking_provider_address.checksum,
                 )
-                self._fleet_sensor.report_active_learning_results(node, metadatas)
-                self.fleet_state.add_metadatas(metadatas)
+
+                # Filter out this node from the node infos
+                if self._this_node is not None:
+                    node_infos = [
+                        node_info
+                        for node_info in node_infos
+                        if node_info.staking_provider_address
+                        != self._this_node.staking_provider_address
+                    ]
+
+                self._fleet_sensor.report_active_learning_results(node, node_infos)
+                self.fleet_state.add_metadatas(node_infos)
             finally:
                 # We just need to signal that the learning ended, no info to return
                 result.set(None)
@@ -280,10 +290,10 @@ class Learner:
         return self._fleet_sensor.get_available_staking_providers()
 
     def get_verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
-        return self._fleet_sensor.verified_node_entries
+        return self._fleet_sensor.verified_node_entries()
 
     def get_verified_nodes(self) -> list[VerifiedNodeInfo]:
-        return self._fleet_sensor.verified_metadata()
+        return self._fleet_sensor.verified_node_infos()
 
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()

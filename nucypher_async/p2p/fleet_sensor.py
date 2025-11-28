@@ -37,7 +37,7 @@ class VerifyAtEntry:
 class StakingProviderEntry:
     address: IdentityAddress
     contact: Contact
-    weight: int
+    weight: int  # TODO: use AmountT, and let the upper layers derive layers from that?
 
 
 @frozen
@@ -128,8 +128,12 @@ class VerifiedNodesDB:
                 self._del_verify_at(entry.node)
                 break
 
-    def all_nodes(self) -> list[VerifiedNodeInfo]:
+    def node_infos(self) -> list[VerifiedNodeInfo]:
+        # TODO: maintain this list so that we don't recreate it every time?
         return [entry.node for entry in self._nodes.values()]
+
+    def node_entries(self) -> dict[IdentityAddress, NodeEntry]:
+        return self._nodes
 
     def has_contact(self, contact: Contact) -> bool:
         return any(entry.node.contact == contact for entry in self._nodes.values())
@@ -255,6 +259,8 @@ def _next_verification_time_may_change(
 
 
 class FleetSensor:
+    """Maintains the database of all *other* nodes, that is excluding `this_node`."""
+
     def __init__(
         self,
         clock: BaseClock,
@@ -262,6 +268,8 @@ class FleetSensor:
     ):
         self._clock = clock
 
+        # This is used for debug purposes - we want to be sure
+        # we don't accidentally add our own node to this database.
         self._this_node = this_node
 
         self._verified_nodes_db = VerifiedNodesDB()
@@ -322,7 +330,7 @@ class FleetSensor:
             self._this_node is not None
             and node.staking_provider_address == self._this_node.staking_provider_address
         ):
-            return
+            raise ValueError("Attempting to add the local node to the database")
 
         verified_at = self._clock.utcnow()
 
@@ -362,23 +370,29 @@ class FleetSensor:
         self, teacher_node: NodeInfo, metadatas: Iterable[NodeInfo]
     ) -> None:
         for metadata in metadatas:
+            # The node we contacted reported its own metadata to be different than what we have.
+            # Need to re-verify.
             if metadata.contact == teacher_node.contact and bytes(metadata) != bytes(teacher_node):
                 self._verified_nodes_db.remove_node(teacher_node)
+            if self._this_node is not None and self._this_node.contact == metadata.contact:
+                raise ValueError("Attempting to add the local node to the database")
         self._add_contacts(metadatas)
 
     @_next_verification_time_may_change
     def report_passive_learning_results(self, metadatas: Iterable[NodeInfo]) -> None:
+        for metadata in metadatas:
+            if self._this_node is not None and self._this_node.contact == metadata.contact:
+                raise ValueError("Attempting to add the local node to the database")
         self._add_contacts(metadatas)
 
     @_next_verification_time_may_change
     def report_staking_providers(self, providers: dict[IdentityAddress, AmountT]) -> None:
+        providers = dict(providers)
+        if self._this_node is not None and self._this_node.staking_provider_address in providers:
+            del providers[self._this_node.staking_provider_address]
+
         self._staking_providers = providers
         self._staking_providers_updated = self._clock.utcnow()
-
-    def verified_metadata(self) -> list[VerifiedNodeInfo]:
-        return self._verified_nodes_db.all_nodes() + (
-            [self._this_node] if self._this_node is not None else []
-        )
 
     def _add_node(
         self,
@@ -518,9 +532,11 @@ class FleetSensor:
 
         return entries
 
-    @property
+    def verified_node_infos(self) -> list[VerifiedNodeInfo]:
+        return self._verified_nodes_db.node_infos()
+
     def verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
-        return self._verified_nodes_db._nodes  # noqa: SLF001
+        return self._verified_nodes_db.node_entries()
 
     def try_get_possible_contacts_for(self, address: IdentityAddress) -> set[Contact]:
         contacts = self._contacts_db._addresses_to_contacts.get(address, set())  # noqa: SLF001

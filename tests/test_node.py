@@ -19,5 +19,5 @@ async def test_learning(
         }
 
         # Each node should know about every other node by now.
-        if all(len(nodes) == 10 for nodes in known_nodes.values()):
+        if all(len(nodes) == 9 for nodes in known_nodes.values()):
             break
