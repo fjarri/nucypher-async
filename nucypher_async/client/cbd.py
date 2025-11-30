@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 import trio
@@ -7,72 +8,77 @@ from nucypher_core.ferveo import (
     FerveoVariant,
     combine_decryption_shares_simple,
 )
-from pons import AccountSigner
 
-from ..drivers.cbd import CBDAddress, CBDClient, OnChainRitual
+from ..drivers.cbd import CBDAccountSigner, CBDAddress, CBDClient, OnChainRitual
 from ..drivers.identity import IdentityAddress
 from ..p2p.verification import VerifiedNodeInfo
 from .network import NetworkClient
 
 
-async def initiate_ritual(
-    network_client: NetworkClient,
-    cbd_client: CBDClient,
-    shares: int,
-    duration: int = 60 * 60 * 24,  # 24 hours
-) -> OnChainRitual:
-    nodes = await network_client.get_nodes(quantity=shares)
+class BaseCBDClient(ABC):
+    @abstractmethod
+    async def initiate_ritual(
+        self, ritualist: CBDAccountSigner, shares: int, duration: int
+    ) -> OnChainRitual: ...
 
-    # TODO: this should be the ritual initiator character
-    signer = AccountSigner.create()
+    @abstractmethod
+    async def decrypt(self, message_kit: ThresholdMessageKit) -> bytes: ...
 
-    # TODO: add fee models
-    fee_model = CBDAddress(b"0" * 20)
 
-    # TODO: figure out who can this be
-    authority = IdentityAddress(b"0" * 20)
+class LocalCBDClient:
+    def __init__(self, network_client: NetworkClient, cbd_client: CBDClient):
+        self._network_client = network_client
+        self._cbd_client = cbd_client
 
-    providers = [node.staking_provider_address for node in nodes]
+    async def initiate_ritual(
+        self, ritualist: CBDAccountSigner, shares: int, duration: int
+    ) -> OnChainRitual:
+        nodes = await self._network_client.get_nodes(quantity=shares)
 
-    # TODO: who is that? Or is it a contract?
-    access_controller = IdentityAddress(b"0" * 20)
+        # TODO: add fee models
+        fee_model = CBDAddress(b"0" * 20)
 
-    async with cbd_client.session() as session:
-        ritual_id = await session.initiate_ritual(
-            signer, fee_model, providers, authority, duration, access_controller
+        # TODO: figure out who can this be
+        authority = IdentityAddress(b"0" * 20)
+
+        providers = [node.staking_provider_address for node in nodes]
+
+        # TODO: who is that? Or is it a contract?
+        access_controller = IdentityAddress(b"0" * 20)
+
+        async with self._cbd_client.session() as session:
+            ritual_id = await session.initiate_ritual(
+                ritualist, fee_model, providers, authority, duration, access_controller
+            )
+            return await session.get_ritual(ritual_id)
+
+    async def decrypt(self, message_kit: ThresholdMessageKit) -> bytes:
+        async with self._cbd_client.session() as session:
+            ritual_id = await session.get_ritual_id_from_public_key(message_kit.acp.public_key)
+            ritual = await session.get_ritual(ritual_id)
+            participants = await session.get_participants(ritual_id)
+
+        decryption_request = ThresholdDecryptionRequest(
+            ritual_id=ritual_id,
+            variant=FerveoVariant.Simple,
+            ciphertext_header=message_kit.ciphertext_header,
+            acp=message_kit.acp,
+            context=None,  # TODO: add context support
         )
-        return await session.get_ritual(ritual_id)
+
+        decryption_shares = await _get_decryption_shares(
+            self._network_client,
+            decryption_request=decryption_request,
+            participants=participants,
+            threshold=ritual.threshold,
+        )
+
+        shared_secret = combine_decryption_shares_simple(decryption_shares)
+
+        return message_kit.decrypt_with_shared_secret(shared_secret)
 
 
-async def cbd_decrypt(
-    network_client: NetworkClient, cbd_client: CBDClient, message_kit: ThresholdMessageKit
-) -> bytes:
-    async with cbd_client.session() as session:
-        ritual_id = await session.get_ritual_id_from_public_key(message_kit.acp.public_key)
-        ritual = await session.get_ritual(ritual_id)
-        participants = await session.get_participants(ritual_id)
-
-    decryption_request = ThresholdDecryptionRequest(
-        ritual_id=ritual_id,
-        variant=FerveoVariant.Simple,
-        ciphertext_header=message_kit.ciphertext_header,
-        acp=message_kit.acp,
-        context=None,  # CHECK: what is this?
-    )
-
-    decryption_shares = await get_decryption_shares(
-        network_client,
-        decryption_request=decryption_request,
-        participants=participants,
-        threshold=ritual.threshold,
-    )
-
-    shared_secret = combine_decryption_shares_simple(decryption_shares)
-
-    return message_kit.decrypt_with_shared_secret(shared_secret)
-
-
-async def get_decryption_shares(
+async def _get_decryption_shares(
     network_client: NetworkClient,
     decryption_request: ThresholdDecryptionRequest,
     participants: Sequence[OnChainRitual.Participant],

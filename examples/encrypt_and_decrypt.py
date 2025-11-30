@@ -10,10 +10,10 @@ from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.cbd import Decryptor, Encryptor
 from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
-from nucypher_async.client.cbd import ThresholdMessageKit, cbd_decrypt, initiate_ritual
+from nucypher_async.client.cbd import LocalCBDClient
 from nucypher_async.client.network import NetworkClient
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.cbd import CBDClient
+from nucypher_async.drivers.cbd import CBDAccount, CBDAccountSigner, CBDClient
 from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
 from nucypher_async.drivers.peer import Contact, PeerClient
@@ -102,22 +102,6 @@ async def run_local_node_fleet(
     return handles, Contact(LOCALHOST, PORT_BASE)
 
 
-async def bob_decrypts(
-    context: Context,
-    seed_contact: Contact,
-    message_kit: ThresholdMessageKit,
-) -> bytes:
-    network_client = NetworkClient(
-        identity_client=context.identity_client,
-        domain=context.domain,
-        parent_logger=context.logger.get_child("Bob"),
-        seed_contacts=[seed_contact],
-        clock=context.clock,
-    )
-
-    return await cbd_decrypt(network_client, message_kit=message_kit, cbd_client=context.cbd_client)
-
-
 async def main(*, mocked: bool = True) -> None:
     logger = Logger(handlers=[ConsoleHandler(level=Level.INFO)])
     domain = Domain.LYNX
@@ -150,24 +134,42 @@ async def main(*, mocked: bool = True) -> None:
         else:
             seed_contact = Contact("lynx.nucypher.network", 9151)
 
+        ritualist_signer = CBDAccountSigner(CBDAccount.random())
+
         alice_keys = MasterKey.random()
         alice = Encryptor(alice_keys)
 
-        network_client = NetworkClient(
-            identity_client=context.identity_client,
-            domain=context.domain,
-            parent_logger=context.logger.get_child("Alice"),
-            seed_contacts=[seed_contact],
-            clock=context.clock,
+        ritualist_client = LocalCBDClient(
+            NetworkClient(
+                identity_client=context.identity_client,
+                domain=context.domain,
+                parent_logger=context.logger.get_child("Ritualist"),
+                seed_contacts=[seed_contact],
+                clock=context.clock,
+            ),
+            context.cbd_client,
         )
-        ritual = await initiate_ritual(network_client, context.cbd_client, 3)
+        ritual = await ritualist_client.initiate_ritual(
+            ritualist_signer, shares=3, duration=24 * 60 * 60
+        )
 
         context.logger.info("Alice encrypts")
         message = b"a secret message"
         message_kit = alice.encrypt(ritual.public_key, message)
 
         context.logger.info("Bob decrypts")
-        decrypted = await bob_decrypts(context, seed_contact, message_kit)
+
+        bob_client = LocalCBDClient(
+            NetworkClient(
+                identity_client=context.identity_client,
+                domain=context.domain,
+                parent_logger=context.logger.get_child("Bob"),
+                seed_contacts=[seed_contact],
+                clock=context.clock,
+            ),
+            context.cbd_client,
+        )
+        decrypted = await bob_client.decrypt(message_kit)
 
         assert message == decrypted
         context.logger.info("Message decrypted successfully!")
