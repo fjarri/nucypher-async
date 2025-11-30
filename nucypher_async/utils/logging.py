@@ -169,9 +169,7 @@ class DefaultFormatter(Formatter):
 
     def format(self, record: LogRecord) -> str:
         message = record.message.format(*record.args)
-        asctime = record.timestamp.to(
-            "local"
-        ).format()  # time.asctime(time.localtime(record.timestamp))
+        asctime = record.timestamp.to("local").format()
 
         full_message = self.format_str.format(
             task_id=("" if record.task_id is None else ("[" + str(record.task_id) + "] ")),

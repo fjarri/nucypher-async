@@ -195,6 +195,7 @@ async def fully_learned_nodes(
 async def porter_server(
     mock_network: MockNetwork,
     mock_identity_client: MockIdentityClient,
+    mock_pre_client: MockPREClient,
     fully_learned_nodes: list[NodeServer],
     logger: logging.Logger,
     mock_clock: MockClock,
@@ -214,6 +215,7 @@ async def porter_server(
     config = PorterServerConfig(
         domain=Domain.MAINNET,
         identity_client=mock_identity_client,
+        pre_client=mock_pre_client,
         peer_client=MockPeerClient(mock_network, host),
         parent_logger=logger,
         storage=InMemoryStorage(),

@@ -54,9 +54,10 @@ jobs:
     - name: Test with pytest
       run: |
         pdm run py.test --cov=nucypher_async --cov-report=xml
-    - name: Upload coverage
+    - name: Upload coverage to Codecov
       if: matrix.python-version == '3.10'
-      run: |
-        curl -Os https://uploader.codecov.io/latest/linux/codecov
-        chmod +x codecov
-        ./codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage.xml
+        fail_ci_if_error: true

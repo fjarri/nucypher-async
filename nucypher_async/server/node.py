@@ -22,7 +22,6 @@ from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..p2p.algorithms import learning_task, verification_task
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
@@ -140,14 +139,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
         self._started_at = self._clock.utcnow()
 
-        async def _verification_task(stop_event: trio.Event) -> None:
-            await verification_task(stop_event, self.learner)
-
-        async def _learning_task(stop_event: trio.Event) -> None:
-            await learning_task(stop_event, self.learner)
-
-        self._verification_task = BackgroundTask(worker=_verification_task, logger=self._logger)
-        self._learning_task = BackgroundTask(worker=_learning_task, logger=self._logger)
+        self._verification_task = BackgroundTask(
+            worker=self.learner.verification_task, logger=self._logger
+        )
+        self._learning_task = BackgroundTask(worker=self.learner.learning_task, logger=self._logger)
 
         self.started = False
 
@@ -204,13 +199,20 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             )
             return MetadataResponse(self.operator.signer, response_payload)
 
-        new_metadatas = [NodeInfo(m) for m in request.announce_nodes]
-
-        self.learner.passive_learning(remote_host, new_metadatas)
-
-        announce_nodes = [
-            m.metadata for m in self.learner.get_verified_nodes(include_this_node=True)
+        # Filter out our own metadata
+        node_infos = [NodeInfo(m) for m in request.announce_nodes]
+        node_infos = [
+            node_info
+            for node_info in node_infos
+            if node_info.staking_provider_address != self._node.staking_provider_address
         ]
+
+        self.learner.passive_learning(remote_host, node_infos)
+
+        announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()] + [
+            self._node.metadata
+        ]
+
         response_payload = MetadataResponsePayload(
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,

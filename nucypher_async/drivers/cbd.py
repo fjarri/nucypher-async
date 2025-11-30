@@ -25,7 +25,6 @@ from pons import (
     Event,
     Method,
     Mutability,
-    Signer,
     abi,
 )
 from pons.http_provider import HTTPProvider
@@ -325,7 +324,7 @@ class CBDClientSession:
 
     async def initiate_ritual(
         self,
-        signer: Signer,
+        signer: CBDAccountSigner,
         fee_model: CBDAddress,
         providers: Sequence[IdentityAddress],
         authority: IdentityAddress,  # TODO: can it be different from the signer's address?

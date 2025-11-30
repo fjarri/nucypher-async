@@ -1,23 +1,16 @@
+import datetime
 from collections.abc import Iterable
 
 import trio
-from nucypher_core import (
-    Conditions,
-    Context,
-    EncryptedThresholdDecryptionRequest,
-    EncryptedThresholdDecryptionResponse,
-    TreasureMap,
-)
-from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
-from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, InMemoryStorage
+from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
@@ -38,24 +31,18 @@ class Learner:
     def __init__(
         self,
         domain: Domain,
+        peer_client: PeerClient,
         identity_client: IdentityClient,
         this_node: VerifiedNodeInfo | None = None,
-        peer_client: PeerClient | None = None,
         seed_contacts: Iterable[Contact] | None = None,
         parent_logger: Logger = NULL_LOGGER,
         storage: BaseStorage | None = None,
         clock: BaseClock | None = None,
     ):
-        if peer_client is None:
-            peer_client = PeerClient()
-
         self.clock = clock or SystemClock()
+        self._storage = storage or InMemoryStorage()
 
         self._logger = parent_logger.get_child("Learner")
-
-        if storage is None:
-            storage = InMemoryStorage()
-        self._storage = storage
 
         self._node_client = NodeClient(peer_client)
         self._identity_client = identity_client
@@ -111,17 +98,6 @@ class Learner:
 
         return node, staked
 
-    async def _learn_from_node(self, node: VerifiedNodeInfo) -> list[NodeInfo]:
-        self._logger.debug(
-            "Learning from {} ({})",
-            node.contact,
-            node.staking_provider_address,
-        )
-
-        return await self._node_client.exchange_node_info(
-            node, self.fleet_state.checksum, self._this_node
-        )
-
     async def learn_from_node_and_report(self, node: VerifiedNodeInfo) -> None:
         with self._fleet_sensor.try_lock_contact_for_learning(node.contact) as (
             contact,
@@ -131,9 +107,17 @@ class Learner:
                 await result.wait()
                 return
 
+            self._logger.debug(
+                "Learning from {} ({})",
+                node.contact,
+                node.staking_provider_address,
+            )
+
             try:
                 with trio.fail_after(self.LEARNING_TIMEOUT):
-                    metadatas = await self._learn_from_node(node)
+                    node_infos = await self._node_client.exchange_node_info(
+                        node, self.fleet_state.checksum, self._this_node
+                    )
             except (PeerError, trio.TooSlowError) as exc:
                 message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
@@ -150,8 +134,18 @@ class Learner:
                     node.contact,
                     node.staking_provider_address.checksum,
                 )
-                self._fleet_sensor.report_active_learning_results(node, metadatas)
-                self.fleet_state.add_metadatas(metadatas)
+
+                # Filter out this node from the node infos
+                if self._this_node is not None:
+                    node_infos = [
+                        node_info
+                        for node_info in node_infos
+                        if node_info.staking_provider_address
+                        != self._this_node.staking_provider_address
+                    ]
+
+                self._fleet_sensor.report_active_learning_results(node, node_infos)
+                self.fleet_state.add_metadatas(node_infos)
             finally:
                 # We just need to signal that the learning ended, no info to return
                 result.set(None)
@@ -180,7 +174,7 @@ class Learner:
                 self.fleet_state.remove_contact(contact)
             else:
                 self._logger.debug("Verified {}: {}", contact, node)
-                # Assuming here that since the node is verified, `node.contact == contact`
+                # TODO: Assuming here that since the node is verified, `node.contact == contact`
                 # (and we won't try to verify `contact` again).
                 # Is there a way to enforce it more explicitly?
                 self._fleet_sensor.report_verified_node(node, staked_amount)
@@ -191,12 +185,20 @@ class Learner:
         return node
 
     def passive_learning(self, sender_host: str | None, metadatas: Iterable[NodeInfo]) -> None:
+        self._logger.debug("Passive learning from {}", sender_host or "unknown host")
+
         # Unfiltered metadata goes into FleetState for compatibility
         self.fleet_state.add_metadatas(metadatas)
-        self._logger.debug("Passive learning from {}", sender_host or "unknown host")
-        self._fleet_sensor.report_passive_learning_results(sender_host, metadatas)
 
-    async def load_staking_providers_and_report(self) -> None:
+        # TODO: `sender_host` is probably an IP address? The contact host may be a hostname.
+        # Need to get an IP from that and use it for the comparison instead.
+
+        # Filter out only the contact(s) with `remote_address`.
+        # We're not going to trust all this metadata anyway.
+        metadatas = [metadata for metadata in metadatas if metadata.contact.host == sender_host]
+        self._fleet_sensor.report_passive_learning_results(metadatas)
+
+    async def _load_staking_providers_and_report(self) -> None:
         try:
             with trio.fail_after(self.STAKING_PROVIDERS_TIMEOUT):
                 async with self._identity_client.session() as session:
@@ -262,37 +264,7 @@ class Learner:
             for node in nodes:
                 nursery.start_soon(self.learn_from_node_and_report, node)
 
-    async def reencrypt(
-        self,
-        node_info: VerifiedNodeInfo,
-        capsules: list[Capsule],
-        treasure_map: TreasureMap,
-        delegator_card: DelegatorCard,
-        recipient_card: RecipientCard,
-        conditions: Conditions | None = None,
-        context: Context | None = None,
-    ) -> list[VerifiedCapsuleFrag]:
-        return await self._node_client.reencrypt(
-            node_info=node_info,
-            capsules=capsules,
-            treasure_map=treasure_map,
-            delegator_card=delegator_card,
-            recipient_card=recipient_card,
-            conditions=conditions,
-            context=context,
-        )
-
-    async def decrypt(
-        self,
-        node_info: VerifiedNodeInfo,
-        request: EncryptedThresholdDecryptionRequest,
-    ) -> EncryptedThresholdDecryptionResponse:
-        return await self._node_client.decrypt(node_info=node_info, request=request)
-
-    def next_verification_in(self) -> float:
-        return self._fleet_sensor.next_verification_in()
-
-    def get_verification_rescheduling_event(self) -> trio.Event:
+    def _get_verification_rescheduling_event(self) -> trio.Event:
         """
         Returns an event that gets set if new information caused the next verification
         to be rescheduled to an earlier time.
@@ -301,9 +273,6 @@ class Learner:
         returns execution to the async runtime.
         """
         return self._fleet_sensor.reschedule_verification_event
-
-    def next_learning_in(self) -> float:
-        return self._fleet_sensor.next_learning_in()
 
     def get_new_verified_nodes_event(self) -> trio.Event:
         """
@@ -314,11 +283,6 @@ class Learner:
         """
         return self._fleet_sensor.new_verified_nodes_event
 
-    def is_empty(self) -> bool:
-        # TODO: we can hide this method and `seed_round()`, and call them
-        # in `learning_round()` instead, to simplify the API.
-        return self._fleet_sensor.is_empty()
-
     def get_possible_contacts_for(self, address: IdentityAddress) -> set[Contact]:
         return self._fleet_sensor.try_get_possible_contacts_for(address)
 
@@ -326,11 +290,52 @@ class Learner:
         return self._fleet_sensor.get_available_staking_providers()
 
     def get_verified_node_entries(self) -> dict[IdentityAddress, NodeEntry]:
-        return self._fleet_sensor.verified_node_entries
+        return self._fleet_sensor.verified_node_entries()
 
-    def get_verified_nodes(self, *, include_this_node: bool = False) -> list[VerifiedNodeInfo]:
-        my_metadata = [self._this_node] if include_this_node and self._this_node else []
-        return my_metadata + self._fleet_sensor.verified_metadata()
+    def get_verified_nodes(self) -> list[VerifiedNodeInfo]:
+        return self._fleet_sensor.verified_node_infos()
 
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()
+
+    async def verification_task(self, stop_event: trio.Event) -> None:
+        while True:
+            await self.verification_round()
+
+            while True:
+                next_event_in = self._fleet_sensor.next_verification_in()
+                verification_resceduled = self._get_verification_rescheduling_event()
+
+                try:
+                    with trio.fail_after(next_event_in):
+                        await wait_for_any([stop_event, verification_resceduled])
+                except trio.TooSlowError:
+                    break
+
+                if stop_event.is_set():
+                    return
+
+    async def learning_task(self, stop_event: trio.Event) -> None:
+        while True:
+            if self._fleet_sensor.is_empty():
+                await self.seed_round(must_succeed=False)
+            else:
+                await self.learning_round()
+
+            next_event_in = self._fleet_sensor.next_learning_in()
+
+            with trio.move_on_after(next_event_in):
+                await stop_event.wait()
+
+            if stop_event.is_set():
+                return
+
+    async def staker_query_task(self, stop_event: trio.Event) -> None:
+        while True:
+            await self._load_staking_providers_and_report()
+
+            with trio.move_on_after(datetime.timedelta(days=1).total_seconds()):
+                await stop_event.wait()
+
+            if stop_event.is_set():
+                return

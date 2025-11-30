@@ -10,7 +10,6 @@ from nucypher_async.characters.pre import (
     Reencryptor,
 )
 from nucypher_async.drivers.identity import IdentityAddress
-from nucypher_async.drivers.pre import PREAccount
 from nucypher_async.master_key import MasterKey
 
 
@@ -25,7 +24,7 @@ class Node:
 def test_grant_and_retrieve() -> None:
     bob = Recipient(MasterKey.random())
     alice = Delegator(MasterKey.random())
-    publisher = Publisher(MasterKey.random(), PREAccount.random())
+    publisher = Publisher(MasterKey.random())
 
     nodes = [
         Node(

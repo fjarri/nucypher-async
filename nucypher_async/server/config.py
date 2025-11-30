@@ -246,6 +246,7 @@ class NodeServerConfig:
 class PorterServerConfig:
     domain: Domain
     identity_client: IdentityClient
+    pre_client: PREClient
     peer_client: PeerClient
     parent_logger: Logger
     storage: BaseStorage
@@ -257,6 +258,7 @@ class PorterServerConfig:
         cls,
         *,
         identity_endpoint: str,
+        pre_endpoint: str,
         debug: bool = False,
         profile_name: str = "porter",
         domain: str = "mainnet",
@@ -266,9 +268,11 @@ class PorterServerConfig:
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
+        pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
     ) -> "PorterServerConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
+        pre_client = pre_client_factory(pre_endpoint, domain_)
         logger = make_logger(
             profile_name,
             "porter",
@@ -283,6 +287,7 @@ class PorterServerConfig:
         return cls(
             domain=domain_,
             identity_client=identity_client,
+            pre_client=pre_client,
             peer_client=peer_client,
             parent_logger=logger,
             storage=storage,

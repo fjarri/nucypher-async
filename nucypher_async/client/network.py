@@ -1,19 +1,134 @@
 import datetime
 import secrets
 from bisect import bisect_right
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from itertools import accumulate
 from typing import Generic, TypeVar
 
 import trio
 
-from ..drivers.identity import IdentityAddress
-from ..drivers.peer import Contact
-from ..utils import wait_for_any
+from ..base.time import BaseClock
+from ..domain import Domain
+from ..drivers.identity import IdentityAddress, IdentityClient
+from ..drivers.peer import Contact, PeerClient
+from ..drivers.time import SystemClock
+from ..p2p.fleet_sensor import FleetSensorSnapshot, NodeEntry
+from ..p2p.learner import Learner
+from ..p2p.node_info import NodeClient
+from ..p2p.verification import VerifiedNodeInfo
+from ..storage import BaseStorage
+from ..utils.logging import NULL_LOGGER, Logger
 from ..utils.producer import producer
-from .fleet_sensor import NodeEntry
-from .learner import Learner
-from .verification import VerifiedNodeInfo
+
+
+class NetworkClient:
+    def __init__(
+        self,
+        identity_client: IdentityClient,
+        peer_client: PeerClient | None = None,
+        seed_contacts: Iterable[Contact] | None = None,
+        domain: Domain = Domain.MAINNET,
+        parent_logger: Logger = NULL_LOGGER,
+        clock: BaseClock = SystemClock(),
+        storage: BaseStorage | None = None,
+    ):
+        peer_client = peer_client or PeerClient()
+        self._learner = Learner(
+            peer_client=peer_client,
+            identity_client=identity_client,
+            domain=domain,
+            parent_logger=parent_logger.get_child("NetworkClient"),
+            seed_contacts=seed_contacts,
+            clock=clock,
+            storage=storage,
+        )
+        self.node_client = NodeClient(peer_client)
+        self._seeded = False
+
+    @property
+    def clock(self) -> BaseClock:
+        return self._learner.clock
+
+    def get_snapshot(self) -> FleetSensorSnapshot:
+        return self._learner.get_snapshot()
+
+    async def _get_updated_learner(self) -> Learner:
+        await self._ensure_seeded()
+        return self._learner
+
+    async def _ensure_seeded(self) -> None:
+        if not self._seeded:
+            await self._learner.seed_round()
+            self._seeded = True
+
+    async def verification_task(self, stop_event: trio.Event) -> None:
+        await self._learner.verification_task(stop_event)
+
+    async def learning_task(self, stop_event: trio.Event) -> None:
+        await self._learner.learning_task(stop_event)
+
+    async def staker_query_task(self, stop_event: trio.Event) -> None:
+        await self._learner.staker_query_task(stop_event)
+
+    async def verified_nodes_iter(
+        self,
+        addresses: Iterable[IdentityAddress],
+        verified_within: float | None = None,
+    ) -> AsyncIterator[VerifiedNodeInfo]:
+        await self._ensure_seeded()
+        async with _verified_nodes_iter(
+            self._learner, addresses=addresses, verified_within=verified_within
+        ) as node_iter:
+            async for node in node_iter:
+                yield node
+
+    async def _random_verified_nodes_iter(
+        self,
+        amount: int,
+        overhead: int = 0,
+        verified_within: float | None = None,
+        exclude_nodes: Iterable[IdentityAddress] | None = None,
+    ) -> AsyncIterator[VerifiedNodeInfo]:
+        async with _random_verified_nodes_iter(
+            self._learner,
+            amount,
+            overhead=overhead,
+            verified_within=verified_within,
+            exclude_nodes=exclude_nodes,
+        ) as node_iter:
+            async for node in node_iter:
+                yield node
+
+    async def get_nodes(
+        self,
+        quantity: int,
+        include_nodes: Iterable[IdentityAddress] | None = None,
+        exclude_nodes: Iterable[IdentityAddress] | None = None,
+    ) -> list[VerifiedNodeInfo]:
+        await self._ensure_seeded()
+
+        nodes = []
+
+        include = set(include_nodes) if include_nodes else set()
+        exclude = set(exclude_nodes) if exclude_nodes else set()
+
+        # Note: include_nodes takes priority over exclude_nodes
+        async for node in self.verified_nodes_iter(include, verified_within=60):
+            nodes.append(node)
+
+        if len(nodes) < quantity:
+            quantity_remaining = quantity - len(nodes)
+            overhead = max(1, quantity_remaining // 5)
+            async for node in self._random_verified_nodes_iter(
+                amount=quantity_remaining,
+                overhead=overhead,
+                verified_within=60,
+                exclude_nodes=exclude | include,
+            ):
+                nodes.append(node)
+
+        return nodes
+
 
 WeightedReservoirT = TypeVar("WeightedReservoirT")
 
@@ -50,63 +165,13 @@ class WeightedReservoir(Generic[WeightedReservoirT]):
         return self._length
 
 
-async def verification_task(stop_event: trio.Event, learner: Learner) -> None:
-    while True:
-        await learner.verification_round()
-
-        while True:
-            next_event_in = learner.next_verification_in()
-            verification_resceduled = learner.get_verification_rescheduling_event()
-
-            try:
-                with trio.fail_after(next_event_in):
-                    await wait_for_any(
-                        [stop_event, verification_resceduled],
-                    )
-            except trio.TooSlowError:
-                break
-
-            if stop_event.is_set():
-                return
-
-
-async def learning_task(stop_event: trio.Event, learner: Learner) -> None:
-    while True:
-        if learner.is_empty():
-            await learner.seed_round(must_succeed=False)
-        else:
-            await learner.learning_round()
-
-        next_event_in = learner.next_learning_in()
-
-        with trio.move_on_after(next_event_in):
-            await stop_event.wait()
-
-        if stop_event.is_set():
-            return
-
-
-async def staker_query_task(stop_event: trio.Event, learner: Learner) -> None:
-    while True:
-        await learner.load_staking_providers_and_report()
-
-        with trio.move_on_after(datetime.timedelta(days=1).total_seconds()):
-            await stop_event.wait()
-
-        if stop_event.is_set():
-            return
-
-
 @producer
-async def verified_nodes_iter(
+async def _verified_nodes_iter(
     yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     addresses: Iterable[IdentityAddress],
     verified_within: float | None = None,
 ) -> None:
-    if learner.is_empty():
-        await learner.seed_round()
-
     addresses = set(addresses)
     now = learner.clock.utcnow()
 
@@ -149,7 +214,7 @@ async def verified_nodes_iter(
 
 
 @producer
-async def random_verified_nodes_iter(  # noqa: C901
+async def _random_verified_nodes_iter(  # noqa: C901
     yield_: Callable[[VerifiedNodeInfo], Awaitable[None]],
     learner: Learner,
     amount: int,
@@ -157,12 +222,14 @@ async def random_verified_nodes_iter(  # noqa: C901
     verified_within: float | None = None,
     exclude_nodes: Iterable[IdentityAddress] | None = None,
 ) -> None:
-    if learner.is_empty():
-        await learner.seed_round()
+    while True:
+        providers = learner.get_available_staking_providers()
+        if len(providers) >= amount:
+            break
+        await learner.verification_round()
 
     now = learner.clock.utcnow()
 
-    providers = learner.get_available_staking_providers()
     reservoir = WeightedReservoir(providers, lambda entry: entry.weight)
 
     exclude_nodes = set(exclude_nodes) if exclude_nodes else set()
@@ -220,35 +287,3 @@ async def random_verified_nodes_iter(  # noqa: C901
                 if returned == amount:
                     nursery.cancel_scope.cancel()
                     return
-
-
-async def get_nodes(
-    learner: Learner,
-    quantity: int,
-    include_nodes: Iterable[IdentityAddress] | None = None,
-    exclude_nodes: Iterable[IdentityAddress] | None = None,
-) -> list[VerifiedNodeInfo]:
-    nodes = []
-
-    include = set(include_nodes) if include_nodes else set()
-    exclude = set(exclude_nodes) if exclude_nodes else set()
-
-    # Note: include_nodes takes priority over exclude_nodes
-    async with verified_nodes_iter(learner, include, verified_within=60) as node_iter:
-        async for node in node_iter:
-            nodes.append(node)
-
-    if len(nodes) < quantity:
-        quantity_remaining = quantity - len(nodes)
-        overhead = max(1, quantity_remaining // 5)
-        async with random_verified_nodes_iter(
-            learner=learner,
-            amount=quantity_remaining,
-            overhead=overhead,
-            verified_within=60,
-            exclude_nodes=exclude | include,
-        ) as node_iter:
-            async for node in node_iter:
-                nodes.append(node)
-
-    return nodes
