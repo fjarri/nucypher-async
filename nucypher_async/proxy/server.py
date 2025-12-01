@@ -8,7 +8,7 @@ from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
 from ..drivers.http_server import HTTPServable, HTTPServableApp
-from ..server.status import render_status
+from ..node.status import render_status
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey

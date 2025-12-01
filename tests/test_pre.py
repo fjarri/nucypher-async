@@ -13,7 +13,7 @@ from nucypher_async.mocks import (
     MockPeerClient,
     MockPREClient,
 )
-from nucypher_async.server import NodeServer
+from nucypher_async.node import NodeServer
 from nucypher_async.utils.logging import Logger
 
 

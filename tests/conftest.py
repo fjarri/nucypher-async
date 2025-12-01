@@ -24,7 +24,7 @@ from nucypher_async.mocks import (
     MockPREClient,
 )
 from nucypher_async.proxy import ProxyServer, ProxyServerConfig
-from nucypher_async.server import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
+from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils import logging
 from nucypher_async.utils.ssl import SSLCertificate, SSLPrivateKey

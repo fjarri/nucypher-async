@@ -20,7 +20,7 @@ from nucypher_async.drivers.pre import PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
-from nucypher_async.server import HTTPServerConfig, NodeServer, NodeServerConfig
+from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
 

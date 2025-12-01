@@ -11,7 +11,7 @@ from ..drivers.identity import IdentityClient
 from ..drivers.peer import Contact, PeerClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
-from ..server.config import HTTPServerConfig
+from ..node.config import HTTPServerConfig
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 

@@ -1,5 +1,5 @@
 from .config import HTTPServerConfig, NodeServerConfig, SSLConfig
-from .node import NodeServer
+from .server import NodeServer
 
 __all__ = [
     "HTTPServerConfig",

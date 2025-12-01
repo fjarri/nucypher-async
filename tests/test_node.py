@@ -1,7 +1,7 @@
 import trio
 import trio.testing
 
-from nucypher_async.server import NodeServer
+from nucypher_async.node import NodeServer
 
 
 async def test_learning(

@@ -12,7 +12,7 @@ from nucypher_async.drivers.peer import PeerClient, PeerServerHandle
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
 from nucypher_async.p2p.node_info import NodeClient
-from nucypher_async.server import HTTPServerConfig, NodeServer, NodeServerConfig
+from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
