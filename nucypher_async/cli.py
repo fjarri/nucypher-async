@@ -12,8 +12,8 @@ from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .drivers.peer import PeerServerHandle
 from .master_key import EncryptedMasterKey, MasterKey
-from .proxy import ProxyServer, ProxyServerConfig
 from .node import NodeServer, NodeServerConfig
+from .proxy import ProxyServer, ProxyServerConfig
 
 
 async def make_node_server(

@@ -15,9 +15,9 @@ from nucypher_async.mocks import (
     MockPeerClient,
     MockPREClient,
 )
+from nucypher_async.node import NodeServer
 from nucypher_async.proxy import ProxyPREClient, ProxyServer
 from nucypher_async.proxy.client import ProxyClient
-from nucypher_async.node import NodeServer
 
 
 async def test_get_nodes(
