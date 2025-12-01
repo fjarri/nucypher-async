@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from ipaddress import IPv4Address
 from pathlib import Path
 
 from attrs import frozen
@@ -12,9 +11,9 @@ from ..drivers.identity import IdentityClient
 from ..drivers.peer import Contact, PeerClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
+from ..server.config import HTTPServerConfig
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 # TODO: handle in a centralized way
@@ -67,49 +66,14 @@ def make_storage(profile_name: str, *, persistent_storage: bool = True) -> BaseS
 
 
 @frozen
-class SSLConfig:
-    certificate: SSLCertificate
-    private_key: SSLPrivateKey
-    ca_chain: list[SSLCertificate]
-
-    @classmethod
-    def from_config_values(
-        cls,
-        *,
-        ssl_private_key_path: str,
-        ssl_certificate_path: str,
-        ssl_ca_chain_path: str | None = None,
-    ) -> "SSLConfig":
-        with Path(ssl_private_key_path).open("rb") as pk_file:
-            ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
-
-        with Path(ssl_certificate_path).open("rb") as cert_file:
-            ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
-
-        if ssl_ca_chain_path is not None:
-            with Path(ssl_ca_chain_path).open("rb") as chain_file:
-                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
-        else:
-            ssl_ca_chain = []
-
-        return cls(
-            certificate=ssl_certificate,
-            private_key=ssl_private_key,
-            ca_chain=ssl_ca_chain,
-        )
-
-
-@frozen
-class ProxyConfig:
+class ProxyServerConfig:
+    http_server_config: HTTPServerConfig
     domain: Domain
-    bind_to_address: IPv4Address
-    bind_to_port: int
-    ssl_config: SSLConfig
     identity_client: IdentityClient
     pre_client: PREClient
     cbd_client: CBDClient
     peer_client: PeerClient
-    parent_logger: Logger
+    logger: Logger
     storage: BaseStorage
     seed_contacts: list[Contact]
     clock: BaseClock
@@ -137,11 +101,7 @@ class ProxyConfig:
         ] = IdentityClient.from_endpoint,
         pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
         cbd_client_factory: Callable[[str, Domain], CBDClient] = CBDClient.from_endpoint,
-    ) -> "ProxyConfig":
-        domain_ = Domain.from_string(domain)
-        identity_client = identity_client_factory(identity_endpoint, domain_)
-        pre_client = pre_client_factory(pre_endpoint, domain_)
-        cbd_client = cbd_client_factory(cbd_endpoint, domain_)
+    ) -> "ProxyServerConfig":
         logger = make_logger(
             profile_name,
             "ptoxy",
@@ -149,27 +109,33 @@ class ProxyConfig:
             log_to_file=log_to_file,
             debug=debug,
         )
-        storage = make_storage(profile_name, persistent_storage=persistent_storage)
-        seed_contacts = seed_contacts_for_domain(domain_)
+        clock = SystemClock()
 
-        # TODO: generate self-signed ones if these are missing in the config?
-        ssl_config = SSLConfig.from_config_values(
+        http_server_config = HTTPServerConfig.from_config_values(
+            bind_to_address=bind_to_address,
+            bind_to_port=bind_to_port,
             ssl_private_key_path=ssl_private_key_path,
             ssl_certificate_path=ssl_certificate_path,
             ssl_ca_chain_path=ssl_ca_chain_path,
         )
 
+        domain_ = Domain.from_string(domain)
+        identity_client = identity_client_factory(identity_endpoint, domain_)
+        pre_client = pre_client_factory(pre_endpoint, domain_)
+        cbd_client = cbd_client_factory(cbd_endpoint, domain_)
+
+        storage = make_storage(profile_name, persistent_storage=persistent_storage)
+        seed_contacts = seed_contacts_for_domain(domain_)
+
         return cls(
-            bind_to_address=IPv4Address(bind_to_address),
-            bind_to_port=bind_to_port,
-            ssl_config=ssl_config,
+            http_server_config=http_server_config,
             domain=domain_,
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
             peer_client=PeerClient(),
-            parent_logger=logger,
+            logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
-            clock=SystemClock(),
+            clock=clock,
         )

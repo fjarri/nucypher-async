@@ -71,60 +71,54 @@ class SSLConfig:
     private_key: SSLPrivateKey
     ca_chain: list[SSLCertificate]
 
+    @classmethod
+    def from_config_values(
+        cls,
+        *,
+        ssl_private_key_path: str,
+        ssl_certificate_path: str,
+        ssl_ca_chain_path: str | None = None,
+    ) -> "SSLConfig":
+        with Path(ssl_private_key_path).open("rb") as pk_file:
+            ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
+
+        with Path(ssl_certificate_path).open("rb") as cert_file:
+            ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
+
+        if ssl_ca_chain_path is not None:
+            with Path(ssl_ca_chain_path).open("rb") as chain_file:
+                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
+        else:
+            ssl_ca_chain = []
+
+        # TODO: check that the SSL certificate corresponds to the given private key
+
+        # TODO: check that certificates in the chain are in the correct order?
+        # (root certificate last)
+        return cls(
+            certificate=ssl_certificate,
+            private_key=ssl_private_key,
+            ca_chain=ssl_ca_chain,
+        )
+
 
 @frozen
-class PeerServerConfig:
+class HTTPServerConfig:
     bind_to_address: IPv4Address
     bind_to_port: int
-    contact: Contact
     ssl_config: SSLConfig | None
 
     @classmethod
     def from_typed_values(
         cls,
         *,
-        bind_to_address: IPv4Address | None = None,
-        bind_to_port: int | None = None,
-        external_host: str,
-        external_port: int = 9151,
-        ssl_key_pair: tuple[SSLPrivateKey, SSLCertificate] | None = None,
-        ssl_ca_chain: list[SSLCertificate] | None = None,
-    ) -> "PeerServerConfig":
-        if bind_to_address is None:
-            try:
-                bind_to_address = IPv4Address(external_host)
-            except ValueError as exc:
-                raise ValueError(
-                    "If `bind_to_address` is not given, it is taken "
-                    "to be equal to `external_host`, "
-                    f"which in this case must be an IPv4 address (got: {external_host})"
-                ) from exc
-
-        if ssl_key_pair is not None:
-            ssl_private_key, ssl_certificate = ssl_key_pair
-            ssl_config = SSLConfig(
-                private_key=ssl_private_key,
-                certificate=ssl_certificate,
-                ca_chain=ssl_ca_chain or [],
-            )
-        else:
-            ssl_config = None
-
-        if ssl_config is not None and ssl_config.certificate.declared_host != external_host:
-            raise ValueError(
-                "The declared external host is `{external_host}`, "
-                "but the given SSL certificate has `{ssl_config.certificate.declared_host}`"
-            )
-
-        # TODO: check that the SSL certificate corresponds to the given private key
-
-        # TODO: check that certificates in the chainare in the correct order?
-        # (root certificate last)
-
+        bind_to_address: str | IPv4Address,
+        bind_to_port: int,
+        ssl_config: SSLConfig | None = None,
+    ) -> "HTTPServerConfig":
         return cls(
-            bind_to_address=bind_to_address,
-            bind_to_port=bind_to_port if bind_to_port is not None else external_port,
-            contact=Contact(external_host, external_port),
+            bind_to_address=IPv4Address(bind_to_address),
+            bind_to_port=bind_to_port,
             ssl_config=ssl_config,
         )
 
@@ -133,72 +127,101 @@ class PeerServerConfig:
         cls,
         *,
         bind_to_address: str = "127.0.0.1",
-        bind_to_port: int | None = None,
-        external_host: str,
-        external_port: int = 9151,
+        bind_to_port: int,
         ssl_private_key_path: str | None,
         ssl_certificate_path: str | None,
         ssl_ca_chain_path: str | None = None,
-    ) -> "PeerServerConfig":
-        ssl_private_key: SSLPrivateKey | None
-        if ssl_private_key_path is not None:
-            with Path(ssl_private_key_path).open("rb") as pk_file:
-                ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
+    ) -> "HTTPServerConfig":
+        if ssl_private_key_path is not None and ssl_certificate_path is not None:
+            ssl_config = SSLConfig.from_config_values(
+                ssl_private_key_path=ssl_private_key_path,
+                ssl_certificate_path=ssl_certificate_path,
+                ssl_ca_chain_path=ssl_ca_chain_path,
+            )
+        elif (
+            ssl_private_key_path is None
+            and ssl_certificate_path is None
+            and ssl_ca_chain_path is None
+        ):
+            ssl_config = None
         else:
-            ssl_private_key = None
-
-        ssl_certificate: SSLCertificate | None
-        if ssl_certificate_path is not None:
-            with Path(ssl_certificate_path).open("rb") as cert_file:
-                ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
-        else:
-            ssl_certificate = None
-
-        if ssl_private_key is not None and ssl_certificate is not None:
-            ssl_key_pair = ssl_private_key, ssl_certificate
-        elif ssl_private_key is None and ssl_certificate is None:
-            ssl_key_pair = None
-
-        if ssl_ca_chain_path is not None:
-            with Path(ssl_ca_chain_path).open("rb") as chain_file:
-                ssl_ca_chain = SSLCertificate.list_from_pem_bytes(chain_file.read())
-        else:
-            ssl_ca_chain = []
+            raise ValueError("Both SSL private key and certificate path must be provided")
 
         return cls.from_typed_values(
-            bind_to_address=IPv4Address(bind_to_address),
+            bind_to_address=bind_to_address,
             bind_to_port=bind_to_port,
-            external_host=external_host,
-            external_port=external_port,
-            ssl_key_pair=ssl_key_pair,
-            ssl_ca_chain=ssl_ca_chain,
+            ssl_config=ssl_config,
         )
-
-    @property
-    def peer_key_pair(self) -> tuple[PeerPrivateKey, PeerPublicKey] | None:
-        if self.ssl_config is not None:
-            private_key = PeerPrivateKey(self.ssl_config.private_key)
-            public_key = PeerPublicKey(self.ssl_config.certificate, self.ssl_config.ca_chain)
-            return (private_key, public_key)
-        return None
 
 
 @frozen
 class NodeServerConfig:
+    http_server_config: HTTPServerConfig
+    contact: Contact
     domain: Domain
     identity_client: IdentityClient
     pre_client: PREClient
     cbd_client: CBDClient
     peer_client: PeerClient
-    parent_logger: Logger
+    logger: Logger
     storage: BaseStorage
     seed_contacts: list[Contact]
     clock: BaseClock
 
     @classmethod
+    def from_typed_values(
+        cls,
+        *,
+        http_server_config: HTTPServerConfig,
+        external_host: str | None = None,
+        external_port: int | None = None,
+        domain: Domain,
+        identity_client: IdentityClient,
+        pre_client: PREClient,
+        cbd_client: CBDClient,
+        peer_client: PeerClient,
+        logger: Logger,
+        storage: BaseStorage = InMemoryStorage(),
+        seed_contacts: list[Contact] | None = None,
+        clock: BaseClock = SystemClock(),
+    ) -> "NodeServerConfig":
+        if (
+            http_server_config.ssl_config is not None
+            and http_server_config.ssl_config.certificate.declared_host != external_host
+        ):
+            raise ValueError(
+                "The declared external host is `{external_host}`, "
+                "but the given SSL certificate has `{ssl_config.certificate.declared_host}`"
+            )
+
+        external_host = external_host or str(http_server_config.bind_to_address)
+        external_port = external_port or http_server_config.bind_to_port
+
+        return cls(
+            http_server_config=http_server_config,
+            contact=Contact(external_host, external_port),
+            domain=domain,
+            identity_client=identity_client,
+            pre_client=pre_client,
+            cbd_client=cbd_client,
+            peer_client=peer_client,
+            logger=logger,
+            storage=storage,
+            seed_contacts=seed_contacts or [],
+            clock=clock,
+        )
+
+    @classmethod
     def from_config_values(
         cls,
         *,
+        bind_to_address: str | None,
+        bind_to_port: int | None,
+        external_host: str,
+        external_port: int | None,
+        ssl_private_key_path: str | None,
+        ssl_certificate_path: str | None,
+        ssl_ca_chain_path: str | None,
         identity_endpoint: str,
         pre_endpoint: str,
         cbd_endpoint: str,
@@ -214,10 +237,6 @@ class NodeServerConfig:
         pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
         cbd_client_factory: Callable[[str, Domain], CBDClient] = CBDClient.from_endpoint,
     ) -> "NodeServerConfig":
-        domain_ = Domain.from_string(domain)
-        identity_client = identity_client_factory(identity_endpoint, domain_)
-        pre_client = pre_client_factory(pre_endpoint, domain_)
-        cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         logger = make_logger(
             profile_name,
             "node",
@@ -225,18 +244,57 @@ class NodeServerConfig:
             log_to_file=log_to_file,
             debug=debug,
         )
+        clock = SystemClock()
+
+        if bind_to_address is None:
+            try:
+                bind_to_address = str(IPv4Address(external_host))
+            except ValueError as exc:
+                raise ValueError(
+                    "If `bind_to_address` is not given, it is taken "
+                    "to be equal to `external_host`, "
+                    f"which in this case must be an IPv4 address (got: {external_host})"
+                ) from exc
+
+        external_port = external_port or 9151
+        bind_to_port = bind_to_port or external_port
+
+        http_server_config = HTTPServerConfig.from_config_values(
+            bind_to_address=bind_to_address,
+            bind_to_port=bind_to_port,
+            ssl_private_key_path=ssl_private_key_path,
+            ssl_certificate_path=ssl_certificate_path,
+            ssl_ca_chain_path=ssl_ca_chain_path,
+        )
+
+        domain_ = Domain.from_string(domain)
+        identity_client = identity_client_factory(identity_endpoint, domain_)
+        pre_client = pre_client_factory(pre_endpoint, domain_)
+        cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
         peer_client = PeerClient()
 
-        return cls(
+        return cls.from_typed_values(
+            http_server_config=http_server_config,
+            external_host=external_host,
+            external_port=external_port,
             domain=domain_,
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
             peer_client=peer_client,
-            parent_logger=logger,
+            logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
-            clock=SystemClock(),
+            clock=clock,
         )
+
+    @property
+    def peer_key_pair(self) -> tuple[PeerPrivateKey, PeerPublicKey] | None:
+        if self.http_server_config.ssl_config is not None:
+            ssl_config = self.http_server_config.ssl_config
+            private_key = PeerPrivateKey(ssl_config.private_key)
+            public_key = PeerPublicKey(ssl_config.certificate, ssl_config.ca_chain)
+            return (private_key, public_key)
+        return None

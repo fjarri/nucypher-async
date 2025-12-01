@@ -11,6 +11,7 @@ from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityAddress
+from nucypher_async.drivers.peer import Contact
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,
@@ -22,8 +23,8 @@ from nucypher_async.mocks import (
     MockPeerServerHandle,
     MockPREClient,
 )
-from nucypher_async.proxy import ProxyConfig, ProxyServer, SSLConfig
-from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
+from nucypher_async.proxy import ProxyServer, ProxyServerConfig
+from nucypher_async.server import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils import logging
 from nucypher_async.utils.ssl import SSLCertificate, SSLPrivateKey
@@ -118,30 +119,32 @@ async def lonely_nodes(
             staking_provider_address, operators[i].address, AmountT.ether(40000)
         )
 
-        peer_server_config = PeerServerConfig.from_typed_values(
-            external_host="127.0.0.1",
-            external_port=9150 + i,
+        logger = logger.get_child(str(i))
+
+        http_server_config = HTTPServerConfig.from_typed_values(
+            bind_to_address=IPv4Address("127.0.0.1"),
+            bind_to_port=9150 + i,
         )
 
-        config = NodeServerConfig(
+        contact = Contact(str(http_server_config.bind_to_address), http_server_config.bind_to_port)
+
+        config = NodeServerConfig.from_typed_values(
+            http_server_config=http_server_config,
             domain=Domain.MAINNET,
             # TODO: find a way to ensure the client's domains correspond to the domain set above
             identity_client=mock_identity_client,
             pre_client=mock_pre_client,
             cbd_client=mock_cbd_client,
-            peer_client=MockPeerClient(mock_p2p_network, peer_server_config.contact),
-            parent_logger=logger.get_child(str(i)),
-            storage=InMemoryStorage(),
-            seed_contacts=[],
+            peer_client=MockPeerClient(mock_p2p_network, contact),
+            logger=logger,
             clock=mock_clock,
         )
 
         server = await NodeServer.async_init(
+            config=config,
             operator=operators[i],
             reencryptor=reencryptors[i],
             decryptor=decryptors[i],
-            peer_server_config=peer_server_config,
-            config=config,
         )
         handle = mock_p2p_network.add_server(server)
         servers.append((handle, server))
@@ -213,16 +216,22 @@ async def proxy_server(
 
     ssl_config = SSLConfig(private_key=ssl_private_key, certificate=ssl_certificate, ca_chain=[])
 
-    config = ProxyConfig(
+    logger = logger.get_child("ProxyServer")
+
+    http_server_config = HTTPServerConfig.from_typed_values(
         bind_to_address=IPv4Address(host),
         bind_to_port=port,
         ssl_config=ssl_config,
+    )
+
+    config = ProxyServerConfig(
+        http_server_config=http_server_config,
         domain=Domain.MAINNET,
         identity_client=mock_identity_client,
         pre_client=mock_pre_client,
         cbd_client=mock_cbd_client,
         peer_client=MockPeerClient(mock_p2p_network),
-        parent_logger=logger,
+        logger=logger,
         storage=InMemoryStorage(),
         seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         clock=mock_clock,

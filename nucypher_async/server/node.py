@@ -27,7 +27,7 @@ from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .config import NodeServerConfig, PeerServerConfig
+from .config import NodeServerConfig
 from .status import render_status
 
 
@@ -35,45 +35,44 @@ class NodeServer(BasePeerServer, BaseNodeServer):
     @classmethod
     async def async_init(
         cls,
+        config: NodeServerConfig,
         operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
-        peer_server_config: PeerServerConfig,
-        config: NodeServerConfig,
     ) -> "NodeServer":
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(session, operator.address)
 
         return cls(
+            config=config,
             operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
-            peer_server_config=peer_server_config,
-            config=config,
             staking_provider_address=staking_provider_address,
         )
 
     def __init__(
         self,
+        config: NodeServerConfig,
         operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
-        peer_server_config: PeerServerConfig,
-        config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
         self.operator = operator
         self.reencryptor = reencryptor
         self.decryptor = decryptor
 
+        self._config = config
+
         self._clock = config.clock
-        self._logger = config.parent_logger.get_child("NodeServer")
+        self._logger = config.logger.get_child("NodeServer")
         self._storage = config.storage
 
         node_info = self._storage.get_my_node_info()
         maybe_node: VerifiedNodeInfo | None = None
 
-        peer_key_pair = peer_server_config.peer_key_pair
+        peer_key_pair = config.peer_key_pair
         if peer_key_pair is not None:
             peer_private_key, peer_public_key = peer_key_pair
         else:
@@ -90,7 +89,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                     operator=operator,
                     reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
-                    contact=peer_server_config.contact,
+                    contact=config.contact,
                     domain=config.domain,
                     peer_public_key=peer_public_key,
                     peer_private_key=peer_private_key,
@@ -113,7 +112,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 encrypting_key=self.reencryptor.encrypting_key,
                 dkg_key=self.decryptor.public_key,
                 staking_provider_address=staking_provider_address,
-                contact=peer_server_config.contact,
+                contact=config.contact,
                 domain=config.domain,
             )
             self._storage.set_my_node_info(self._node)
@@ -132,7 +131,6 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         )
 
         self._peer_private_key = peer_private_key
-        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
 
         self._pre_client = config.pre_client
         self._cbd_client = config.cbd_client
@@ -153,7 +151,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         return self._peer_private_key
 
     def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self._bind_pair
+        return (
+            self._config.http_server_config.bind_to_address,
+            self._config.http_server_config.bind_to_port,
+        )
 
     def into_servable(self) -> ServerWrapper:
         return make_node_asgi_app(self)

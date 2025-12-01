@@ -14,7 +14,7 @@ from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from . import schema
 from .asgi_app import BaseProxyServer, HTTPError, make_proxy_asgi_app
-from .config import ProxyConfig
+from .config import ProxyServerConfig
 from .schema import (
     JSON,
     GetUrsulasRequest,
@@ -29,10 +29,10 @@ from .schema import (
 
 
 class ProxyServer(HTTPServable, BaseProxyServer):
-    def __init__(self, config: ProxyConfig):
+    def __init__(self, config: ProxyServerConfig):
         self._clock = config.clock
         self._config = config
-        self._logger = config.parent_logger.get_child("ProxyServer")
+        self._logger = config.logger
         self._network_client = NetworkClient(
             peer_client=config.peer_client,
             identity_client=config.identity_client,
@@ -45,6 +45,11 @@ class ProxyServer(HTTPServable, BaseProxyServer):
         self._pre_client = config.pre_client
         self._cbd_client = config.cbd_client
         self._domain = config.domain
+
+        # TODO: generate self-signed ones if these are missing in the config?
+        if config.http_server_config.ssl_config is None:
+            raise ValueError("SSL keypair must be specified for a proxy server")
+        self._ssl_config = config.http_server_config.ssl_config
 
         self._verification_task = BackgroundTask(
             worker=self._network_client.verification_task, logger=self._logger
@@ -61,16 +66,19 @@ class ProxyServer(HTTPServable, BaseProxyServer):
         self.started = False
 
     def bind_pair(self) -> tuple[IPv4Address, int]:
-        return (self._config.bind_to_address, self._config.bind_to_port)
+        return (
+            self._config.http_server_config.bind_to_address,
+            self._config.http_server_config.bind_to_port,
+        )
 
     def ssl_certificate(self) -> SSLCertificate:
-        return self._config.ssl_config.certificate
+        return self._ssl_config.certificate
 
     def ssl_private_key(self) -> SSLPrivateKey:
-        return self._config.ssl_config.private_key
+        return self._ssl_config.private_key
 
     def ssl_ca_chain(self) -> list[SSLCertificate]:
-        return self._config.ssl_config.ca_chain
+        return self._ssl_config.ca_chain
 
     def into_servable(self) -> HTTPServableApp:
         return make_proxy_asgi_app(self)

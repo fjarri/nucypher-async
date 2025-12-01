@@ -12,8 +12,8 @@ from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .drivers.peer import PeerServerHandle
 from .master_key import EncryptedMasterKey, MasterKey
-from .proxy import ProxyConfig, ProxyServer
-from .server import NodeServer, NodeServerConfig, PeerServerConfig
+from .proxy import ProxyServer, ProxyServerConfig
+from .server import NodeServer, NodeServerConfig
 
 
 async def make_node_server(
@@ -41,16 +41,15 @@ async def make_node_server(
     reencryptor = Reencryptor(master_key)
     decryptor = Decryptor(master_key)
 
-    # TODO: put it in `PeerServerConfig.from_nucypher_config()` or something?
-    peer_server_config = PeerServerConfig.from_config_values(
+    # TODO: put it in `NodeServerConfig.from_nucypher_config()` or something?
+    config = NodeServerConfig.from_config_values(
         external_host=config["rest_host"],
-        external_port=config["rest_port"],
+        external_port=config.get("rest_port", None),
+        bind_to_address=config.get("bind_to_address", None),
+        bind_to_port=config.get("bind_to_port", None),
         ssl_certificate_path=config.get("ssl_certificate", None),
         ssl_private_key_path=config.get("ssl_private_key", None),
         ssl_ca_chain_path=config.get("ssl_ca_chain", None),
-    )
-
-    config = NodeServerConfig.from_config_values(
         profile_name=config.get("profile_name", "node-" + config["domain"]),
         domain=config["domain"],
         identity_endpoint=config["eth_provider_uri"],
@@ -63,11 +62,10 @@ async def make_node_server(
     )
 
     return await NodeServer.async_init(
+        config=config,
         operator=operator,
         reencryptor=reencryptor,
         decryptor=decryptor,
-        peer_server_config=peer_server_config,
-        config=config,
     )
 
 
@@ -76,7 +74,7 @@ def make_proxy_server(config_path: str) -> ProxyServer:
         config = json.load(file)
 
     # TODO: check the format of the config the reference implementation uses
-    config = ProxyConfig.from_config_values(
+    config = ProxyServerConfig.from_config_values(
         bind_to_address=config["bind_to_address"],
         bind_to_port=config["bind_to_port"],
         ssl_certificate_path=config["ssl_certificate"],
