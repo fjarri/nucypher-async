@@ -9,7 +9,7 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.cbd import CBDClient
 from ..drivers.identity import IdentityClient
-from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
+from ..drivers.peer import Contact, PeerClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
@@ -17,6 +17,7 @@ from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFile
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
+# TODO: handle in a centralized way
 def seed_contacts_for_domain(domain: Domain) -> list[Contact]:  # noqa: RET503
     if domain == Domain.MAINNET:
         return [Contact("mainnet.nucypher.network", 9151)]
@@ -71,93 +72,19 @@ class SSLConfig:
     private_key: SSLPrivateKey
     ca_chain: list[SSLCertificate]
 
-
-@frozen
-class PeerServerConfig:
-    bind_to_address: IPv4Address
-    bind_to_port: int
-    contact: Contact
-    ssl_config: SSLConfig | None
-
-    @classmethod
-    def from_typed_values(
-        cls,
-        *,
-        bind_to_address: IPv4Address | None = None,
-        bind_to_port: int | None = None,
-        external_host: str,
-        external_port: int = 9151,
-        ssl_key_pair: tuple[SSLPrivateKey, SSLCertificate] | None = None,
-        ssl_ca_chain: list[SSLCertificate] | None = None,
-    ) -> "PeerServerConfig":
-        if bind_to_address is None:
-            try:
-                bind_to_address = IPv4Address(external_host)
-            except ValueError as exc:
-                raise ValueError(
-                    "If `bind_to_address` is not given, it is taken "
-                    "to be equal to `external_host`, "
-                    f"which in this case must be an IPv4 address (got: {external_host})"
-                ) from exc
-
-        if ssl_key_pair is not None:
-            ssl_private_key, ssl_certificate = ssl_key_pair
-            ssl_config = SSLConfig(
-                private_key=ssl_private_key,
-                certificate=ssl_certificate,
-                ca_chain=ssl_ca_chain or [],
-            )
-        else:
-            ssl_config = None
-
-        if ssl_config is not None and ssl_config.certificate.declared_host != external_host:
-            raise ValueError(
-                "The declared external host is `{external_host}`, "
-                "but the given SSL certificate has `{ssl_config.certificate.declared_host}`"
-            )
-
-        # TODO: check that the SSL certificate corresponds to the given private key
-
-        # TODO: check that certificates in the chainare in the correct order?
-        # (root certificate last)
-
-        return cls(
-            bind_to_address=bind_to_address,
-            bind_to_port=bind_to_port if bind_to_port is not None else external_port,
-            contact=Contact(external_host, external_port),
-            ssl_config=ssl_config,
-        )
-
     @classmethod
     def from_config_values(
         cls,
         *,
-        bind_to_address: str = "127.0.0.1",
-        bind_to_port: int | None = None,
-        external_host: str,
-        external_port: int = 9151,
-        ssl_private_key_path: str | None,
-        ssl_certificate_path: str | None,
+        ssl_private_key_path: str,
+        ssl_certificate_path: str,
         ssl_ca_chain_path: str | None = None,
-    ) -> "PeerServerConfig":
-        ssl_private_key: SSLPrivateKey | None
-        if ssl_private_key_path is not None:
-            with Path(ssl_private_key_path).open("rb") as pk_file:
-                ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
-        else:
-            ssl_private_key = None
+    ) -> "SSLConfig":
+        with Path(ssl_private_key_path).open("rb") as pk_file:
+            ssl_private_key = SSLPrivateKey.from_pem_bytes(pk_file.read())
 
-        ssl_certificate: SSLCertificate | None
-        if ssl_certificate_path is not None:
-            with Path(ssl_certificate_path).open("rb") as cert_file:
-                ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
-        else:
-            ssl_certificate = None
-
-        if ssl_private_key is not None and ssl_certificate is not None:
-            ssl_key_pair = ssl_private_key, ssl_certificate
-        elif ssl_private_key is None and ssl_certificate is None:
-            ssl_key_pair = None
+        with Path(ssl_certificate_path).open("rb") as cert_file:
+            ssl_certificate = SSLCertificate.from_pem_bytes(cert_file.read())
 
         if ssl_ca_chain_path is not None:
             with Path(ssl_ca_chain_path).open("rb") as chain_file:
@@ -165,27 +92,19 @@ class PeerServerConfig:
         else:
             ssl_ca_chain = []
 
-        return cls.from_typed_values(
-            bind_to_address=IPv4Address(bind_to_address),
-            bind_to_port=bind_to_port,
-            external_host=external_host,
-            external_port=external_port,
-            ssl_key_pair=ssl_key_pair,
-            ssl_ca_chain=ssl_ca_chain,
+        return cls(
+            certificate=ssl_certificate,
+            private_key=ssl_private_key,
+            ca_chain=ssl_ca_chain,
         )
-
-    @property
-    def peer_key_pair(self) -> tuple[PeerPrivateKey, PeerPublicKey] | None:
-        if self.ssl_config is not None:
-            private_key = PeerPrivateKey(self.ssl_config.private_key)
-            public_key = PeerPublicKey(self.ssl_config.certificate, self.ssl_config.ca_chain)
-            return (private_key, public_key)
-        return None
 
 
 @frozen
-class NodeServerConfig:
+class ProxyConfig:
     domain: Domain
+    bind_to_address: IPv4Address
+    bind_to_port: int
+    ssl_config: SSLConfig
     identity_client: IdentityClient
     pre_client: PREClient
     cbd_client: CBDClient
@@ -199,42 +118,56 @@ class NodeServerConfig:
     def from_config_values(
         cls,
         *,
+        bind_to_address: str = "127.0.0.1",
+        bind_to_port: int,
+        ssl_private_key_path: str,
+        ssl_certificate_path: str,
+        ssl_ca_chain_path: str | None = None,
         identity_endpoint: str,
         pre_endpoint: str,
         cbd_endpoint: str,
+        debug: bool = False,
+        profile_name: str = "proxy",
         domain: str = "mainnet",
         log_to_console: bool = True,
         log_to_file: bool = True,
         persistent_storage: bool = True,
-        debug: bool = False,
-        profile_name: str = "node",
         identity_client_factory: Callable[
             [str, Domain], IdentityClient
         ] = IdentityClient.from_endpoint,
         pre_client_factory: Callable[[str, Domain], PREClient] = PREClient.from_endpoint,
         cbd_client_factory: Callable[[str, Domain], CBDClient] = CBDClient.from_endpoint,
-    ) -> "NodeServerConfig":
+    ) -> "ProxyConfig":
         domain_ = Domain.from_string(domain)
         identity_client = identity_client_factory(identity_endpoint, domain_)
         pre_client = pre_client_factory(pre_endpoint, domain_)
         cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         logger = make_logger(
             profile_name,
-            "node",
+            "ptoxy",
             log_to_console=log_to_console,
             log_to_file=log_to_file,
             debug=debug,
         )
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
-        peer_client = PeerClient()
+
+        # TODO: generate self-signed ones if these are missing in the config?
+        ssl_config = SSLConfig.from_config_values(
+            ssl_private_key_path=ssl_private_key_path,
+            ssl_certificate_path=ssl_certificate_path,
+            ssl_ca_chain_path=ssl_ca_chain_path,
+        )
 
         return cls(
+            bind_to_address=IPv4Address(bind_to_address),
+            bind_to_port=bind_to_port,
+            ssl_config=ssl_config,
             domain=domain_,
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=peer_client,
+            peer_client=PeerClient(),
             parent_logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,

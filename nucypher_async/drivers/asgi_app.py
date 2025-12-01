@@ -23,7 +23,6 @@ from starlette.routing import Route
 
 from ..base.node import BaseNodeServer, NodeRoutes
 from ..base.peer_error import InactivePolicy, ServerSidePeerError
-from ..base.porter import BasePorterServer, PorterRoutes
 from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..utils.logging import Logger
@@ -153,43 +152,6 @@ def make_node_asgi_app(node_server: BaseNodeServer) -> ServerWrapper:
         Route(f"/{NodeRoutes.CONDITION_CHAINS}", condition_chains),
         Route(f"/{NodeRoutes.DECRYPT}", decrypt, methods=["POST"]),
         Route(f"/{NodeRoutes.STATUS}", status),
-    ]
-
-    app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)
-
-    # We don't have a typing package shared between Starlette and Hypercorn,
-    # so this will have to do
-    return cast("ServerWrapper", app)
-
-
-def make_porter_asgi_app(porter_server: BasePorterServer) -> ServerWrapper:
-    """Returns an ASGI app serving as a front-end for a Porter."""
-    logger = porter_server.logger().get_child("App")
-
-    async def get_ursulas(request: Request) -> Response:
-        request_body = await request.json() if await request.body() else None
-        return await rest_api_call(
-            logger,
-            porter_server.endpoint_get_ursulas(dict(request.query_params), request_body),
-        )
-
-    async def retrieve_cfrags(request: Request) -> Response:
-        request_body = await request.json() if await request.body() else {}
-        return await rest_api_call(logger, porter_server.endpoint_retrieve_cfrags(request_body))
-
-    async def status(_request: Request) -> Response:
-        return await html_call(logger, porter_server.endpoint_status())
-
-    async def on_startup(nursery: trio.Nursery) -> None:
-        await porter_server.start(nursery)
-
-    async def on_shutdown(_nursery: trio.Nursery) -> None:
-        await porter_server.stop()
-
-    routes = [
-        Route(f"/{PorterRoutes.GET_URSULAS}", get_ursulas),
-        Route(f"/{PorterRoutes.RETRIEVE_CFRAGS}", retrieve_cfrags, methods=["POST"]),
-        Route(f"/{PorterRoutes.STATUS}", status),
     ]
 
     app = Starlette(lifespan=make_lifespan(on_startup, on_shutdown), routes=routes)

@@ -14,9 +14,8 @@ from nucypher_async.client.cbd import LocalCBDClient
 from nucypher_async.client.network import NetworkClient
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.cbd import CBDAccount, CBDAccountSigner, CBDClient
-from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.peer import Contact, PeerClient
+from nucypher_async.drivers.peer import Contact, PeerClient, PeerServerHandle
 from nucypher_async.drivers.pre import PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
@@ -46,7 +45,7 @@ class Context(NamedTuple):
 
 async def run_local_node_fleet(
     context: Context, nursery: trio.Nursery
-) -> tuple[list[HTTPServerHandle], Contact]:
+) -> tuple[list[PeerServerHandle], Contact]:
     handles = []
     for i in range(3):
         master_key = MasterKey.random()
@@ -92,7 +91,7 @@ async def run_local_node_fleet(
             peer_server_config=peer_server_config,
             config=config,
         )
-        handle = HTTPServerHandle(server)
+        handle = PeerServerHandle(server)
         await nursery.start(handle.startup)
         handles.append(handle)
 

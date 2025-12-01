@@ -1,20 +1,26 @@
 """Encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``)."""
 
 import os
+from abc import ABC, abstractmethod
+from ipaddress import IPv4Address
 from ssl import SSLContext
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypeAlias, cast
 
 import hypercorn
 import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
+from hypercorn.typing import ASGIFramework
 
 from ..utils import temp_file
+from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from .peer import BasePeerServer
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging
+
+
+HTTPServableApp: TypeAlias = ASGIFramework
 
 
 class InMemoryCertificateConfig(Config):
@@ -72,14 +78,14 @@ class InMemoryCertificateConfig(Config):
         return True
 
 
-def make_config(server: BasePeerServer) -> InMemoryCertificateConfig:
+def make_config(server: "HTTPServable") -> InMemoryCertificateConfig:
     config = InMemoryCertificateConfig(
-        ssl_certificate=server.secure_contact().public_key._as_ssl_certificate(),  # noqa: SLF001
-        ssl_private_key=server.peer_private_key()._as_ssl_private_key(),  # noqa: SLF001
-        ssl_ca_chain=server.secure_contact().public_key._as_ssl_ca_chain(),  # noqa: SLF001
+        ssl_certificate=server.ssl_certificate(),
+        ssl_private_key=server.ssl_private_key(),
+        ssl_ca_chain=server.ssl_ca_chain(),
     )
 
-    host, port = server.bind_pair()
+    address, port = server.bind_pair()
 
     # Since the config accepts a class and not an instance of a logger,
     # we have to pass the parent logger through via an ad-hoc class.
@@ -93,11 +99,31 @@ def make_config(server: BasePeerServer) -> InMemoryCertificateConfig:
             # so we can safely cast.
             self.error_logger = cast("logging.Logger", parent_logger.get_child("HTTPServer"))
 
-    config.bind = [f"{host}:{port}"]
+    config.bind = [f"{address}:{port}"]
     config.worker_class = "trio"
     config.logger_class = BoundLogger
 
     return config
+
+
+class HTTPServable(ABC):
+    @abstractmethod
+    def into_servable(self) -> HTTPServableApp: ...
+
+    @abstractmethod
+    def bind_pair(self) -> tuple[IPv4Address, int]: ...
+
+    @abstractmethod
+    def logger(self) -> Logger: ...
+
+    @abstractmethod
+    def ssl_certificate(self) -> SSLCertificate: ...
+
+    @abstractmethod
+    def ssl_private_key(self) -> SSLPrivateKey: ...
+
+    @abstractmethod
+    def ssl_ca_chain(self) -> list[SSLCertificate]: ...
 
 
 class HTTPServerHandle:
@@ -106,7 +132,7 @@ class HTTPServerHandle:
     Can be used to shut it down.
     """
 
-    def __init__(self, server: BasePeerServer):
+    def __init__(self, server: HTTPServable):
         self.server = server
         self.app = server.into_servable()
         self._shutdown_event = trio.Event()

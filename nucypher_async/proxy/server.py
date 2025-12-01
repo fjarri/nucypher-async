@@ -4,16 +4,19 @@ from ipaddress import IPv4Address
 import attrs
 import trio
 
-from .. import schema
-from ..base.porter import BasePorterServer
-from ..base.server import ServerWrapper
-from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
-from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..schema.porter import (
+from ..drivers.http_server import HTTPServable, HTTPServableApp
+from ..server.status import render_status
+from ..utils import BackgroundTask
+from ..utils.logging import Logger
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
+from . import schema
+from .asgi_app import BaseProxyServer, HTTPError, make_proxy_asgi_app
+from .config import ProxyConfig
+from .schema import (
+    JSON,
     GetUrsulasRequest,
     GetUrsulasResponse,
     GetUrsulasResult,
@@ -23,17 +26,13 @@ from ..schema.porter import (
     ServerRetrieveCFragsResult,
     UrsulaResult,
 )
-from ..utils import BackgroundTask
-from ..utils.logging import Logger
-from .config import PeerServerConfig, PorterServerConfig
-from .status import render_status
 
 
-class PorterServer(BasePeerServer, BasePorterServer):
-    def __init__(self, peer_server_config: PeerServerConfig, config: PorterServerConfig):
+class ProxyServer(HTTPServable, BaseProxyServer):
+    def __init__(self, config: ProxyConfig):
         self._clock = config.clock
         self._config = config
-        self._logger = config.parent_logger.get_child("PorterServer")
+        self._logger = config.parent_logger.get_child("ProxyServer")
         self._network_client = NetworkClient(
             peer_client=config.peer_client,
             identity_client=config.identity_client,
@@ -44,19 +43,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
             storage=config.storage,
         )
         self._pre_client = config.pre_client
-
-        self._contact = peer_server_config.contact
-
-        # TODO: generate self-signed ones if these are missing in the config
-        peer_key_pair = peer_server_config.peer_key_pair
-        if peer_key_pair is not None:
-            self._peer_private_key, self._peer_public_key = peer_key_pair
-        else:
-            raise NotImplementedError
-
-        self._secure_contact = SecureContact(peer_server_config.contact, self._peer_public_key)
-        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
-
+        self._cbd_client = config.cbd_client
         self._domain = config.domain
 
         self._verification_task = BackgroundTask(
@@ -73,17 +60,20 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         self.started = False
 
-    def secure_contact(self) -> SecureContact:
-        return self._secure_contact
-
-    def peer_private_key(self) -> PeerPrivateKey:
-        return self._peer_private_key
-
     def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self._bind_pair
+        return (self._config.bind_to_address, self._config.bind_to_port)
 
-    def into_servable(self) -> ServerWrapper:
-        return make_porter_asgi_app(self)
+    def ssl_certificate(self) -> SSLCertificate:
+        return self._config.ssl_config.certificate
+
+    def ssl_private_key(self) -> SSLPrivateKey:
+        return self._config.ssl_config.private_key
+
+    def ssl_ca_chain(self) -> list[SSLCertificate]:
+        return self._config.ssl_config.ca_chain
+
+    def into_servable(self) -> HTTPServableApp:
+        return make_proxy_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger

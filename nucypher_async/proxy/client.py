@@ -3,16 +3,18 @@ from collections.abc import Iterable
 from http import HTTPStatus
 
 import httpx
-from nucypher_core import Context, RetrievalKit, TreasureMap
+from nucypher_core import Context, TreasureMap
+from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
-from .. import schema
-from ..characters.pre import DelegatorCard, RecipientCard
+from ..characters.pre import DelegatorCard, MessageKit, RecipientCard, RetrievalKit
+from ..client.pre import BasePREConsumerClient, PRERetrievalOutcome
 from ..drivers.identity import IdentityAddress
-from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
+from . import schema
+from .schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
 
-class PorterClient:
+class ProxyClient:
     def __init__(self, host: str, port: int, http_client: httpx.AsyncClient | None = None):
         if http_client is not None:
             self._http_client = http_client
@@ -55,7 +57,7 @@ class PorterClient:
     async def retrieve_cfrags(
         self,
         treasure_map: TreasureMap,
-        retrieval_kits: Iterable[RetrievalKit],
+        retrieval_kits: Iterable[CoreRetrievalKit],
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
@@ -96,3 +98,34 @@ class PorterClient:
             processed_response.append(processed_result)
 
         return processed_response
+
+
+class ProxyPREClient(BasePREConsumerClient):
+    def __init__(
+        self, proxy_host: str, proxy_port: int, http_client: httpx.AsyncClient | None = None
+    ):
+        self._proxy_client = ProxyClient(proxy_host, proxy_port, http_client=http_client)
+
+    async def retrieve(
+        self,
+        treasure_map: TreasureMap,
+        message_kit: MessageKit | RetrievalKit,
+        delegator_card: DelegatorCard,
+        recipient_card: RecipientCard,
+        context: Context | None = None,
+    ) -> PRERetrievalOutcome:
+        # TODO: support multi-step retrieval in Proxy
+        # (that is, when some parts were already retrieved,
+        # we can list those addresses in RetrievalKit)
+        # TODO: support retrieving multiple kits
+        retrieval_kits = [
+            message_kit.core_retrieval_kit
+            if isinstance(message_kit, RetrievalKit)
+            else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
+        ]
+        cfrags = await self._proxy_client.retrieve_cfrags(
+            treasure_map, retrieval_kits, delegator_card, recipient_card, context
+        )
+
+        # TODO: collect errors as well
+        return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

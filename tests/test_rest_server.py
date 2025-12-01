@@ -7,9 +7,8 @@ from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.http_server import HTTPServerHandle
 from nucypher_async.drivers.identity import IdentityAccount, IdentityAddress
-from nucypher_async.drivers.peer import PeerClient
+from nucypher_async.drivers.peer import PeerClient, PeerServerHandle
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
@@ -54,7 +53,7 @@ def node_server() -> NodeServer:
 
 
 async def test_client_real_server(nursery: trio.Nursery, node_server: NodeServer) -> None:
-    handle = HTTPServerHandle(node_server)
+    handle = PeerServerHandle(node_server)
     await nursery.start(handle.startup)
 
     client = NodeClient(PeerClient())

@@ -1,6 +1,7 @@
 import itertools
 import os
 from collections.abc import AsyncIterator
+from ipaddress import IPv4Address
 
 import pytest
 import trio
@@ -14,19 +15,15 @@ from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,
     MockClock,
-    MockHTTPServerHandle,
+    MockHTTPNetwork,
     MockIdentityClient,
-    MockNetwork,
+    MockP2PNetwork,
     MockPeerClient,
+    MockPeerServerHandle,
     MockPREClient,
 )
-from nucypher_async.server import (
-    NodeServer,
-    NodeServerConfig,
-    PeerServerConfig,
-    PorterServer,
-    PorterServerConfig,
-)
+from nucypher_async.proxy import ProxyConfig, ProxyServer, SSLConfig
+from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
 from nucypher_async.storage import InMemoryStorage
 from nucypher_async.utils import logging
 from nucypher_async.utils.ssl import SSLCertificate, SSLPrivateKey
@@ -76,8 +73,13 @@ def decryptors(master_keys: list[MasterKey]) -> list[Decryptor]:
 
 
 @pytest.fixture
-def mock_network(nursery: trio.Nursery) -> MockNetwork:
-    return MockNetwork(nursery)
+def mock_p2p_network(nursery: trio.Nursery) -> MockP2PNetwork:
+    return MockP2PNetwork(nursery)
+
+
+@pytest.fixture
+def mock_http_network(nursery: trio.Nursery) -> MockHTTPNetwork:
+    return MockHTTPNetwork(nursery)
 
 
 @pytest.fixture
@@ -97,7 +99,7 @@ def mock_cbd_client() -> MockCBDClient:
 
 @pytest.fixture
 async def lonely_nodes(
-    mock_network: MockNetwork,
+    mock_p2p_network: MockP2PNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     mock_cbd_client: MockCBDClient,
@@ -106,7 +108,7 @@ async def lonely_nodes(
     decryptors: list[Decryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
-) -> list[tuple[MockHTTPServerHandle, NodeServer]]:
+) -> list[tuple[MockPeerServerHandle, NodeServer]]:
     servers = []
 
     for i in range(10):
@@ -127,7 +129,7 @@ async def lonely_nodes(
             identity_client=mock_identity_client,
             pre_client=mock_pre_client,
             cbd_client=mock_cbd_client,
-            peer_client=MockPeerClient(mock_network, "127.0.0.1"),
+            peer_client=MockPeerClient(mock_p2p_network, peer_server_config.contact),
             parent_logger=logger.get_child(str(i)),
             storage=InMemoryStorage(),
             seed_contacts=[],
@@ -141,7 +143,7 @@ async def lonely_nodes(
             peer_server_config=peer_server_config,
             config=config,
         )
-        handle = mock_network.add_server(server)
+        handle = mock_p2p_network.add_server(server)
         servers.append((handle, server))
 
     return servers
@@ -149,7 +151,7 @@ async def lonely_nodes(
 
 @pytest.fixture
 async def chain_seeded_nodes(
-    lonely_nodes: list[tuple[MockHTTPServerHandle, NodeServer]],
+    lonely_nodes: list[tuple[MockPeerServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.
@@ -168,7 +170,7 @@ async def chain_seeded_nodes(
 @pytest.fixture
 async def fully_learned_nodes(
     mock_identity_client: MockIdentityClient,
-    lonely_nodes: list[tuple[MockHTTPServerHandle, NodeServer]],
+    lonely_nodes: list[tuple[MockPeerServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.
@@ -192,39 +194,43 @@ async def fully_learned_nodes(
 
 
 @pytest.fixture
-async def porter_server(
-    mock_network: MockNetwork,
+async def proxy_server(
+    mock_p2p_network: MockP2PNetwork,
+    mock_http_network: MockHTTPNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
+    mock_cbd_client: MockCBDClient,
     fully_learned_nodes: list[NodeServer],
     logger: logging.Logger,
     mock_clock: MockClock,
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-) -> AsyncIterator[PorterServer]:
+) -> AsyncIterator[ProxyServer]:
     host = "127.0.0.1"
     port = 9000
+
     ssl_private_key = SSLPrivateKey.from_seed(b"1231234")
     ssl_certificate = SSLCertificate.self_signed(mock_clock.utcnow(), ssl_private_key, host)
 
-    peer_server_config = PeerServerConfig.from_typed_values(
-        external_host="127.0.0.1",
-        external_port=port,
-        ssl_key_pair=(ssl_private_key, ssl_certificate),
-    )
+    ssl_config = SSLConfig(private_key=ssl_private_key, certificate=ssl_certificate, ca_chain=[])
 
-    config = PorterServerConfig(
+    config = ProxyConfig(
+        bind_to_address=IPv4Address(host),
+        bind_to_port=port,
+        ssl_config=ssl_config,
         domain=Domain.MAINNET,
         identity_client=mock_identity_client,
         pre_client=mock_pre_client,
-        peer_client=MockPeerClient(mock_network, host),
+        cbd_client=mock_cbd_client,
+        peer_client=MockPeerClient(mock_p2p_network),
         parent_logger=logger,
         storage=InMemoryStorage(),
         seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         clock=mock_clock,
     )
-    server = PorterServer(peer_server_config=peer_server_config, config=config)
 
-    handle = mock_network.add_server(server)
+    server = ProxyServer(config)
+
+    handle = mock_http_network.add_server(server)
 
     await handle.startup()
     yield server

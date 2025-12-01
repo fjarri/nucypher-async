@@ -12,7 +12,7 @@ from hypercorn.typing import (
     LifespanStartupEvent,
 )
 
-from ..drivers.peer import BasePeerServer
+from ..drivers.http_server import HTTPServable
 from ..utils.ssl import SSLCertificate
 
 
@@ -46,7 +46,7 @@ class LifespanManager:
 
 
 class MockHTTPServerHandle:
-    def __init__(self, network: "MockNetwork", host: str, port: int):
+    def __init__(self, network: "MockHTTPNetwork", host: str, port: int):
         self._network = network
         self._host = host
         self._port = port
@@ -58,20 +58,20 @@ class MockHTTPServerHandle:
         await self._network.shutdown(self._host, self._port)
 
 
-class MockNetwork:
+class MockHTTPNetwork:
     def __init__(self, nursery: trio.Nursery):
         self._known_servers: dict[tuple[str, int], tuple[SSLCertificate, LifespanManager]] = {}
         self._nursery = nursery
 
-    def add_server(self, server: BasePeerServer) -> MockHTTPServerHandle:
+    def add_server(self, server: HTTPServable) -> MockHTTPServerHandle:
         app = server.into_servable()
         manager = LifespanManager(app)
-        certificate = server.secure_contact().public_key._as_ssl_certificate()  # noqa: SLF001
-        contact = server.secure_contact().contact
-        host, port = contact.host, contact.port
-        assert (host, port) not in self._known_servers
-        self._known_servers[(host, port)] = (certificate, manager)
-        return MockHTTPServerHandle(self, host, port)
+        certificate = server.ssl_certificate()
+        host, port = server.bind_pair()
+        str_host = str(host)
+        assert (str_host, port) not in self._known_servers
+        self._known_servers[(str_host, port)] = (certificate, manager)
+        return MockHTTPServerHandle(self, str_host, port)
 
     async def startup(self, host: str, port: int) -> None:
         _certificate, manager = self._known_servers[(host, port)]
@@ -86,13 +86,10 @@ class MockNetwork:
 
 
 class MockHTTPClient:
-    def __init__(self, mock_network: MockNetwork, host: str, certificate: SSLCertificate):
-        # TODO: a weird separation here: the target host's certificate
-        # is provided in the constructor, but then the target host can be selected
-        # at will in `_request()`.
+    def __init__(self, mock_network: MockHTTPNetwork, host: str = "mock_hostname"):
+        # TODO: do we actually need to be able to specify the client's host?
         self._mock_network = mock_network
         self._host = host
-        self._certificate = certificate
 
     def as_httpx_async_client(self) -> httpx.AsyncClient:
         # We implement all the methods we need for it to act as one
@@ -108,11 +105,11 @@ class MockHTTPClient:
         url_parts = urlparse(url)
         assert url_parts.hostname is not None, "Hostname is missing from the url"
         assert url_parts.port is not None, "Port is missing from the url"
-        certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
-        assert self._certificate == certificate
+        _certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
+        # TODO: check the cerificate's validity here
         # Unfortunately there are no unified types for hypercorn and httpx,
         # so we have to cast manually.
         app = cast("httpx._transports.asgi._ASGIApp", manager.app)  # noqa: SLF001
-        transport = httpx.ASGITransport(app=app, client=(self._host, 9999))
+        transport = httpx.ASGITransport(app=app, client=(str(self._host), 9999))
         async with httpx.AsyncClient(transport=transport) as client:
             return await client.request(method, url, *args, **kwargs)

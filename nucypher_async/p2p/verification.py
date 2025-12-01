@@ -108,7 +108,7 @@ class VerifiedNodeInfo(NodeInfo):
             # Abstraction leak here, ideally NodeMetadata should
             # have a field like `peer_public_key`.
             certificate_der=bytes(public_key),
-            host=contact.host,
+            host=str(contact.host),
             port=contact.port,
         )
         metadata = NodeMetadata(signer=signer, payload=payload)

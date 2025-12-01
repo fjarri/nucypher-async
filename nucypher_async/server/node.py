@@ -185,7 +185,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
     async def endpoint_ping(self, remote_host: str | None) -> bytes:
         if remote_host:
-            return remote_host.encode()
+            return str(remote_host).encode()
         raise GenericPeerError
 
     async def node_metadata(
@@ -207,6 +207,9 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             if node_info.staking_provider_address != self._node.staking_provider_address
         ]
 
+        # TODO: this can work differently if the P2P network does not use HTTP.
+        # But we still need some way to filter node infos based on who sent them, to avoid DDoS.
+        # Also, the filtering out may need to be done here and not in Learner.
         self.learner.passive_learning(remote_host, node_infos)
 
         announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()] + [

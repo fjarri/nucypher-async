@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 import arrow
-import httpx
 import trio
 from attrs import frozen
 from nucypher_core import Context, EncryptedTreasureMap, TreasureMap
@@ -22,7 +21,6 @@ from ..drivers.identity import IdentityAddress
 from ..drivers.pre import PREAccountSigner, PREClient
 from ..p2p.verification import VerifiedNodeInfo
 from .network import NetworkClient
-from .porter import PorterClient
 
 
 @frozen
@@ -168,34 +166,3 @@ class LocalPREClient(BasePREConsumerClient):
             encrypted_treasure_map=encrypted_treasure_map,
             encrypting_key=policy.encrypting_key,
         )
-
-
-class ProxyPREClient(BasePREConsumerClient):
-    def __init__(
-        self, proxy_host: str, proxy_port: int, http_client: httpx.AsyncClient | None = None
-    ):
-        self._porter_client = PorterClient(proxy_host, proxy_port, http_client=http_client)
-
-    async def retrieve(
-        self,
-        treasure_map: TreasureMap,
-        message_kit: MessageKit | RetrievalKit,
-        delegator_card: DelegatorCard,
-        recipient_card: RecipientCard,
-        context: Context | None = None,
-    ) -> PRERetrievalOutcome:
-        # TODO: support multi-step retrieval in Porter
-        # (that is, when some parts were already retrieved,
-        # we can list those addresses in RetrievalKit)
-        # TODO: support retrieving multiple kits
-        retrieval_kits = [
-            message_kit.core_retrieval_kit
-            if isinstance(message_kit, RetrievalKit)
-            else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
-        ]
-        cfrags = await self._porter_client.retrieve_cfrags(
-            treasure_map, retrieval_kits, delegator_card, recipient_card, context
-        )
-
-        # TODO: collect errors as well
-        return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

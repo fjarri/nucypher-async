@@ -9,7 +9,7 @@ from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREAmount
 from nucypher_async.mocks import (
     MockClock,
     MockIdentityClient,
-    MockNetwork,
+    MockP2PNetwork,
     MockPeerClient,
     MockPREClient,
 )
@@ -20,12 +20,12 @@ from nucypher_async.utils.logging import Logger
 async def test_verified_nodes_iter(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
     fully_learned_nodes: list[NodeServer],
-    mock_network: MockNetwork,
+    mock_p2p_network: MockP2PNetwork,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
     mock_clock: MockClock,
 ) -> None:
-    peer_client = MockPeerClient(mock_network, "127.0.0.1")
+    peer_client = MockPeerClient(mock_p2p_network)
     network_client = NetworkClient(
         domain=Domain.MAINNET,
         peer_client=peer_client,
@@ -48,7 +48,7 @@ async def test_verified_nodes_iter(
 async def test_granting(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
     fully_learned_nodes: list[NodeServer],
-    mock_network: MockNetwork,
+    mock_p2p_network: MockP2PNetwork,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     mock_clock: MockClock,
@@ -58,7 +58,7 @@ async def test_granting(
     publisher = Publisher.random()
     publisher_signer = PREAccountSigner(PREAccount.random())
     bob = Recipient.random()
-    peer_client = MockPeerClient(mock_network, "127.0.0.1")
+    peer_client = MockPeerClient(mock_p2p_network)
 
     publisher_client = LocalPREClient(
         NetworkClient(
