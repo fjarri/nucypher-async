@@ -87,17 +87,17 @@ def make_config(server: "HTTPServable") -> InMemoryCertificateConfig:
 
     address, port = server.bind_pair()
 
+    logger = server.logger().get_child("HTTPServer")
+
     # Since the config accepts a class and not an instance of a logger,
     # we have to pass the parent logger through via an ad-hoc class.
-    parent_logger = server.logger()
-
     class BoundLogger(hypercorn.logging.Logger):
         def __init__(self, config: Config):
             super().__init__(config)
             self.access_logger = None
             # Our logger has the same subset of `logging.Logger`'s API Hypercorn uses,
             # so we can safely cast.
-            self.error_logger = cast("logging.Logger", parent_logger.get_child("HTTPServer"))
+            self.error_logger = cast("logging.Logger", logger)
 
     config.bind = [f"{address}:{port}"]
     config.worker_class = "trio"
