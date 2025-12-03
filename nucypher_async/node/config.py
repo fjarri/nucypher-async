@@ -181,7 +181,7 @@ class NodeServerConfig:
         cbd_client: CBDClient,
         peer_client: PeerClient,
         logger: Logger,
-        storage: BaseStorage = InMemoryStorage(),
+        storage: BaseStorage | None = None,
         seed_contacts: list[Contact] | None = None,
         clock: BaseClock = SystemClock(),
     ) -> "NodeServerConfig":
@@ -196,6 +196,7 @@ class NodeServerConfig:
 
         external_host = external_host or str(http_server_config.bind_to_address)
         external_port = external_port or http_server_config.bind_to_port
+        storage = storage or InMemoryStorage()
 
         return cls(
             http_server_config=http_server_config,
