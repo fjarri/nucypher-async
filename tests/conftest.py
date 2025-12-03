@@ -119,7 +119,7 @@ async def lonely_nodes(
             staking_provider_address, operators[i].address, AmountT.ether(40000)
         )
 
-        logger = logger.get_child(str(i))
+        node_logger = logger.get_child(str(i))
 
         http_server_config = HTTPServerConfig.from_typed_values(
             bind_to_address=IPv4Address("127.0.0.1"),
@@ -136,7 +136,7 @@ async def lonely_nodes(
             pre_client=mock_pre_client,
             cbd_client=mock_cbd_client,
             peer_client=MockPeerClient(mock_p2p_network, contact),
-            logger=logger,
+            logger=node_logger,
             clock=mock_clock,
         )
 
