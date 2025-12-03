@@ -18,9 +18,9 @@ from nucypher_async.mocks import (
     MockClock,
     MockHTTPNetwork,
     MockIdentityClient,
+    MockNodeServerHandle,
     MockP2PNetwork,
     MockPeerClient,
-    MockPeerServerHandle,
     MockPREClient,
 )
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
@@ -109,7 +109,7 @@ async def lonely_nodes(
     decryptors: list[Decryptor],
     logger: logging.Logger,
     mock_clock: MockClock,
-) -> list[tuple[MockPeerServerHandle, NodeServer]]:
+) -> list[tuple[MockNodeServerHandle, NodeServer]]:
     servers = []
 
     for i in range(10):
@@ -154,7 +154,7 @@ async def lonely_nodes(
 
 @pytest.fixture
 async def chain_seeded_nodes(
-    lonely_nodes: list[tuple[MockPeerServerHandle, NodeServer]],
+    lonely_nodes: list[tuple[MockNodeServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.
@@ -173,7 +173,7 @@ async def chain_seeded_nodes(
 @pytest.fixture
 async def fully_learned_nodes(
     mock_identity_client: MockIdentityClient,
-    lonely_nodes: list[tuple[MockPeerServerHandle, NodeServer]],
+    lonely_nodes: list[tuple[MockNodeServerHandle, NodeServer]],
 ) -> AsyncIterator[list[NodeServer]]:
     # Each node knows only about one other node,
     # but the graph is fully connected.

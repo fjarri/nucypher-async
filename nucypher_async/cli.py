@@ -10,9 +10,8 @@ from .characters.node import Operator
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
-from .drivers.peer import PeerServerHandle
 from .master_key import EncryptedMasterKey, MasterKey
-from .node import NodeServer, NodeServerConfig
+from .node import NodeServer, NodeServerConfig, NodeServerHandle
 from .proxy import ProxyServer, ProxyServerConfig
 
 
@@ -102,7 +101,7 @@ def main() -> None:
 @click.argument("geth_password")
 def node(config_path: str, nucypher_password: str, geth_password: str) -> None:
     server = trio.run(make_node_server, config_path, nucypher_password, geth_password)
-    handle = PeerServerHandle(server)
+    handle = NodeServerHandle(server)
     trio.run(handle.startup)
 
 

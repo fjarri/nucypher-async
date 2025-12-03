@@ -12,26 +12,23 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.types import JSON
 from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
-from ..drivers.http_server import HTTPServableApp
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
+from ..drivers.peer import PeerPrivateKey, SecureContact
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .asgi_app import make_node_asgi_app
 from .config import NodeServerConfig
 from .status import render_status
 
 
-class NodeServer(BasePeerServer, BaseNodeServer):
+class NodeServer:
     @classmethod
     async def async_init(
         cls,
@@ -155,9 +152,6 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             self._config.http_server_config.bind_to_address,
             self._config.http_server_config.bind_to_port,
         )
-
-    def into_servable(self) -> HTTPServableApp:
-        return make_node_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger
@@ -311,6 +305,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             requester_public_key=request.requester_public_key,
         )
 
+    # NOTE: This method really does not belong in the PeerAPI, because it is strictly HTTP,
+    # while peers can theoretically use gRPC, or Noise, or something else.
+    # But the way the protocol works now, it is hardcoded that the status page
+    # should be available at the same port as the rest of the API, so it has to stay here.
     async def status(self) -> str:
         return render_status(
             node=self._node,

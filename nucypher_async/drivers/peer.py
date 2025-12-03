@@ -7,11 +7,10 @@ or that its transport key is a SSL certificate).
 
 import http
 import ssl
-from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from functools import cached_property
-from ipaddress import IPv4Address, ip_address
+from ipaddress import ip_address
 
 import arrow
 import httpx
@@ -20,9 +19,7 @@ import trio
 from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..utils import temp_file
-from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-from .http_server import HTTPServable, HTTPServableApp, HTTPServerHandle
 
 
 class PeerConnectionError(PeerError):
@@ -238,68 +235,3 @@ class PeerClient:
             if response.status_code != http.HTTPStatus.OK:
                 raise PeerError.from_json(response_data)
             return response_data
-
-
-class BasePeerServer(ABC):
-    @abstractmethod
-    def secure_contact(self) -> SecureContact: ...
-
-    @abstractmethod
-    def peer_private_key(self) -> PeerPrivateKey: ...
-
-    @abstractmethod
-    def into_servable(self) -> HTTPServableApp: ...
-
-    @abstractmethod
-    def logger(self) -> Logger: ...
-
-    # TODO: abstraction leak, can this be made more general?
-    @abstractmethod
-    def bind_pair(self) -> tuple[IPv4Address, int]: ...
-
-
-class PeerServerAsHTTPServer(HTTPServable):
-    def __init__(self, peer_server: BasePeerServer):
-        self._peer_server = peer_server
-
-    def into_servable(self) -> HTTPServableApp:
-        return self._peer_server.into_servable()
-
-    def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self._peer_server.bind_pair()
-
-    def logger(self) -> Logger:
-        return self._peer_server.logger()
-
-    def ssl_certificate(self) -> SSLCertificate:
-        return self._peer_server.secure_contact().public_key._as_ssl_certificate()  # noqa: SLF001
-
-    def ssl_private_key(self) -> SSLPrivateKey:
-        return self._peer_server.peer_private_key()._as_ssl_private_key()  # noqa: SLF001
-
-    def ssl_ca_chain(self) -> list[SSLCertificate]:
-        return []
-
-
-class PeerServerHandle:
-    """
-    A handle for a running P2P server.
-    Can be used to shut it down.
-    """
-
-    def __init__(self, server: BasePeerServer):
-        self._handle = HTTPServerHandle(PeerServerAsHTTPServer(server))
-
-    async def startup(
-        self, *, task_status: trio.TaskStatus[list[str]] = trio.TASK_STATUS_IGNORED
-    ) -> None:
-        """
-        Starts the server in an external event loop.
-        Useful for the cases when it needs to run in parallel with other servers or clients.
-
-        Supports start-up reporting when invoked via `nursery.start()`.
-        """
-        return await self._handle.startup(task_status=task_status)
-
-    async def shutdown(self) -> None:
-        return await self._handle.shutdown()

@@ -19,12 +19,12 @@ from nucypher_core import (
 )
 from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
-from ..base.node import NodeRoutes
 from ..base.peer_error import InvalidMessage
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
+from ..node_base import NodeRoutes
 
 
 class NodeInfo:

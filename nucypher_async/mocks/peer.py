@@ -4,13 +4,9 @@ from contextlib import asynccontextmanager
 import httpx
 import trio
 
-from ..drivers.peer import (
-    BasePeerServer,
-    Contact,
-    PeerClient,
-    PeerPublicKey,
-    PeerServerAsHTTPServer,
-)
+from ..drivers.peer import Contact, PeerClient, PeerPublicKey
+from ..node import NodeServer
+from ..node.handle import NodeServerAsHTTPServer
 from ..utils.ssl import SSLCertificate
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 
@@ -45,7 +41,7 @@ class MockPeerClient(PeerClient):
         yield self._client.as_httpx_async_client()
 
 
-class MockPeerServerHandle:
+class MockNodeServerHandle:
     def __init__(self, handle: MockHTTPServerHandle):
         self._handle = handle
 
@@ -60,9 +56,9 @@ class MockP2PNetwork:
     def __init__(self, nursery: trio.Nursery):
         self._mock_http_network = MockHTTPNetwork(nursery)
 
-    def add_server(self, server: BasePeerServer) -> MockPeerServerHandle:
-        handle = self._mock_http_network.add_server(PeerServerAsHTTPServer(server))
-        return MockPeerServerHandle(handle)
+    def add_server(self, server: NodeServer) -> MockNodeServerHandle:
+        handle = self._mock_http_network.add_server(NodeServerAsHTTPServer(server))
+        return MockNodeServerHandle(handle)
 
     async def startup(self, contact: Contact) -> None:
         await self._mock_http_network.startup(contact.host, contact.port)

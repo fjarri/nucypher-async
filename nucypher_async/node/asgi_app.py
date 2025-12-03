@@ -1,13 +1,14 @@
 import trio
 from nucypher_core import EncryptedThresholdDecryptionRequest, MetadataRequest, ReencryptionRequest
 
-from ..base.node import BaseNodeServer, NodeRoutes
 from ..base.peer_error import InvalidMessage
 from ..drivers.asgi import BinaryResponse, HTMLResponse, JSONResponse, Request, Route, make_asgi_app
 from ..drivers.http_server import HTTPServableApp
+from ..node_base import NodeRoutes
+from .server import NodeServer
 
 
-def make_node_asgi_app(server: BaseNodeServer) -> HTTPServableApp:
+def make_node_asgi_app(server: NodeServer) -> HTTPServableApp:
     http_server = NodeServerAsHTTPServer(server)
     return make_asgi_app(
         parent_logger=server.logger(),
@@ -26,7 +27,7 @@ def make_node_asgi_app(server: BaseNodeServer) -> HTTPServableApp:
 
 
 class NodeServerAsHTTPServer:
-    def __init__(self, server: BaseNodeServer):
+    def __init__(self, server: NodeServer):
         self._server = server
 
     async def start(self, nursery: trio.Nursery) -> None:
