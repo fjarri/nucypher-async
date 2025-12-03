@@ -8,7 +8,7 @@ from mako.template import Template
 
 from ..base.time import BaseClock
 from ..domain import Domain
-from ..drivers.asgi_app import HTTPError
+from ..drivers.asgi import HTTPError
 from ..p2p.fleet_sensor import FleetSensorSnapshot
 from ..p2p.verification import VerifiedNodeInfo
 from ..utils.logging import Logger

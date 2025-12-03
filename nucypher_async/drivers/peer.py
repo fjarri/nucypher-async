@@ -18,7 +18,6 @@ import httpx
 import trio
 
 from ..base.peer_error import PeerError
-from ..base.server import ServerWrapper
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.logging import Logger
@@ -249,7 +248,7 @@ class BasePeerServer(ABC):
     def peer_private_key(self) -> PeerPrivateKey: ...
 
     @abstractmethod
-    def into_servable(self) -> ServerWrapper: ...
+    def into_servable(self) -> HTTPServableApp: ...
 
     @abstractmethod
     def logger(self) -> Logger: ...

@@ -14,12 +14,11 @@ from nucypher_core import (
 
 from ..base.node import BaseNodeServer
 from ..base.peer_error import GenericPeerError, InactivePolicy
-from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
-from ..drivers.asgi_app import make_node_asgi_app
+from ..drivers.http_server import HTTPServableApp
 from ..drivers.identity import IdentityAddress
 from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
 from ..p2p.learner import Learner
@@ -27,6 +26,7 @@ from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
+from .asgi_app import make_node_asgi_app
 from .config import NodeServerConfig
 from .status import render_status
 
@@ -156,7 +156,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             self._config.http_server_config.bind_to_port,
         )
 
-    def into_servable(self) -> ServerWrapper:
+    def into_servable(self) -> HTTPServableApp:
         return make_node_asgi_app(self)
 
     def logger(self) -> Logger:
@@ -184,9 +184,9 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         await self._verification_task.stop()
         self.started = False
 
-    async def endpoint_ping(self, remote_host: str | None) -> bytes:
+    async def ping(self, remote_host: str | None) -> str:
         if remote_host:
-            return str(remote_host).encode()
+            return remote_host
         raise GenericPeerError
 
     async def node_metadata(
@@ -254,7 +254,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
         )
 
-    async def endpoint_condition_chains(self) -> JSON:
+    async def condition_chains(self) -> JSON:
         raise NotImplementedError
 
     async def decrypt(
@@ -311,7 +311,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             requester_public_key=request.requester_public_key,
         )
 
-    async def endpoint_status(self) -> str:
+    async def status(self) -> str:
         return render_status(
             node=self._node,
             logger=self._logger,
