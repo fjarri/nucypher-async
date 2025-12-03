@@ -15,7 +15,7 @@ from sortedcontainers import SortedKeyList
 
 from ..base.time import BaseClock
 from ..drivers.identity import AmountT, IdentityAddress
-from ..drivers.peer import Contact
+from ..node_base import Contact
 from .node_info import NodeInfo
 from .verification import VerifiedNodeInfo
 

@@ -16,10 +16,10 @@ import arrow
 import httpx
 import trio
 
-from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..utils import temp_file
 from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
+from .errors import PeerError
 
 
 class PeerConnectionError(PeerError):

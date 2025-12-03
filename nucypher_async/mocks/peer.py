@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 import httpx
 import trio
 
-from ..drivers.peer import Contact, PeerClient, PeerPublicKey
 from ..node import NodeServer
 from ..node.handle import NodeServerAsHTTPServer
+from ..node_base import Contact, PeerClient, PeerPublicKey
 from ..utils.ssl import SSLCertificate
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 

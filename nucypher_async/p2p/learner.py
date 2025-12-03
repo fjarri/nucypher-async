@@ -3,12 +3,11 @@ from collections.abc import Iterable
 
 import trio
 
-from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
-from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
+from ..node_base import Contact, PeerClient, PeerError, get_alternative_contact
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger

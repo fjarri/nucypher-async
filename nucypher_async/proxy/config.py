@@ -8,10 +8,10 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.cbd import CBDClient
 from ..drivers.identity import IdentityClient
-from ..drivers.peer import Contact, PeerClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
 from ..node.config import HTTPServerConfig
+from ..node_base import Contact, PeerClient
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 

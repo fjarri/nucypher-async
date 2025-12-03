@@ -12,13 +12,12 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from ..base.peer_error import GenericPeerError, InactivePolicy
 from ..base.types import JSON
 from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import PeerPrivateKey, SecureContact
+from ..node_base import GenericPeerError, InactivePolicy, PeerPrivateKey, SecureContact
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeInfo
 from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local

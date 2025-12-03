@@ -8,7 +8,6 @@ from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.identity import IdentityAccount, IdentityAddress
-from nucypher_async.drivers.peer import PeerClient
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
@@ -28,7 +27,6 @@ def node_server() -> NodeServer:
         identity_client=MockIdentityClient(),
         pre_client=MockPREClient(),
         cbd_client=MockCBDClient(),
-        peer_client=PeerClient(),
         logger=NULL_LOGGER,
         seed_contacts=[],
     )
@@ -52,7 +50,7 @@ async def test_client_real_server(nursery: trio.Nursery, node_server: NodeServer
     handle = NodeServerHandle(node_server)
     await nursery.start(handle.startup)
 
-    client = NodeClient(PeerClient())
+    client = NodeClient()
     response = await client.ping(node_server.secure_contact())
     assert response == "127.0.0.1"
 

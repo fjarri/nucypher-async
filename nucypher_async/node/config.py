@@ -9,9 +9,9 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.cbd import CBDClient
 from ..drivers.identity import IdentityClient
-from ..drivers.peer import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
+from ..node_base import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
@@ -179,7 +179,7 @@ class NodeServerConfig:
         identity_client: IdentityClient,
         pre_client: PREClient,
         cbd_client: CBDClient,
-        peer_client: PeerClient,
+        peer_client: PeerClient | None = None,
         logger: Logger,
         storage: BaseStorage | None = None,
         seed_contacts: list[Contact] | None = None,
@@ -194,6 +194,7 @@ class NodeServerConfig:
                 "but the given SSL certificate has `{ssl_config.certificate.declared_host}`"
             )
 
+        peer_client = peer_client or PeerClient()
         external_host = external_host or str(http_server_config.bind_to_address)
         external_port = external_port or http_server_config.bind_to_port
         storage = storage or InMemoryStorage()

@@ -7,7 +7,7 @@ from ..characters.node import Operator
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
-from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
+from ..node_base import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
 
 

@@ -10,8 +10,8 @@ import trio
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClient
-from ..drivers.peer import Contact, PeerClient
 from ..drivers.time import SystemClock
+from ..node_base import Contact, PeerClient
 from ..p2p.fleet_sensor import FleetSensorSnapshot, NodeEntry
 from ..p2p.learner import Learner
 from ..p2p.node_info import NodeClient

@@ -21,8 +21,8 @@ from nucypher_core.umbral import (
 )
 
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import PeerPrivateKey
 from ..master_key import MasterKey
+from ..node_base import PeerPrivateKey
 
 
 @frozen

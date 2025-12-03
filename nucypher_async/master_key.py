@@ -7,7 +7,7 @@ from nucypher_core import SessionSecretFactory, SessionSharedSecret, SessionStat
 from nucypher_core.ferveo import Keypair as FerveoKeypair
 from nucypher_core.umbral import SecretKey, SecretKeyFactory, Signer
 
-from .drivers.peer import PeerPrivateKey
+from .node_base import PeerPrivateKey
 from .utils.passwords import (
     SecretBoxAuthenticationError,
     derive_key_material_from_password,

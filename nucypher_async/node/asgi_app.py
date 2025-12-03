@@ -1,10 +1,9 @@
 import trio
 from nucypher_core import EncryptedThresholdDecryptionRequest, MetadataRequest, ReencryptionRequest
 
-from ..base.peer_error import InvalidMessage
 from ..drivers.asgi import BinaryResponse, HTMLResponse, JSONResponse, Request, Route, make_asgi_app
 from ..drivers.http_server import HTTPServableApp
-from ..node_base import NodeRoutes
+from ..node_base import InvalidMessage, NodeRoutes
 from .server import NodeServer
 
 

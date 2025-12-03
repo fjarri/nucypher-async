@@ -19,12 +19,17 @@ from nucypher_core import (
 )
 from nucypher_core.umbral import Capsule, PublicKey, VerifiedCapsuleFrag
 
-from ..base.peer_error import InvalidMessage
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import Contact, PeerClient, PeerPublicKey, SecureContact
-from ..node_base import NodeRoutes
+from ..node_base import (
+    Contact,
+    InvalidMessage,
+    NodeRoutes,
+    PeerClient,
+    PeerPublicKey,
+    SecureContact,
+)
 
 
 class NodeInfo:
@@ -103,8 +108,8 @@ def unwrap_bytes(
 
 
 class NodeClient:
-    def __init__(self, peer_client: PeerClient):
-        self._peer_client = peer_client
+    def __init__(self, peer_client: PeerClient | None = None):
+        self._peer_client = peer_client or PeerClient()
 
     async def handshake(self, contact: Contact) -> SecureContact:
         return await self._peer_client.handshake(contact)

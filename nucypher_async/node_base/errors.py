@@ -9,7 +9,7 @@ from collections.abc import Callable
 from enum import Enum, unique
 from typing import Any
 
-from .types import JSON
+from ..base.types import JSON
 
 
 @unique
