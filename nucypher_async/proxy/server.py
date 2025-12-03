@@ -1,4 +1,5 @@
 import http
+from collections.abc import Mapping
 from ipaddress import IPv4Address
 
 import attrs
@@ -7,13 +8,14 @@ import trio
 from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
+from ..drivers.asgi import HTTPError
 from ..drivers.http_server import HTTPServable, HTTPServableApp
 from ..node.status import render_status
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from . import schema
-from .asgi_app import BaseProxyServer, HTTPError, make_proxy_asgi_app
+from .asgi_app import BaseProxyServer, make_proxy_asgi_app
 from .config import ProxyServerConfig
 from .schema import (
     JSON,
@@ -110,8 +112,8 @@ class ProxyServer(HTTPServable, BaseProxyServer):
 
         self.started = False
 
-    async def endpoint_get_ursulas(
-        self, request_params: dict[str, str], request_body: JSON | None
+    async def get_ursulas(
+        self, request_params: Mapping[str, str], request_body: JSON | None
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
@@ -162,7 +164,7 @@ class ProxyServer(HTTPServable, BaseProxyServer):
 
         return schema.to_json(response)
 
-    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
+    async def retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
             request = schema.from_json(RetrieveCFragsRequest, request_body)
         except schema.ValidationError as exc:
@@ -187,7 +189,7 @@ class ProxyServer(HTTPServable, BaseProxyServer):
 
         return schema.to_json(response)
 
-    async def endpoint_status(self) -> str:
+    async def status(self) -> str:
         return render_status(
             node=None,
             logger=self._logger,

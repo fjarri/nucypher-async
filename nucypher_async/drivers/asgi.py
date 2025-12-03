@@ -11,7 +11,7 @@ Nothing else should be happening here, the bulk of the server logic is located i
 """
 
 import http
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import cast
@@ -78,13 +78,17 @@ class Request:
 
     async def body_json(self) -> JSON:
         # Starlette reports the type as `Any`
-        return cast("JSON", await self._request.json())
+        json = await self._request.json() if await self._request.body() else None
+        return cast("JSON", json)
 
     @property
     def remote_host(self) -> str | None:
+        # TODO: we can get the port here too
         return self._request.client.host if self._request.client else None
 
-    # TODO: support query parameters
+    @property
+    def query_params(self) -> Mapping[str, str]:
+        return self._request.query_params
 
 
 @dataclass
