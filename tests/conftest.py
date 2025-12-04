@@ -18,9 +18,9 @@ from nucypher_async.mocks import (
     MockHTTPClient,
     MockHTTPNetwork,
     MockIdentityClient,
+    MockNodeClient,
     MockNodeServerHandle,
     MockP2PNetwork,
-    MockPeerClient,
     MockPREClient,
 )
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
@@ -90,8 +90,8 @@ def mock_passive_http_client(mock_http_network: MockHTTPNetwork) -> MockHTTPClie
 
 
 @pytest.fixture
-def mock_passive_peer_client(mock_p2p_network: MockP2PNetwork) -> MockPeerClient:
-    return MockPeerClient(mock_p2p_network, contact=None)
+def mock_passive_node_client(mock_p2p_network: MockP2PNetwork) -> MockNodeClient:
+    return MockNodeClient(mock_p2p_network, contact=None)
 
 
 @pytest.fixture
@@ -146,7 +146,7 @@ async def lonely_nodes(
             identity_client=mock_identity_client,
             pre_client=mock_pre_client,
             cbd_client=mock_cbd_client,
-            peer_client=MockPeerClient(mock_p2p_network, contact),
+            node_client=MockNodeClient(mock_p2p_network, contact),
             logger=node_logger,
             clock=mock_clock,
         )
@@ -241,7 +241,7 @@ async def proxy_server(
         identity_client=mock_identity_client,
         pre_client=mock_pre_client,
         cbd_client=mock_cbd_client,
-        peer_client=MockPeerClient(mock_p2p_network),
+        node_client=MockNodeClient(mock_p2p_network),
         logger=logger,
         storage=InMemoryStorage(),
         seed_contacts=[fully_learned_nodes[0].secure_contact().contact],

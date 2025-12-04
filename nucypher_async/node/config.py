@@ -12,7 +12,8 @@ from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
-from ..node_base import Contact, PeerClient, PeerPrivateKey, PeerPublicKey
+from ..node_base import Contact, PeerPrivateKey, PeerPublicKey
+from ..p2p import NodeClient
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
@@ -163,7 +164,7 @@ class NodeServerConfig:
     identity_client: IdentityClient
     pre_client: PREClient
     cbd_client: CBDClient
-    peer_client: PeerClient
+    node_client: NodeClient
     logger: Logger
     storage: BaseStorage
     seed_contacts: list[Contact]
@@ -180,7 +181,7 @@ class NodeServerConfig:
         identity_client: IdentityClient,
         pre_client: PREClient,
         cbd_client: CBDClient,
-        peer_client: PeerClient | None = None,
+        node_client: NodeClient | None = None,
         logger: Logger,
         storage: BaseStorage | None = None,
         seed_contacts: list[Contact] | None = None,
@@ -206,7 +207,7 @@ class NodeServerConfig:
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=peer_client or PeerClient(HTTPClient()),
+            node_client=node_client or NodeClient(HTTPClient()),
             logger=logger,
             storage=storage,
             seed_contacts=seed_contacts or [],
@@ -275,7 +276,7 @@ class NodeServerConfig:
         cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
-        peer_client = PeerClient(HTTPClient())
+        node_client = NodeClient(HTTPClient())
 
         return cls.from_typed_values(
             http_server_config=http_server_config,
@@ -285,7 +286,7 @@ class NodeServerConfig:
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=peer_client,
+            node_client=node_client,
             logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,

@@ -10,7 +10,7 @@ from nucypher_async.mocks import (
     MockClock,
     MockHTTPClient,
     MockIdentityClient,
-    MockPeerClient,
+    MockNodeClient,
     MockPREClient,
 )
 from nucypher_async.node import NodeServer
@@ -42,7 +42,7 @@ async def test_get_nodes(
 
 
 async def test_retrieve_cfrags(
-    mock_passive_peer_client: MockPeerClient,
+    mock_passive_node_client: MockNodeClient,
     mock_passive_http_client: MockHTTPClient,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
@@ -58,7 +58,7 @@ async def test_retrieve_cfrags(
 
     publisher_client = LocalPREClient(
         NetworkClient(
-            peer_client=mock_passive_peer_client,
+            node_client=mock_passive_node_client,
             identity_client=mock_identity_client,
             seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
             domain=Domain.MAINNET,

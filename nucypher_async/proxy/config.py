@@ -12,7 +12,8 @@ from ..drivers.identity import IdentityClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
 from ..node.config import HTTPServerConfig
-from ..node_base import Contact, PeerClient
+from ..node_base import Contact
+from ..p2p import NodeClient
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 
@@ -73,7 +74,7 @@ class ProxyServerConfig:
     identity_client: IdentityClient
     pre_client: PREClient
     cbd_client: CBDClient
-    peer_client: PeerClient
+    node_client: NodeClient
     logger: Logger
     storage: BaseStorage
     seed_contacts: list[Contact]
@@ -134,7 +135,7 @@ class ProxyServerConfig:
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=PeerClient(HTTPClient()),
+            node_client=NodeClient(HTTPClient()),
             logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,

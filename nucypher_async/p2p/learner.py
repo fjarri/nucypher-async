@@ -7,7 +7,7 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.time import SystemClock
-from ..node_base import Contact, PeerClient, PeerError, get_alternative_contact
+from ..node_base import Contact, PeerError, get_alternative_contact
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
@@ -30,7 +30,7 @@ class Learner:
     def __init__(
         self,
         domain: Domain,
-        peer_client: PeerClient,
+        node_client: NodeClient,
         identity_client: IdentityClient,
         this_node: VerifiedNodeInfo | None = None,
         seed_contacts: Iterable[Contact] | None = None,
@@ -43,7 +43,7 @@ class Learner:
 
         self._logger = parent_logger.get_child("Learner")
 
-        self._node_client = NodeClient(peer_client)
+        self._node_client = node_client
         self._identity_client = identity_client
 
         self._domain = domain

@@ -5,9 +5,7 @@ The related details are also hidden here (e.g. that a peer contact is a DNS name
 or that its transport key is a SSL certificate).
 """
 
-import http
-from collections.abc import AsyncIterator, Iterable
-from contextlib import asynccontextmanager
+from collections.abc import Iterable
 from functools import cached_property
 from ipaddress import ip_address
 
@@ -15,13 +13,7 @@ import arrow
 import trio
 
 from ..base.time import BaseClock
-from ..drivers.http_client import HTTPClient, HTTPClientSession
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
-from .errors import PeerError
-
-
-class PeerConnectionError(Exception):
-    pass
 
 
 class Contact:
@@ -173,45 +165,3 @@ class SecureContact:
     @property
     def _uri(self) -> str:
         return self.contact.uri()
-
-
-class PeerClient:
-    def __init__(self, http_client: HTTPClient):
-        self._http_client = http_client
-
-    async def handshake(self, contact: Contact) -> SecureContact:
-        """Resolves a peer contact into a secure contact that can be used for communication."""
-        try:
-            certificate = await self._http_client.fetch_certificate(contact.host, contact.port)
-        except RuntimeError as exc:
-            raise PeerConnectionError(str(exc)) from exc
-
-        public_key = PeerPublicKey(certificate)
-        try:
-            return SecureContact(contact, public_key)
-        except ValueError as exc:
-            raise PeerConnectionError(str(exc)) from exc
-
-    @asynccontextmanager
-    async def session(self, secure_contact: SecureContact) -> AsyncIterator["PeerClientSession"]:
-        certificate = secure_contact.public_key._as_ssl_certificate()  # noqa: SLF001
-        async with self._http_client.session(certificate) as session:
-            yield PeerClientSession(secure_contact, session)
-
-
-class PeerClientSession:
-    def __init__(self, secure_contact: SecureContact, http_session: HTTPClientSession):
-        self._secure_contact = secure_contact
-        self._http_session = http_session
-
-    async def communicate(self, route: str, data: bytes | None = None) -> bytes:
-        """Sends an optional message to the specified route and returns the response bytes."""
-        path = f"{self._secure_contact._uri}/{route}"  # noqa: SLF001
-        if data is None:
-            response = await self._http_session.get(path)
-        else:
-            response = await self._http_session.post(path, data)
-
-        if response.status_code != http.HTTPStatus.OK:
-            raise PeerError.from_json(response.body_bytes)  # TODO: use a JSON-returning property
-        return response.body_bytes

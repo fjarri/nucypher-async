@@ -36,7 +36,7 @@ class ProxyServer(HTTPServable, BaseProxyServer):
         self._config = config
         self._logger = config.logger
         self._network_client = NetworkClient(
-            peer_client=config.peer_client,
+            node_client=config.node_client,
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,

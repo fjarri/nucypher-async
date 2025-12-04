@@ -23,7 +23,8 @@ from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
-from nucypher_async.node_base import Contact, PeerClient
+from nucypher_async.node_base import Contact
+from nucypher_async.p2p import NodeClient
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
 
@@ -83,7 +84,7 @@ async def run_local_node_fleet(
             identity_client=context.identity_client,
             pre_client=context.pre_client,
             cbd_client=context.cbd_client,
-            peer_client=PeerClient(HTTPClient()),
+            node_client=NodeClient(HTTPClient()),
             logger=logger,
             seed_contacts=seed_contacts,
             clock=context.clock,

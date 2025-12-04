@@ -117,7 +117,7 @@ class NodeServer:
 
         self.learner = Learner(
             this_node=self._node,
-            peer_client=config.peer_client,
+            node_client=config.node_client,
             identity_client=config.identity_client,
             storage=config.storage,
             seed_contacts=config.seed_contacts,

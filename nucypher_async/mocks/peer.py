@@ -2,7 +2,8 @@ import trio
 
 from ..node import NodeServer
 from ..node.handle import NodeServerAsHTTPServer
-from ..node_base import Contact, PeerClient, PeerPublicKey
+from ..node_base import Contact, PeerPublicKey
+from ..p2p import NodeClient
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 
 
@@ -36,7 +37,10 @@ class MockP2PNetwork:
         return PeerPublicKey(certificate)
 
 
-class MockPeerClient(PeerClient):
+# Note that we cannot just use `NodeClient(mock_http_client)` since we need the client
+# to be able to supply its own host in requests
+# (which nodes use to filter the received contact list).
+class MockNodeClient(NodeClient):
     def __init__(self, mock_p2p_network: MockP2PNetwork, contact: Contact | None = None):
         super().__init__(
             MockHTTPClient(
