@@ -46,9 +46,8 @@ class PeerPrivateKey:
         return self.__private_key
 
     def matches(self, public_key: "PeerPublicKey") -> bool:
-        expected_public_key = self._as_ssl_private_key().public_key()
         certificate = public_key._as_ssl_certificate()  # noqa: SLF001
-        return certificate.public_key() == expected_public_key
+        return self._as_ssl_private_key().matches(certificate)
 
 
 class PeerPublicKey:

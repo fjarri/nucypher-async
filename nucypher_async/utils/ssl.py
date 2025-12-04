@@ -26,8 +26,11 @@ class SSLPrivateKey:
     def __init__(self, private_key: CertificateIssuerPrivateKeyTypes):
         self.certificate_private_key = private_key
 
-    def public_key(self) -> "SSLPublicKey":
+    def _public_key(self) -> "SSLPublicKey":
         return SSLPublicKey(self.certificate_private_key.public_key())
+
+    def matches(self, certificate: "SSLCertificate") -> bool:
+        return self._public_key() == certificate._public_key()  # noqa: SLF001
 
     @classmethod
     def from_pem_bytes(cls, data: bytes, password: bytes | None = None) -> "SSLPrivateKey":
@@ -84,7 +87,7 @@ class SSLCertificate:
     ) -> "SSLCertificate":
         # TODO: assert that the start date is in UTC?
 
-        public_key = private_key.public_key()
+        public_key = private_key._public_key()  # noqa: SLF001
 
         end_date = start_date.shift(days=days_valid)
         fields = [x509.NameAttribute(NameOID.COMMON_NAME, host)]
@@ -141,7 +144,7 @@ class SSLCertificate:
     def from_der_bytes(cls, data: bytes) -> "SSLCertificate":
         return cls(x509.load_der_x509_certificate(data))
 
-    def public_key(self) -> SSLPublicKey:
+    def _public_key(self) -> SSLPublicKey:
         public_key = self._certificate.public_key()
         # We need these to match the supported types in SSLPrivateKey
         key_types = get_args(CertificatePublicKeyTypes)
