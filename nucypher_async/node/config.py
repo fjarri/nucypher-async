@@ -8,6 +8,7 @@ from platformdirs import PlatformDirs
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.cbd import CBDClient
+from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
@@ -194,7 +195,6 @@ class NodeServerConfig:
                 "but the given SSL certificate has `{ssl_config.certificate.declared_host}`"
             )
 
-        peer_client = peer_client or PeerClient()
         external_host = external_host or str(http_server_config.bind_to_address)
         external_port = external_port or http_server_config.bind_to_port
         storage = storage or InMemoryStorage()
@@ -206,7 +206,7 @@ class NodeServerConfig:
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=peer_client,
+            peer_client=peer_client or PeerClient(HTTPClient()),
             logger=logger,
             storage=storage,
             seed_contacts=seed_contacts or [],
@@ -275,7 +275,7 @@ class NodeServerConfig:
         cbd_client = cbd_client_factory(cbd_endpoint, domain_)
         storage = make_storage(profile_name, persistent_storage=persistent_storage)
         seed_contacts = seed_contacts_for_domain(domain_)
-        peer_client = PeerClient()
+        peer_client = PeerClient(HTTPClient())
 
         return cls.from_typed_values(
             http_server_config=http_server_config,

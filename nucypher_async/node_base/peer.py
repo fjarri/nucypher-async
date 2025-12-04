@@ -6,27 +6,21 @@ or that its transport key is a SSL certificate).
 """
 
 import http
-import ssl
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from functools import cached_property
 from ipaddress import ip_address
 
 import arrow
-import httpx
 import trio
 
 from ..base.time import BaseClock
-from ..utils import temp_file
-from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
+from ..drivers.http_client import HTTPClient, HTTPClientSession
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from .errors import PeerError
 
 
-class PeerConnectionError(PeerError):
-    pass
-
-
-class HandshakeError(PeerError):
+class PeerConnectionError(Exception):
     pass
 
 
@@ -158,7 +152,7 @@ class SecureContact:
         # when creating a public key, it is logical to also check that it is correct,
         # and this is the best place to do it.
         if public_key.declared_host != contact.host:
-            raise HandshakeError(
+            raise ValueError(
                 f"Host mismatch: contact has {contact.host}, "
                 f"but certificate has {public_key.declared_host}"
             )
@@ -182,56 +176,42 @@ class SecureContact:
 
 
 class PeerClient:
-    @asynccontextmanager
-    async def _http_client(self, public_key: PeerPublicKey) -> AsyncIterator[httpx.AsyncClient]:
-        """
-        Creates a client context manager to send HTTP requests.
-        Can be overridden in mocks.
-        """
-        # It would be nice avoid saving the certificate to disk at each request.
-        # Having a cache directory requires too much architectural overhead,
-        # and with the current frequency of REST calls it just isn't worth it.
-        # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
-        # and we will be able to load certificates from memory.
-        with temp_file(public_key._as_ssl_certificate().to_pem_bytes()) as filename:  # noqa: SLF001
-            # Timeouts are caught at top level, as per `trio` style.
-            context = ssl.create_default_context(cafile=str(filename))
-            async with httpx.AsyncClient(verify=context, timeout=None) as client:  # noqa: S113
-                try:
-                    yield client
-                except (OSError, httpx.HTTPError) as exc:
-                    exc_message = str(exc)
-                    message = str(type(exc)) + (f" {exc_message}" if exc_message else "")
-                    raise PeerConnectionError(message) from exc
-
-    async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
-        """
-        Fetches the SSL certificate for the contact.
-        Can be overridden in mocks.
-        """
-        try:
-            return await fetch_certificate(contact.host, contact.port)
-        except RuntimeError as exc:
-            raise PeerConnectionError(str(exc)) from exc
+    def __init__(self, http_client: HTTPClient):
+        self._http_client = http_client
 
     async def handshake(self, contact: Contact) -> SecureContact:
         """Resolves a peer contact into a secure contact that can be used for communication."""
-        certificate = await self._fetch_certificate(contact)
+        try:
+            certificate = await self._http_client.fetch_certificate(contact.host, contact.port)
+        except RuntimeError as exc:
+            raise PeerConnectionError(str(exc)) from exc
+
         public_key = PeerPublicKey(certificate)
-        return SecureContact(contact, public_key)
+        try:
+            return SecureContact(contact, public_key)
+        except ValueError as exc:
+            raise PeerConnectionError(str(exc)) from exc
 
-    async def communicate(
-        self, secure_contact: SecureContact, route: str, data: bytes | None = None
-    ) -> bytes:
+    @asynccontextmanager
+    async def session(self, secure_contact: SecureContact) -> AsyncIterator["PeerClientSession"]:
+        certificate = secure_contact.public_key._as_ssl_certificate()  # noqa: SLF001
+        async with self._http_client.session(certificate) as session:
+            yield PeerClientSession(secure_contact, session)
+
+
+class PeerClientSession:
+    def __init__(self, secure_contact: SecureContact, http_session: HTTPClientSession):
+        self._secure_contact = secure_contact
+        self._http_session = http_session
+
+    async def communicate(self, route: str, data: bytes | None = None) -> bytes:
         """Sends an optional message to the specified route and returns the response bytes."""
-        async with self._http_client(secure_contact.public_key) as client:
-            path = f"{secure_contact._uri}/{route}"  # noqa: SLF001
-            if data is None:
-                response = await client.get(path)
-            else:
-                response = await client.post(path, content=data)
+        path = f"{self._secure_contact._uri}/{route}"  # noqa: SLF001
+        if data is None:
+            response = await self._http_session.get(path)
+        else:
+            response = await self._http_session.post(path, data)
 
-            response_data = response.read()
-            if response.status_code != http.HTTPStatus.OK:
-                raise PeerError.from_json(response_data)
-            return response_data
+        if response.status_code != http.HTTPStatus.OK:
+            raise PeerError.from_json(response.body_bytes)  # TODO: use a JSON-returning property
+        return response.body_bytes

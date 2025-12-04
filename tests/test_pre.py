@@ -6,29 +6,23 @@ from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREAmount
-from nucypher_async.mocks import (
-    MockClock,
-    MockIdentityClient,
-    MockP2PNetwork,
-    MockPeerClient,
-    MockPREClient,
-)
+from nucypher_async.mocks import MockClock, MockIdentityClient, MockPeerClient, MockPREClient
 from nucypher_async.node import NodeServer
+from nucypher_async.node_base import PeerClient
 from nucypher_async.utils.logging import Logger
 
 
 async def test_verified_nodes_iter(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
     fully_learned_nodes: list[NodeServer],
-    mock_p2p_network: MockP2PNetwork,
+    mock_passive_peer_client: PeerClient,
     mock_identity_client: MockIdentityClient,
     logger: Logger,
     mock_clock: MockClock,
 ) -> None:
-    peer_client = MockPeerClient(mock_p2p_network)
     network_client = NetworkClient(
         domain=Domain.MAINNET,
-        peer_client=peer_client,
+        peer_client=mock_passive_peer_client,
         identity_client=mock_identity_client,
         seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
         parent_logger=logger,
@@ -48,7 +42,7 @@ async def test_verified_nodes_iter(
 async def test_granting(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
     fully_learned_nodes: list[NodeServer],
-    mock_p2p_network: MockP2PNetwork,
+    mock_passive_peer_client: MockPeerClient,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     mock_clock: MockClock,
@@ -58,11 +52,10 @@ async def test_granting(
     publisher = Publisher.random()
     publisher_signer = PREAccountSigner(PREAccount.random())
     bob = Recipient.random()
-    peer_client = MockPeerClient(mock_p2p_network)
 
     publisher_client = LocalPREClient(
         NetworkClient(
-            peer_client=peer_client,
+            peer_client=mock_passive_peer_client,
             identity_client=mock_identity_client,
             seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
             domain=Domain.MAINNET,
@@ -95,7 +88,7 @@ async def test_granting(
 
     bob_client = LocalPREClient(
         NetworkClient(
-            peer_client=peer_client,
+            peer_client=mock_passive_peer_client,
             identity_client=mock_identity_client,
             seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
             domain=Domain.MAINNET,

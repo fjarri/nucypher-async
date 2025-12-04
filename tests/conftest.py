@@ -15,6 +15,7 @@ from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,
     MockClock,
+    MockHTTPClient,
     MockHTTPNetwork,
     MockIdentityClient,
     MockNodeServerHandle,
@@ -81,6 +82,16 @@ def mock_p2p_network(nursery: trio.Nursery) -> MockP2PNetwork:
 @pytest.fixture
 def mock_http_network(nursery: trio.Nursery) -> MockHTTPNetwork:
     return MockHTTPNetwork(nursery)
+
+
+@pytest.fixture
+def mock_passive_http_client(mock_http_network: MockHTTPNetwork) -> MockHTTPClient:
+    return MockHTTPClient(mock_http_network, host=None)
+
+
+@pytest.fixture
+def mock_passive_peer_client(mock_p2p_network: MockP2PNetwork) -> MockPeerClient:
+    return MockPeerClient(mock_p2p_network, contact=None)
 
 
 @pytest.fixture

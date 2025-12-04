@@ -9,9 +9,7 @@ from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREAmount
 from nucypher_async.mocks import (
     MockClock,
     MockHTTPClient,
-    MockHTTPNetwork,
     MockIdentityClient,
-    MockP2PNetwork,
     MockPeerClient,
     MockPREClient,
 )
@@ -21,16 +19,14 @@ from nucypher_async.proxy.client import ProxyClient
 
 
 async def test_get_nodes(
-    mock_http_network: MockHTTPNetwork,
+    mock_passive_http_client: MockHTTPClient,
     fully_learned_nodes: list[NodeServer],
     # TODO: make the fixture return a handle or something, so we can actually use it?
     # Or `ProxyClient`?
     proxy_server: ProxyServer,  # noqa: ARG001
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
 ) -> None:
-    mock_client = MockHTTPClient(mock_http_network)
-    http_client = mock_client.as_httpx_async_client()
-    proxy_client = ProxyClient("127.0.0.1", 9000, http_client)
+    proxy_client = ProxyClient("127.0.0.1", 9000, mock_passive_http_client)
 
     some_nodes = [
         fully_learned_nodes[3]._node.staking_provider_address,
@@ -46,8 +42,8 @@ async def test_get_nodes(
 
 
 async def test_retrieve_cfrags(
-    mock_p2p_network: MockP2PNetwork,
-    mock_http_network: MockHTTPNetwork,
+    mock_passive_peer_client: MockPeerClient,
+    mock_passive_http_client: MockHTTPClient,
     mock_identity_client: MockIdentityClient,
     mock_pre_client: MockPREClient,
     fully_learned_nodes: list[NodeServer],
@@ -55,18 +51,14 @@ async def test_retrieve_cfrags(
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
     mock_clock: MockClock,
 ) -> None:
-    mock_client = MockHTTPClient(mock_http_network)
-    http_client = mock_client.as_httpx_async_client()
-
     alice = Delegator.random()
     publisher = Publisher.random()
     publisher_signer = PREAccountSigner(PREAccount.random())
     bob = Recipient.random()
-    peer_client = MockPeerClient(mock_p2p_network)
 
     publisher_client = LocalPREClient(
         NetworkClient(
-            peer_client=peer_client,
+            peer_client=mock_passive_peer_client,
             identity_client=mock_identity_client,
             seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
             domain=Domain.MAINNET,
@@ -96,11 +88,7 @@ async def test_retrieve_cfrags(
     message = b"a secret message"
     message_kit = pre_encrypt(policy, message)
 
-    bob_client = ProxyPREClient(
-        "127.0.0.1",
-        9000,
-        http_client,
-    )
+    bob_client = ProxyPREClient("127.0.0.1", 9000, mock_passive_http_client)
 
     decrypted = await bob_client.decrypt(
         recipient=bob,

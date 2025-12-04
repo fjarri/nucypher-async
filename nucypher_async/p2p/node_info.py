@@ -108,14 +108,15 @@ def unwrap_bytes(
 
 
 class NodeClient:
-    def __init__(self, peer_client: PeerClient | None = None):
-        self._peer_client = peer_client or PeerClient()
+    def __init__(self, peer_client: PeerClient):
+        self._peer_client = peer_client
 
     async def handshake(self, contact: Contact) -> SecureContact:
         return await self._peer_client.handshake(contact)
 
     async def ping(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.PING)
+        async with self._peer_client.session(secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.PING)
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:
@@ -131,9 +132,8 @@ class NodeClient:
         request = MetadataRequest(
             fleet_state_checksum, [this_node_info.metadata] if this_node_info else []
         )
-        response_bytes = await self._peer_client.communicate(
-            node_info.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
-        )
+        async with self._peer_client.session(node_info.secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.NODE_METADATA, bytes(request))
         response = unwrap_bytes(response_bytes, MetadataResponse)
 
         try:
@@ -145,9 +145,8 @@ class NodeClient:
         return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
     async def public_information(self, secure_contact: SecureContact) -> NodeInfo:
-        response_bytes = await self._peer_client.communicate(
-            secure_contact, NodeRoutes.PUBLIC_INFORMATION
-        )
+        async with self._peer_client.session(secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.PUBLIC_INFORMATION)
         metadata = unwrap_bytes(response_bytes, NodeMetadata)
         return NodeInfo(metadata)
 
@@ -178,9 +177,8 @@ class NodeClient:
             conditions=conditions,
             context=context,
         )
-        response_bytes = await self._peer_client.communicate(
-            node_info.secure_contact, NodeRoutes.REENCRYPT, bytes(request)
-        )
+        async with self._peer_client.session(node_info.secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.REENCRYPT, bytes(request))
 
         response = unwrap_bytes(response_bytes, ReencryptionResponse)
 
@@ -203,13 +201,13 @@ class NodeClient:
         node_info: NodeInfo,
         request: EncryptedThresholdDecryptionRequest,
     ) -> EncryptedThresholdDecryptionResponse:
-        response_bytes = await self._peer_client.communicate(
-            node_info.secure_contact, NodeRoutes.DECRYPT, bytes(request)
-        )
+        async with self._peer_client.session(node_info.secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.DECRYPT, bytes(request))
         return unwrap_bytes(response_bytes, EncryptedThresholdDecryptionResponse)
 
     async def status(self, secure_contact: SecureContact) -> str:
-        response_bytes = await self._peer_client.communicate(secure_contact, NodeRoutes.STATUS)
+        async with self._peer_client.session(secure_contact) as session:
+            response_bytes = await session.communicate(NodeRoutes.STATUS)
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:

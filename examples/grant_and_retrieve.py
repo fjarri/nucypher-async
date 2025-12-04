@@ -16,6 +16,7 @@ from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.cbd import CBDClient
+from nucypher_async.drivers.http_client import HTTPClient
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
 from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREClient
 from nucypher_async.drivers.time import SystemClock
@@ -82,7 +83,7 @@ async def run_local_node_fleet(
             identity_client=context.identity_client,
             pre_client=context.pre_client,
             cbd_client=context.cbd_client,
-            peer_client=PeerClient(),
+            peer_client=PeerClient(HTTPClient()),
             logger=logger,
             seed_contacts=seed_contacts,
             clock=context.clock,

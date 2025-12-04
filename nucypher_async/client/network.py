@@ -9,6 +9,7 @@ import trio
 
 from ..base.time import BaseClock
 from ..domain import Domain
+from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityAddress, IdentityClient
 from ..drivers.time import SystemClock
 from ..node_base import Contact, PeerClient
@@ -32,7 +33,7 @@ class NetworkClient:
         clock: BaseClock = SystemClock(),
         storage: BaseStorage | None = None,
     ):
-        peer_client = peer_client or PeerClient()
+        peer_client = peer_client or PeerClient(HTTPClient())
         self._learner = Learner(
             peer_client=peer_client,
             identity_client=identity_client,

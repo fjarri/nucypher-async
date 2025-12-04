@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -12,6 +14,7 @@ from hypercorn.typing import (
     LifespanStartupEvent,
 )
 
+from ..drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
 from ..drivers.http_server import HTTPServable
 from ..utils.ssl import SSLCertificate
 
@@ -85,21 +88,35 @@ class MockHTTPNetwork:
         return self._known_servers[(host, port)]
 
 
-class MockHTTPClient:
-    def __init__(self, mock_network: MockHTTPNetwork, host: str = "mock_hostname"):
+class MockHTTPClient(HTTPClient):
+    def __init__(self, mock_network: MockHTTPNetwork, host: str | None = None):
         # TODO: do we actually need to be able to specify the client's host?
+        self._mock_network = mock_network
+        self._host = host or "passive client"
+
+    async def fetch_certificate(self, host: str, port: int) -> SSLCertificate:
+        certificate, _manager = self._mock_network.get_server(host, port)
+        return certificate
+
+    @asynccontextmanager
+    async def session(
+        self, _certificate: SSLCertificate | None = None
+    ) -> AsyncIterator["MockHTTPClientSession"]:
+        yield MockHTTPClientSession(self._mock_network, self._host)
+
+
+class MockHTTPClientSession(HTTPClientSession):
+    def __init__(self, mock_network: MockHTTPNetwork, host: str = "mock_hostname"):
         self._mock_network = mock_network
         self._host = host
 
-    def as_httpx_async_client(self) -> httpx.AsyncClient:
-        # We implement all the methods we need for it to act as one
-        return cast("httpx.AsyncClient", self)
+    async def get(self, url: str, params: Mapping[str, str] = {}) -> HTTPResponse:
+        response = await self._request("get", url, params=params)
+        return HTTPResponse(response)
 
-    async def get(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
-        return await self._request("get", url, *args, **kwargs)
-
-    async def post(self, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
-        return await self._request("post", url, *args, **kwargs)
+    async def post(self, url: str, data: bytes) -> HTTPResponse:
+        response = await self._request("post", url, content=data)
+        return HTTPResponse(response)
 
     async def _request(self, method: str, url: str, *args: Any, **kwargs: Any) -> httpx.Response:
         url_parts = urlparse(url)

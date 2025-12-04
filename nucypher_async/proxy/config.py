@@ -7,6 +7,7 @@ from platformdirs import PlatformDirs
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.cbd import CBDClient
+from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
@@ -133,7 +134,7 @@ class ProxyServerConfig:
             identity_client=identity_client,
             pre_client=pre_client,
             cbd_client=cbd_client,
-            peer_client=PeerClient(),
+            peer_client=PeerClient(HTTPClient()),
             logger=logger,
             storage=storage,
             seed_contacts=seed_contacts,
