@@ -2,6 +2,7 @@ import http
 import ssl
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from functools import lru_cache
 from typing import cast
 
 import httpx
@@ -15,7 +16,19 @@ class HTTPClientError(Exception):
     pass
 
 
+def make_ssl_context(certificate: SSLCertificate) -> ssl.SSLContext:
+    # Cannot create a context with a certificate directly, see https://bugs.python.org/issue16487.
+    # So instead we do it via a temporary file, and negate the performance penalty by caching.
+    with temp_file(certificate.to_pem_bytes()) as certificate_filename:
+        return ssl.create_default_context(cafile=str(certificate_filename))
+
+
 class HTTPClient:
+    # The default certificate cache size is chosen to cover the possible size of the network,
+    # which at its best only had a few hundred nodes.
+    def __init__(self, certificate_cache_size: int = 1024):
+        self._cached_ssl_context = lru_cache(maxsize=certificate_cache_size)(make_ssl_context)
+
     async def fetch_certificate(self, host: str, port: int) -> SSLCertificate:
         return await fetch_certificate(host, port)
 
@@ -23,18 +36,7 @@ class HTTPClient:
     async def session(
         self, certificate: SSLCertificate | None = None
     ) -> AsyncIterator["HTTPClientSession"]:
-        # It would be nice avoid saving the certificate to disk at each request.
-        # Having a cache directory requires too much architectural overhead,
-        # and with the current frequency of REST calls it just isn't worth it.
-        # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
-        # and we will be able to load certificates from memory.
-        verify: bool | ssl.SSLContext
-        if certificate is not None:
-            with temp_file(certificate.to_pem_bytes()) as certificate_filename:
-                # TODO: keep an in-memory cache of contexts?
-                verify = ssl.create_default_context(cafile=str(certificate_filename))
-        else:
-            verify = True
+        verify = self._cached_ssl_context(certificate) if certificate is not None else True
 
         # Timeouts are caught at top level, as per `trio` style.
         async with httpx.AsyncClient(verify=verify, timeout=None) as client:  # noqa: S113
