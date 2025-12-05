@@ -17,8 +17,8 @@ from nucypher_core import (
 )
 from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
+from .._drivers.http_client import HTTPClient
 from ..characters.pre import DelegatorCard, RecipientCard
-from ..drivers.http_client import HTTPClient
 from .errors import PeerError
 from .keys import Contact, PeerPublicKey, SecureContact
 from .node_info import NodeInfo

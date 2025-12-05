@@ -12,8 +12,8 @@ from ipaddress import ip_address
 import arrow
 import trio
 
+from .._drivers.ssl import SSLCertificate, SSLPrivateKey
 from ..base.time import BaseClock
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 class Contact:

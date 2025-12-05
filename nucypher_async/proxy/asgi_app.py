@@ -12,8 +12,8 @@ Nothing else should be happening here, the bulk of the server logic is located i
 
 import trio
 
-from ..drivers.asgi import HTMLResponse, JSONResponse, Request, Route, make_asgi_app
-from ..drivers.http_server import HTTPServableApp
+from .._drivers.asgi import HTMLResponse, JSONResponse, Request, Route, make_asgi_app
+from .._drivers.http_server import HTTPServableApp
 from .server import ProxyServer
 
 

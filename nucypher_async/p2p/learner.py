@@ -3,10 +3,10 @@ from collections.abc import Iterable
 
 import trio
 
+from .._drivers.time import SystemClock
 from ..base.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress, IdentityClient
 from ..domain import Domain
-from ..drivers.time import SystemClock
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger

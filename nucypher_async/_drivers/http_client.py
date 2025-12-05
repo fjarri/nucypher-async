@@ -9,7 +9,7 @@ import httpx
 
 from ..base.types import JSON
 from ..utils import temp_file
-from ..utils.ssl import SSLCertificate, fetch_certificate
+from .ssl import SSLCertificate, fetch_certificate
 
 
 class HTTPClientError(Exception):

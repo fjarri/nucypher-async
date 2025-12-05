@@ -5,17 +5,17 @@ from pathlib import Path
 from attrs import frozen
 from platformdirs import PlatformDirs
 
+from .._drivers.http_client import HTTPClient
+from .._drivers.ssl import SSLCertificate, SSLPrivateKey
+from .._drivers.time import SystemClock
 from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
 from ..domain import Domain
-from ..drivers.http_client import HTTPClient
-from ..drivers.time import SystemClock
 from ..p2p import Contact, NodeClient, PeerPrivateKey, PeerPublicKey
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 def seed_contacts_for_domain(domain: Domain) -> list[Contact]:  # noqa: RET503

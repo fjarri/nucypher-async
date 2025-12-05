@@ -1,6 +1,6 @@
 import trio
 
-from ..drivers.http_server import HTTPServerHandle
+from .._drivers.http_server import HTTPServerHandle
 from .asgi_app import make_proxy_asgi_app
 from .server import ProxyServer
 

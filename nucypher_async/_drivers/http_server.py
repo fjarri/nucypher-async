@@ -14,7 +14,7 @@ from hypercorn.typing import ASGIFramework
 
 from ..utils import temp_file
 from ..utils.logging import Logger
-from ..utils.ssl import SSLCertificate, SSLPrivateKey
+from .ssl import SSLCertificate, SSLPrivateKey
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging

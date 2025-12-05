@@ -14,11 +14,11 @@ from hypercorn.typing import (
     LifespanStartupEvent,
 )
 
-from ..drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
-from ..drivers.http_server import HTTPServable, HTTPServableApp
+from .._drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
+from .._drivers.http_server import HTTPServable, HTTPServableApp
+from .._drivers.ssl import SSLCertificate
 from ..proxy import ProxyServer
 from ..proxy.asgi_app import make_proxy_asgi_app
-from ..utils.ssl import SSLCertificate
 
 
 class LifespanManager:

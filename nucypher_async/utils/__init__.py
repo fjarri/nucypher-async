@@ -8,8 +8,6 @@ import trio
 from .logging import Logger
 
 
-# TODO: use async file access? Since we're using it in every request
-# to create a temporary certificate file.
 @contextmanager
 def temp_file(contents: bytes) -> Iterator[Path]:
     with tempfile.NamedTemporaryFile(mode="wb") as file:

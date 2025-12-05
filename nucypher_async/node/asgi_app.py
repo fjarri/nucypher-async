@@ -6,7 +6,7 @@ from typing import ParamSpec, TypeVar
 
 import trio
 
-from ..drivers.asgi import (
+from .._drivers.asgi import (
     BinaryResponse,
     HTMLResponse,
     HTTPError,
@@ -15,7 +15,7 @@ from ..drivers.asgi import (
     Route,
     make_asgi_app,
 )
-from ..drivers.http_server import HTTPServableApp
+from .._drivers.http_server import HTTPServableApp
 from ..p2p import NodeRoutes, PeerError
 from .server import NodeServer
 

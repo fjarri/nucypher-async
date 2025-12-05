@@ -7,11 +7,11 @@ from typing import Generic, TypeVar
 
 import trio
 
+from .._drivers.http_client import HTTPClient
+from .._drivers.time import SystemClock
 from ..base.time import BaseClock
 from ..blockchain.identity import IdentityAddress, IdentityClient
 from ..domain import Domain
-from ..drivers.http_client import HTTPClient
-from ..drivers.time import SystemClock
 from ..p2p import Contact, FleetSensorSnapshot, Learner, NodeClient, NodeEntry, VerifiedNodeInfo
 from ..storage import BaseStorage
 from ..utils.logging import NULL_LOGGER, Logger

@@ -4,13 +4,13 @@ from pathlib import Path
 from attrs import frozen
 from platformdirs import PlatformDirs
 
+from .._drivers.http_client import HTTPClient
+from .._drivers.time import SystemClock
 from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
 from ..domain import Domain
-from ..drivers.http_client import HTTPClient
-from ..drivers.time import SystemClock
 from ..node.config import HTTPServerConfig
 from ..p2p import Contact, NodeClient
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage

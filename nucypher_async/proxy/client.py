@@ -6,10 +6,10 @@ from nucypher_core import Context, TreasureMap
 from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
+from .._drivers.http_client import HTTPClient
 from ..blockchain.identity import IdentityAddress
 from ..characters.pre import DelegatorCard, MessageKit, RecipientCard, RetrievalKit
 from ..client.pre import BasePREConsumerClient, PRERetrievalOutcome
-from ..drivers.http_client import HTTPClient
 from . import schema
 from .schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
