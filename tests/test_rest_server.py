@@ -4,7 +4,6 @@ import pytest
 import trio
 
 from nucypher_async.characters.cbd import Decryptor
-from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.http_client import HTTPClient
@@ -12,7 +11,7 @@ from nucypher_async.drivers.identity import IdentityAccount, IdentityAddress
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
-from nucypher_async.p2p.node_info import NodeClient
+from nucypher_async.p2p import NodeClient, Operator
 from nucypher_async.utils.logging import NULL_LOGGER
 
 

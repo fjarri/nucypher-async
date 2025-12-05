@@ -14,13 +14,20 @@ from nucypher_core import (
 
 from ..base.types import JSON
 from ..characters.cbd import ActiveRitual, Decryptor
-from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.identity import IdentityAddress
-from ..node_base import GenericPeerError, InactivePolicy, PeerPrivateKey, SecureContact
-from ..p2p.learner import Learner
-from ..p2p.node_info import NodeInfo
-from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
+from ..p2p import (
+    GenericPeerError,
+    InactivePolicy,
+    Learner,
+    NodeInfo,
+    Operator,
+    PeerPrivateKey,
+    PeerVerificationError,
+    SecureContact,
+    VerifiedNodeInfo,
+    verify_staking_local,
+)
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from .config import NodeServerConfig
@@ -72,7 +79,7 @@ class NodeServer:
         if peer_key_pair is not None:
             peer_private_key, peer_public_key = peer_key_pair
         else:
-            peer_private_key = reencryptor.make_peer_private_key()
+            peer_private_key = operator.peer_private_key
             peer_public_key = None
 
         if node_info is not None:

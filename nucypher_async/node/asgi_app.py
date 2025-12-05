@@ -3,7 +3,7 @@ from nucypher_core import EncryptedThresholdDecryptionRequest, MetadataRequest, 
 
 from ..drivers.asgi import BinaryResponse, HTMLResponse, JSONResponse, Request, Route, make_asgi_app
 from ..drivers.http_server import HTTPServableApp
-from ..node_base import InvalidMessage, NodeRoutes
+from ..p2p import InvalidMessage, NodeRoutes
 from .server import NodeServer
 
 

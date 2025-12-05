@@ -6,12 +6,12 @@ import click
 import trio
 
 from .characters.cbd import Decryptor
-from .characters.node import Operator
 from .characters.pre import Reencryptor
 from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .master_key import EncryptedMasterKey, MasterKey
 from .node import NodeServer, NodeServerConfig, NodeServerHandle
+from .p2p import Operator
 from .proxy import ProxyServer, ProxyServerConfig
 
 

@@ -12,11 +12,7 @@ from ..domain import Domain
 from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityAddress, IdentityClient
 from ..drivers.time import SystemClock
-from ..node_base import Contact
-from ..p2p.fleet_sensor import FleetSensorSnapshot, NodeEntry
-from ..p2p.learner import Learner
-from ..p2p.node_info import NodeClient
-from ..p2p.verification import VerifiedNodeInfo
+from ..p2p import Contact, FleetSensorSnapshot, Learner, NodeClient, NodeEntry, VerifiedNodeInfo
 from ..storage import BaseStorage
 from ..utils.logging import NULL_LOGGER, Logger
 from ..utils.producer import producer

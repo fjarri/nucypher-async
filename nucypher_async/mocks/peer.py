@@ -2,8 +2,7 @@ import trio
 
 from ..node import NodeServer
 from ..node.handle import NodeServerAsHTTPServer
-from ..node_base import Contact, PeerPublicKey
-from ..p2p import NodeClient
+from ..p2p import Contact, NodeClient, PeerPublicKey
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 
 

@@ -22,7 +22,6 @@ from nucypher_core.umbral import (
 
 from ..drivers.identity import IdentityAddress
 from ..master_key import MasterKey
-from ..node_base import PeerPrivateKey
 
 
 @frozen
@@ -209,9 +208,6 @@ class Reencryptor:
         self.__master_key = master_key
         self._decrypting_key = self.__master_key.make_decrypting_key()
         self.encrypting_key = self._decrypting_key.public_key()
-
-    def make_peer_private_key(self) -> PeerPrivateKey:
-        return self.__master_key.make_peer_private_key()
 
     def decrypt_kfrag(
         self,

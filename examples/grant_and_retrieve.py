@@ -10,7 +10,6 @@ from hexbytes import HexBytes
 
 from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.cbd import Decryptor
-from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient, Reencryptor
 from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
@@ -23,8 +22,7 @@ from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
-from nucypher_async.node_base import Contact
-from nucypher_async.p2p import NodeClient
+from nucypher_async.p2p import Contact, NodeClient, Operator
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
 

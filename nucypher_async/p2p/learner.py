@@ -7,13 +7,15 @@ from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from ..drivers.time import SystemClock
-from ..node_base import Contact, PeerError, get_alternative_contact
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
+from .errors import PeerError
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
-from .node_info import NodeClient, NodeInfo
+from .keys import Contact, get_alternative_contact
+from .node_client import NodeClient
+from .node_info import NodeInfo
 from .verification import VerifiedNodeInfo, verify_staking_remote
 
 

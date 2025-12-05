@@ -12,8 +12,7 @@ from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityClient
 from ..drivers.pre import PREClient
 from ..drivers.time import SystemClock
-from ..node_base import Contact, PeerPrivateKey, PeerPublicKey
-from ..p2p import NodeClient
+from ..p2p import Contact, NodeClient, PeerPrivateKey, PeerPublicKey
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
