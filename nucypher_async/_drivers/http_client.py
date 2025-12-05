@@ -7,8 +7,8 @@ from typing import cast
 
 import httpx
 
+from .._utils import temp_file
 from ..base.types import JSON
-from ..utils import temp_file
 from .ssl import SSLCertificate, fetch_certificate
 
 
@@ -16,6 +16,7 @@ class HTTPClientError(Exception):
     pass
 
 
+# TODO: move logic to _drivers/ssl
 def make_ssl_context(certificate: SSLCertificate) -> ssl.SSLContext:
     # Cannot create a context with a certificate directly, see https://bugs.python.org/issue16487.
     # So instead we do it via a temporary file, and negate the performance penalty by caching.

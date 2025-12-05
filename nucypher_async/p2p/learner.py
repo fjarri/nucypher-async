@@ -4,12 +4,12 @@ from collections.abc import Iterable
 import trio
 
 from .._drivers.time import SystemClock
+from .._utils import wait_for_any
 from ..base.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress, IdentityClient
 from ..domain import Domain
+from ..logging import NULL_LOGGER, Logger
 from ..storage import BaseStorage, InMemoryStorage
-from ..utils import wait_for_any
-from ..utils.logging import NULL_LOGGER, Logger
 from .errors import PeerError
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState

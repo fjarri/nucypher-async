@@ -8,12 +8,12 @@ import trio
 from .._drivers.asgi import HTTPError
 from .._drivers.http_server import HTTPServable
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
+from .._utils import BackgroundTask
 from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
+from ..logging import Logger
 from ..node.status import render_status
-from ..utils import BackgroundTask
-from ..utils.logging import Logger
 from . import schema
 from .config import ProxyServerConfig
 from .schema import (

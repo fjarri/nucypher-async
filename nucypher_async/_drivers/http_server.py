@@ -12,8 +12,8 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 from hypercorn.typing import ASGIFramework
 
-from ..utils import temp_file
-from ..utils.logging import Logger
+from .._utils import temp_file
+from ..logging import Logger
 from .ssl import SSLCertificate, SSLPrivateKey
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -61,6 +61,7 @@ class InMemoryCertificateConfig(Config):
         # Encrypt the temporary file we create with an emphemeral password.
         keyfile_password = os.urandom(32)
 
+        # TODO: move logic to _drivers/ssl
         if self.__ssl_ca_chain:
             chain_data = b"\n".join(cert.to_pem_bytes() for cert in self.__ssl_ca_chain).decode()
             context.load_verify_locations(cadata=chain_data)

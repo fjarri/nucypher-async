@@ -17,8 +17,8 @@ import arrow
 import trio
 from attr import frozen
 
-from .._drivers.time import SystemClock
-from ..base.time import BaseClock
+from ._drivers.time import SystemClock
+from .base.time import BaseClock
 
 
 class Level(IntEnum):

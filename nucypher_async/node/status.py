@@ -9,9 +9,9 @@ from mako.template import Template
 from .._drivers.asgi import HTTPError
 from ..base.time import BaseClock
 from ..domain import Domain
+from ..logging import Logger
 from ..p2p.fleet_sensor import FleetSensorSnapshot
 from ..p2p.verification import VerifiedNodeInfo
-from ..utils.logging import Logger
 from ..version import CodeInfo
 
 BASE_DIR = Path(__file__).parent

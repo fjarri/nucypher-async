@@ -17,11 +17,11 @@ from nucypher_async.blockchain.pre import PREAccount, PREClient
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
+from nucypher_async.logging import ConsoleHandler, Level, Logger
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
 from nucypher_async.p2p import Contact, NodeClient, Operator
-from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 
 LOCALHOST = "127.0.0.1"
 PORT_BASE = 9151

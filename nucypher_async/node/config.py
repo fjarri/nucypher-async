@@ -13,9 +13,9 @@ from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
 from ..domain import Domain
+from ..logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 from ..p2p import Contact, NodeClient, PeerPrivateKey, PeerPublicKey
 from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
-from ..utils.logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
 
 
 def seed_contacts_for_domain(domain: Domain) -> list[Contact]:  # noqa: RET503

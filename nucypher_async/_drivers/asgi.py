@@ -24,7 +24,7 @@ from starlette.responses import Response as StarletteResponse
 from starlette.routing import Route as StarletteRoute
 
 from ..base.types import JSON
-from ..utils.logging import Logger
+from ..logging import Logger
 from .http_server import HTTPServableApp
 
 

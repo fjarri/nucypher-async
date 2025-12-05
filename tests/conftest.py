@@ -6,6 +6,7 @@ from ipaddress import IPv4Address
 import pytest
 import trio
 
+from nucypher_async import logging
 from nucypher_async._drivers.ssl import SSLCertificate, SSLPrivateKey
 from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityAddress
 from nucypher_async.characters.cbd import Decryptor
@@ -27,7 +28,6 @@ from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, 
 from nucypher_async.p2p import Contact, Operator
 from nucypher_async.proxy import ProxyServer, ProxyServerConfig
 from nucypher_async.storage import InMemoryStorage
-from nucypher_async.utils import logging
 
 
 @pytest.fixture(scope="session")

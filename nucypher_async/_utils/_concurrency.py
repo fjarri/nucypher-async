@@ -1,19 +1,8 @@
-import tempfile
-from collections.abc import Awaitable, Callable, Iterable, Iterator
-from contextlib import contextmanager
-from pathlib import Path
+from collections.abc import Awaitable, Callable, Iterable
 
 import trio
 
-from .logging import Logger
-
-
-@contextmanager
-def temp_file(contents: bytes) -> Iterator[Path]:
-    with tempfile.NamedTemporaryFile(mode="wb") as file:
-        file.write(contents)
-        file.flush()
-        yield Path(file.name)
+from ..logging import Logger
 
 
 async def wait_for_any(events: Iterable[trio.Event]) -> trio.Event | None:
