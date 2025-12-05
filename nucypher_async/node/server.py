@@ -3,11 +3,9 @@ from ipaddress import IPv4Address
 import trio
 from nucypher_core import (
     EncryptedThresholdDecryptionRequest,
-    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     MetadataResponsePayload,
-    NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
 )
@@ -183,21 +181,24 @@ class NodeServer:
         await self._verification_task.stop()
         self.started = False
 
-    async def ping(self, remote_host: str | None) -> str:
+    async def ping(self, remote_host: str | None) -> bytes:
         if remote_host:
-            return remote_host
+            return remote_host.encode()
         raise PeerError.generic("Remote host could not be obtained from the request")
 
-    async def node_metadata(
-        self, remote_host: str | None, request: MetadataRequest
-    ) -> MetadataResponse:
+    async def node_metadata(self, remote_host: str | None, request_bytes: bytes) -> bytes:
+        try:
+            request = MetadataRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(MetadataRequest, exc) from exc
+
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
-            return MetadataResponse(self.operator.signer, response_payload)
+            return bytes(MetadataResponse(self.operator.signer, response_payload))
 
         # Filter out our own metadata
         node_infos = [NodeInfo(m) for m in request.announce_nodes]
@@ -220,13 +221,17 @@ class NodeServer:
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
-        return MetadataResponse(self.operator.signer, response_payload)
+        return bytes(MetadataResponse(self.operator.signer, response_payload))
 
-    async def public_information(self) -> NodeMetadata:
-        # TODO: can we just return NodeInfo?
-        return self._node.metadata
+    async def public_information(self) -> bytes:
+        return bytes(self._node.metadata)
 
-    async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
+    async def reencrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = ReencryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(ReencryptionRequest, exc) from exc
+
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
@@ -248,17 +253,23 @@ class NodeServer:
             verified_kfrag=verified_kfrag, capsules=request.capsules
         )
 
-        return ReencryptionResponse(
-            signer=self.operator.signer,
-            capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
+        return bytes(
+            ReencryptionResponse(
+                signer=self.operator.signer,
+                capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
+            )
         )
 
     async def condition_chains(self) -> JSON:
         raise NotImplementedError
 
-    async def decrypt(
-        self, request: EncryptedThresholdDecryptionRequest
-    ) -> EncryptedThresholdDecryptionResponse:
+    async def decrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = EncryptedThresholdDecryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(EncryptedThresholdDecryptionRequest, exc) from exc
+
+        # TODO: raise PeerError on failure
         decryption_request = self.decryptor.decrypt_threshold_decryption_request(request)
         self._logger.info(
             "Threshold decryption request for ritual ID #{}", decryption_request.ritual_id
@@ -305,9 +316,11 @@ class NodeServer:
         decryption_response = self.decryptor.make_threshold_decryption_response(
             ritual, decryption_share
         )
-        return self.decryptor.encrypt_threshold_decryption_response(
-            response=decryption_response,
-            requester_public_key=request.requester_public_key,
+        return bytes(
+            self.decryptor.encrypt_threshold_decryption_response(
+                response=decryption_response,
+                requester_public_key=request.requester_public_key,
+            )
         )
 
     # NOTE: This method really does not belong in the PeerAPI, because it is strictly HTTP,
