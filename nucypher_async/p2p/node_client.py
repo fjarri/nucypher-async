@@ -19,7 +19,7 @@ from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from ..characters.pre import DelegatorCard, RecipientCard
 from ..drivers.http_client import HTTPClient
-from .errors import InvalidMessage, PeerError
+from .errors import PeerError
 from .keys import Contact, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
 from .routes import NodeRoutes
@@ -38,14 +38,14 @@ class Deserializable(Protocol[DeserializableT_co]):
     def from_bytes(cls, data: bytes) -> DeserializableT_co: ...
 
 
-def unwrap_bytes(
+def try_deserialize(
     message_bytes: bytes, cls: type[Deserializable[DeserializableT_co]]
 ) -> DeserializableT_co:
     try:
         message = cls.from_bytes(message_bytes)
     except ValueError as exc:
         # Should we have a different error type for message format errors on client side?
-        raise InvalidMessage.for_message(cls, exc) from exc
+        raise PeerError.invalid_message(cls, exc) from exc
     return message
 
 
@@ -66,7 +66,7 @@ class NodeClient:
                 response = await session.post(path, data)
 
         if response.status_code != http.HTTPStatus.OK:
-            raise PeerError.from_json(response.body_bytes)  # TODO: use a JSON-returning property
+            raise PeerError.from_bytes(response.body_bytes)
         return response.body_bytes
 
     async def handshake(self, contact: Contact) -> SecureContact:
@@ -86,7 +86,7 @@ class NodeClient:
         try:
             return response_bytes.decode()
         except UnicodeDecodeError as exc:
-            raise InvalidMessage.for_message(str, exc) from exc
+            raise PeerError.invalid_message(str, exc) from exc
 
     async def exchange_node_info(
         self,
@@ -100,19 +100,19 @@ class NodeClient:
         response_bytes = await self._http_communicate(
             node_info.secure_contact, NodeRoutes.NODE_METADATA, bytes(request)
         )
-        response = unwrap_bytes(response_bytes, MetadataResponse)
+        response = try_deserialize(response_bytes, MetadataResponse)
 
         try:
             payload = response.verify(node_info.verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
-            raise InvalidMessage(MetadataResponse, exc) from exc
+            raise PeerError.invalid_message(MetadataResponse, exc) from exc
 
         return [NodeInfo(metadata) for metadata in payload.announce_nodes]
 
     async def public_information(self, secure_contact: SecureContact) -> NodeInfo:
         response_bytes = await self._http_communicate(secure_contact, NodeRoutes.PUBLIC_INFORMATION)
-        metadata = unwrap_bytes(response_bytes, NodeMetadata)
+        metadata = try_deserialize(response_bytes, NodeMetadata)
         return NodeInfo(metadata)
 
     async def reencrypt(
@@ -145,7 +145,7 @@ class NodeClient:
             node_info.secure_contact, NodeRoutes.REENCRYPT, bytes(request)
         )
 
-        response = unwrap_bytes(response_bytes, ReencryptionResponse)
+        response = try_deserialize(response_bytes, ReencryptionResponse)
 
         try:
             verified_cfrags = response.verify(
@@ -157,7 +157,7 @@ class NodeClient:
             )
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
-            raise InvalidMessage(ReencryptionResponse, exc) from exc
+            raise PeerError.invalid_message(ReencryptionResponse, exc) from exc
 
         return verified_cfrags
 
@@ -169,7 +169,7 @@ class NodeClient:
         response_bytes = await self._http_communicate(
             node_info.secure_contact, NodeRoutes.DECRYPT, bytes(request)
         )
-        return unwrap_bytes(response_bytes, EncryptedThresholdDecryptionResponse)
+        return try_deserialize(response_bytes, EncryptedThresholdDecryptionResponse)
 
     async def status(self, secure_contact: SecureContact) -> str:
         response_bytes = await self._http_communicate(secure_contact, NodeRoutes.STATUS)
@@ -178,4 +178,4 @@ class NodeClient:
         except UnicodeDecodeError as exc:
             # TODO: the error contents is the HTML page with Mako traceback,
             # process it accordingly.
-            raise InvalidMessage.for_message(str, exc) from exc
+            raise PeerError.invalid_message(str, exc) from exc

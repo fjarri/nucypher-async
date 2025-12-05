@@ -17,11 +17,10 @@ from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.pre import PublisherCard, Reencryptor
 from ..drivers.identity import IdentityAddress
 from ..p2p import (
-    GenericPeerError,
-    InactivePolicy,
     Learner,
     NodeInfo,
     Operator,
+    PeerError,
     PeerPrivateKey,
     PeerVerificationError,
     SecureContact,
@@ -187,7 +186,7 @@ class NodeServer:
     async def ping(self, remote_host: str | None) -> str:
         if remote_host:
             return remote_host
-        raise GenericPeerError
+        raise PeerError.generic("Remote host could not be obtained from the request")
 
     async def node_metadata(
         self, remote_host: str | None, request: MetadataRequest
@@ -233,7 +232,7 @@ class NodeServer:
         # TODO: check if the policy is marked as revoked
         async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
-                raise InactivePolicy(f"Policy {hrac} is not active")
+                raise PeerError.inactive_policy(f"Policy {hrac} is not active")
 
         # TODO: catch decryption errors and raise RPC error here
         verified_kfrag = self.reencryptor.decrypt_kfrag(

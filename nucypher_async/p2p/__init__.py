@@ -1,4 +1,4 @@
-from .errors import GenericPeerError, InactivePolicy, InvalidMessage, PeerError
+from .errors import PeerError
 from .fleet_sensor import FleetSensorSnapshot, NodeEntry
 from .keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact, get_alternative_contact
 from .learner import Learner
@@ -11,9 +11,6 @@ from .verification import PeerVerificationError, VerifiedNodeInfo, verify_stakin
 __all__ = [
     "Contact",
     "FleetSensorSnapshot",
-    "GenericPeerError",
-    "InactivePolicy",
-    "InvalidMessage",
     "Learner",
     "NodeClient",
     "NodeEntry",

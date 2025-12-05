@@ -114,13 +114,13 @@ class ProxyServer(HTTPServable):
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
         except schema.ValidationError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         if request_body is not None:
             try:
                 request_from_body = schema.from_json(GetUrsulasRequest, request_body)
             except schema.ValidationError as exc:
-                raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+                raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
             # TODO: kind of weird. Who would use both query params and body?
             # Also, should GET request even support a body?
@@ -140,10 +140,11 @@ class ProxyServer(HTTPServable):
                     exclude_nodes=request.exclude_ursulas,
                 )
         except RuntimeError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
         except trio.TooSlowError as exc:
             raise HTTPError(
-                "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
+                http.HTTPStatus.GATEWAY_TIMEOUT,
+                "Could not get all the nodes in time",
             ) from exc
 
         node_list = [
@@ -164,7 +165,7 @@ class ProxyServer(HTTPServable):
         try:
             request = schema.from_json(RetrieveCFragsRequest, request_body)
         except schema.ValidationError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         client = LocalPREClient(self._network_client, self._pre_client)
 

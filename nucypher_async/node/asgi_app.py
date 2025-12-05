@@ -1,9 +1,23 @@
+import http
+import json
+from collections.abc import Callable
+from functools import wraps
+from typing import ParamSpec, TypeVar
+
 import trio
 from nucypher_core import EncryptedThresholdDecryptionRequest, MetadataRequest, ReencryptionRequest
 
-from ..drivers.asgi import BinaryResponse, HTMLResponse, JSONResponse, Request, Route, make_asgi_app
+from ..drivers.asgi import (
+    BinaryResponse,
+    HTMLResponse,
+    HTTPError,
+    JSONResponse,
+    Request,
+    Route,
+    make_asgi_app,
+)
 from ..drivers.http_server import HTTPServableApp
-from ..p2p import InvalidMessage, NodeRoutes
+from ..p2p import NodeRoutes, PeerError
 from .server import NodeServer
 
 
@@ -25,6 +39,21 @@ def make_node_asgi_app(server: NodeServer) -> HTTPServableApp:
     )
 
 
+Param = ParamSpec("Param")
+RetVal = TypeVar("RetVal")
+
+
+def wrap_peer_errors(func: Callable[Param, RetVal]) -> Callable[Param, RetVal]:
+    @wraps(func)
+    def wrapped(*args: Param.args, **kwds: Param.kwargs) -> RetVal:
+        try:
+            return func(*args, **kwds)
+        except PeerError as exc:
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, message=json.dumps(exc.to_json())) from exc
+
+    return wrapped
+
+
 class NodeServerAsHTTPServer:
     def __init__(self, server: NodeServer):
         self._server = server
@@ -35,40 +64,46 @@ class NodeServerAsHTTPServer:
     async def stop(self, _nursery: trio.Nursery) -> None:
         await self._server.stop()
 
+    @wrap_peer_errors
     async def ping(self, request: Request) -> BinaryResponse:
         response = await self._server.ping(request.remote_host)
         return BinaryResponse(data=response.encode())
 
+    @wrap_peer_errors
     async def node_metadata(self, request: Request) -> BinaryResponse:
         try:
             typed_request = MetadataRequest.from_bytes(await request.body_bytes())
         except ValueError as exc:
-            raise InvalidMessage.for_message(MetadataRequest, exc) from exc
+            raise PeerError.invalid_message(MetadataRequest, exc) from exc
         response = await self._server.node_metadata(request.remote_host, typed_request)
         return BinaryResponse(data=bytes(response))
 
+    @wrap_peer_errors
     async def public_information(self, _request: Request) -> BinaryResponse:
         response = await self._server.public_information()
         return BinaryResponse(data=bytes(response))
 
+    @wrap_peer_errors
     async def reencrypt(self, request: Request) -> BinaryResponse:
         try:
             typed_request = ReencryptionRequest.from_bytes(await request.body_bytes())
         except ValueError as exc:
-            raise InvalidMessage.for_message(ReencryptionRequest, exc) from exc
+            raise PeerError.invalid_message(ReencryptionRequest, exc) from exc
         response = await self._server.reencrypt(typed_request)
         return BinaryResponse(data=bytes(response))
 
+    @wrap_peer_errors
     async def condition_chains(self, _request: Request) -> JSONResponse:
         return JSONResponse(data=await self._server.condition_chains())
 
+    @wrap_peer_errors
     async def decrypt(self, request: Request) -> BinaryResponse:
         try:
             typed_request = EncryptedThresholdDecryptionRequest.from_bytes(
                 await request.body_bytes()
             )
         except ValueError as exc:
-            raise InvalidMessage.for_message(EncryptedThresholdDecryptionRequest, exc) from exc
+            raise PeerError.invalid_message(EncryptedThresholdDecryptionRequest, exc) from exc
         response = await self._server.decrypt(typed_request)
         return BinaryResponse(data=bytes(response))
 

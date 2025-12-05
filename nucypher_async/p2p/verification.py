@@ -6,13 +6,12 @@ from ..base.time import BaseClock
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
-from .errors import PeerError
 from .keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
 from .operator import Operator
 
 
-class PeerVerificationError(PeerError):
+class PeerVerificationError(Exception):
     pass
 
 

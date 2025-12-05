@@ -16,7 +16,7 @@ from .fleet_state import FleetState
 from .keys import Contact, get_alternative_contact
 from .node_client import NodeClient
 from .node_info import NodeInfo
-from .verification import VerifiedNodeInfo, verify_staking_remote
+from .verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_remote
 
 
 class Learner:
@@ -164,7 +164,7 @@ class Learner:
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
-            except (PeerError, trio.TooSlowError) as exc:
+            except (PeerVerificationError, trio.TooSlowError) as exc:
                 message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
                     "Error when trying to verify {}: {}",

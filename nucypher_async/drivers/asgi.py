@@ -29,7 +29,7 @@ from .http_server import HTTPServableApp
 
 
 class HTTPError(Exception):
-    def __init__(self, message: str, status_code: http.HTTPStatus):
+    def __init__(self, status_code: http.HTTPStatus, message: str):
         super().__init__(message, status_code)
         self.message = message
         self.status_code = status_code

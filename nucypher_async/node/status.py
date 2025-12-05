@@ -43,4 +43,4 @@ def render_status(
         text_error = mako_exceptions.text_error_template().render()
         html_error = mako_exceptions.html_error_template().render()
         logger.error("Template Rendering Exception:\n{}", text_error)
-        raise HTTPError(html_error, HTTPStatus.INTERNAL_SERVER_ERROR) from exc
+        raise HTTPError(HTTPStatus.INTERNAL_SERVER_ERROR, html_error) from exc
