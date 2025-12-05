@@ -19,11 +19,11 @@ from nucypher_core.umbral import Capsule, VerifiedCapsuleFrag
 
 from .._drivers.http_client import HTTPClient
 from ..characters.pre import DelegatorCard, RecipientCard
-from .errors import PeerError
-from .keys import Contact, PeerPublicKey, SecureContact
-from .node_info import NodeInfo
-from .routes import NodeRoutes
-from .verification import VerifiedNodeInfo
+from ._errors import PeerError
+from ._keys import Contact, PeerPublicKey, SecureContact
+from ._node_info import NodeInfo
+from ._routes import NodeRoutes
+from ._verification import VerifiedNodeInfo
 
 
 class PeerConnectionError(Exception):

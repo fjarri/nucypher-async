@@ -15,7 +15,7 @@ from nucypher_async.client.pre import LocalPREClient, pre_encrypt
 from nucypher_async.domain import Domain
 from nucypher_async.node import NodeServer
 from nucypher_async.proxy import ProxyPREClient, ProxyServer
-from nucypher_async.proxy.client import ProxyClient
+from nucypher_async.proxy._client import ProxyClient
 
 
 async def test_get_nodes(

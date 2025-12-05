@@ -5,12 +5,12 @@ from pathlib import Path
 import click
 import trio
 
+from ._p2p import Operator
 from .blockchain.identity import IdentityAccount
 from .characters.cbd import Decryptor
 from .characters.pre import Reencryptor
 from .master_key import EncryptedMasterKey, MasterKey
 from .node import NodeServer, NodeServerConfig, NodeServerHandle
-from .p2p import Operator
 from .proxy import ProxyServer, ProxyServerConfig, ProxyServerHandle
 
 

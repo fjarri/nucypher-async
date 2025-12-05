@@ -6,15 +6,14 @@ from platformdirs import PlatformDirs
 
 from .._drivers.http_client import HTTPClient
 from .._drivers.time import SystemClock
+from .._p2p import BaseStorage, Contact, FileSystemStorage, InMemoryStorage, NodeClient
 from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
 from ..domain import Domain
 from ..logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
-from ..node.config import HTTPServerConfig
-from ..p2p import Contact, NodeClient
-from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
+from ..node import HTTPServerConfig
 
 
 # TODO: handle in a centralized way

@@ -14,7 +14,7 @@ import trio
 
 from .._drivers.asgi import HTMLResponse, JSONResponse, Request, Route, make_asgi_app
 from .._drivers.http_server import HTTPServableApp
-from .server import ProxyServer
+from ._server import ProxyServer
 
 
 class ProxyRoutes:

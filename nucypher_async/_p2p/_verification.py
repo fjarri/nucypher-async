@@ -6,9 +6,9 @@ from ..base.time import BaseClock
 from ..blockchain.identity import IdentityAddress, IdentityClientSession
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
-from .keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
-from .node_info import NodeInfo
-from .operator import Operator
+from ._keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
+from ._node_info import NodeInfo
+from ._operator import Operator
 
 
 class PeerVerificationError(Exception):

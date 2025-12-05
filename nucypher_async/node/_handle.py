@@ -5,8 +5,8 @@ import trio
 from .._drivers.http_server import HTTPServable, HTTPServerHandle
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
 from ..logging import Logger
-from .asgi_app import make_node_asgi_app
-from .server import NodeServer
+from ._asgi_app import make_node_asgi_app
+from ._server import NodeServer
 
 
 class NodeServerAsHTTPServer(HTTPServable):

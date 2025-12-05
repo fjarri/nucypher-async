@@ -8,14 +8,21 @@ from platformdirs import PlatformDirs
 from .._drivers.http_client import HTTPClient
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
 from .._drivers.time import SystemClock
+from .._p2p import (
+    BaseStorage,
+    Contact,
+    FileSystemStorage,
+    InMemoryStorage,
+    NodeClient,
+    PeerPrivateKey,
+    PeerPublicKey,
+)
 from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
 from ..domain import Domain
 from ..logging import ConsoleHandler, Handler, Level, Logger, RotatingFileHandler
-from ..p2p import Contact, NodeClient, PeerPrivateKey, PeerPublicKey
-from ..storage import BaseStorage, FileSystemStorage, InMemoryStorage
 
 
 def seed_contacts_for_domain(domain: Domain) -> list[Contact]:  # noqa: RET503

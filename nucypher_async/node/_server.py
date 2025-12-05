@@ -10,13 +10,7 @@ from nucypher_core import (
     ReencryptionResponse,
 )
 
-from .._utils import BackgroundTask
-from ..base.types import JSON
-from ..blockchain.identity import IdentityAddress
-from ..characters.cbd import ActiveRitual, Decryptor
-from ..characters.pre import PublisherCard, Reencryptor
-from ..logging import Logger
-from ..p2p import (
+from .._p2p import (
     Learner,
     NodeInfo,
     Operator,
@@ -27,8 +21,14 @@ from ..p2p import (
     VerifiedNodeInfo,
     verify_staking_local,
 )
-from .config import NodeServerConfig
-from .status import render_status
+from .._utils import BackgroundTask
+from ..base.types import JSON
+from ..blockchain.identity import IdentityAddress
+from ..characters.cbd import ActiveRitual, Decryptor
+from ..characters.pre import PublisherCard, Reencryptor
+from ..logging import Logger
+from ._config import NodeServerConfig
+from ._status import render_status
 
 
 class NodeServer:

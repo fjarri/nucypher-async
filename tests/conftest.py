@@ -19,15 +19,14 @@ from nucypher_async._mocks import (
     MockP2PNetwork,
     MockPREClient,
 )
+from nucypher_async._p2p import Contact, InMemoryStorage, Operator
 from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityAddress
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.master_key import MasterKey
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
-from nucypher_async.p2p import Contact, Operator
 from nucypher_async.proxy import ProxyServer, ProxyServerConfig
-from nucypher_async.storage import InMemoryStorage
 
 
 @pytest.fixture(scope="session")

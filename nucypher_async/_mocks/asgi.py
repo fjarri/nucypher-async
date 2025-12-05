@@ -18,7 +18,7 @@ from .._drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
 from .._drivers.http_server import HTTPServable, HTTPServableApp
 from .._drivers.ssl import SSLCertificate
 from ..proxy import ProxyServer
-from ..proxy.asgi_app import make_proxy_asgi_app
+from ..proxy._asgi_app import make_proxy_asgi_app
 
 
 class LifespanManager:

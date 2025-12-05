@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING
 from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
-from .keys import Contact
-from .node_info import NodeInfo
-from .verification import VerifiedNodeInfo
+from ._keys import Contact
+from ._node_info import NodeInfo
+from ._verification import VerifiedNodeInfo
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..blockchain.identity import IdentityAddress

@@ -16,8 +16,8 @@ from .._drivers.asgi import (
     make_asgi_app,
 )
 from .._drivers.http_server import HTTPServableApp
-from ..p2p import NodeRoutes, PeerError
-from .server import NodeServer
+from .._p2p import NodeRoutes, PeerError
+from ._server import NodeServer
 
 
 def make_node_asgi_app(server: NodeServer) -> HTTPServableApp:

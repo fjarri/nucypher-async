@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from .p2p.node_info import NodeInfo
+from ._node_info import NodeInfo
 
 
 # TODO: add the ability to save certificates

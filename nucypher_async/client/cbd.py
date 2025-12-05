@@ -9,9 +9,9 @@ from nucypher_core.ferveo import (
     combine_decryption_shares_simple,
 )
 
+from .._p2p import VerifiedNodeInfo
 from ..blockchain.cbd import CBDAccountSigner, CBDAddress, CBDClient, OnChainRitual
 from ..blockchain.identity import IdentityAddress
-from ..p2p.verification import VerifiedNodeInfo
 from .network import NetworkClient
 
 

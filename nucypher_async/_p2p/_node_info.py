@@ -6,7 +6,7 @@ from nucypher_core.umbral import PublicKey
 
 from ..blockchain.identity import IdentityAddress
 from ..domain import Domain
-from .keys import Contact, PeerPublicKey, SecureContact
+from ._keys import Contact, PeerPublicKey, SecureContact
 
 
 class NodeInfo:

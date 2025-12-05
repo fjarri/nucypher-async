@@ -1,9 +1,9 @@
 import trio
 
+from .._p2p import Contact, NodeClient, PeerPublicKey
 from ..node import NodeServer
-from ..node.asgi_app import make_node_asgi_app
-from ..node.handle import NodeServerAsHTTPServer
-from ..p2p import Contact, NodeClient, PeerPublicKey
+from ..node._asgi_app import make_node_asgi_app
+from ..node._handle import NodeServerAsHTTPServer
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 
 

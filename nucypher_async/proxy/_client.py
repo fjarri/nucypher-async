@@ -10,8 +10,8 @@ from .._drivers.http_client import HTTPClient
 from ..blockchain.identity import IdentityAddress
 from ..characters.pre import DelegatorCard, MessageKit, RecipientCard, RetrievalKit
 from ..client.pre import BasePREConsumerClient, PRERetrievalOutcome
-from . import schema
-from .schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
+from . import _schema
+from ._schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
 
 class ProxyClient:
@@ -44,7 +44,7 @@ class ProxyClient:
             # TODO: a more specialized exception
             raise RuntimeError(f"/get_ursulas failed with status {response.status_code}")
 
-        parsed_response = schema.from_json(GetUrsulasResponse, response.json)
+        parsed_response = _schema.from_json(GetUrsulasResponse, response.json)
 
         return {
             node.checksum_address: (node.uri, node.encrypting_key)
@@ -71,13 +71,13 @@ class ProxyClient:
         async with self._http_client.session() as session:
             response = await session.post(
                 f"https://{self._host}:{self._port}/retrieve_cfrags",
-                data=json.dumps(schema.to_json(request)).encode(),
+                data=json.dumps(_schema.to_json(request)).encode(),
             )
         if response.status_code != HTTPStatus.OK:
             # TODO: a more specialized exception
             raise RuntimeError(f"/retrieve_cfrags failed with status {response.status_code}")
 
-        parsed_response = schema.from_json(ClientRetrieveCFragsResponse, response.json)
+        parsed_response = _schema.from_json(ClientRetrieveCFragsResponse, response.json)
 
         processed_response = []
         for rkit, result in zip(

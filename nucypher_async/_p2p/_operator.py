@@ -2,7 +2,7 @@ from nucypher_core.umbral import RecoverableSignature
 
 from ..blockchain.identity import IdentityAccount
 from ..master_key import MasterKey
-from .keys import PeerPrivateKey
+from ._keys import PeerPrivateKey
 
 
 class Operator:

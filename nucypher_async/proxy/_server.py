@@ -13,10 +13,10 @@ from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
 from ..logging import Logger
-from ..node.status import render_status
-from . import schema
-from .config import ProxyServerConfig
-from .schema import (
+from ..node import render_status
+from . import _schema
+from ._config import ProxyServerConfig
+from ._schema import (
     JSON,
     GetUrsulasRequest,
     GetUrsulasResponse,
@@ -113,13 +113,13 @@ class ProxyServer(HTTPServable):
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
-        except schema.ValidationError as exc:
+        except _schema.ValidationError as exc:
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         if request_body is not None:
             try:
-                request_from_body = schema.from_json(GetUrsulasRequest, request_body)
-            except schema.ValidationError as exc:
+                request_from_body = _schema.from_json(GetUrsulasRequest, request_body)
+            except _schema.ValidationError as exc:
                 raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
             # TODO: kind of weird. Who would use both query params and body?
@@ -159,12 +159,12 @@ class ProxyServer(HTTPServable):
             result=GetUrsulasResult(ursulas=node_list), version="async-0.1.0-dev"
         )
 
-        return schema.to_json(response)
+        return _schema.to_json(response)
 
     async def retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
-            request = schema.from_json(RetrieveCFragsRequest, request_body)
-        except schema.ValidationError as exc:
+            request = _schema.from_json(RetrieveCFragsRequest, request_body)
+        except _schema.ValidationError as exc:
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         client = LocalPREClient(self._network_client, self._pre_client)
@@ -184,7 +184,7 @@ class ProxyServer(HTTPServable):
             version="async-0.1.0-dev",
         )
 
-        return schema.to_json(response)
+        return _schema.to_json(response)
 
     async def status(self) -> str:
         return render_status(

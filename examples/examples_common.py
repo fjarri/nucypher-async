@@ -11,6 +11,7 @@ from nucypher_async._drivers.http_client import HTTPClient
 from nucypher_async._drivers.ssl import fetch_certificate
 from nucypher_async._drivers.time import SystemClock
 from nucypher_async._mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
+from nucypher_async._p2p import Contact, NodeClient, Operator
 from nucypher_async.base.time import BaseClock
 from nucypher_async.blockchain.cbd import CBDClient
 from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityClient
@@ -21,7 +22,6 @@ from nucypher_async.domain import Domain
 from nucypher_async.logging import ConsoleHandler, Level, Logger
 from nucypher_async.master_key import MasterKey
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
-from nucypher_async.p2p import Contact, NodeClient, Operator
 
 LOCALHOST = "127.0.0.1"
 PORT_BASE = 9151

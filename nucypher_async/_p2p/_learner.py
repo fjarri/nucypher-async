@@ -9,14 +9,14 @@ from ..base.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress, IdentityClient
 from ..domain import Domain
 from ..logging import NULL_LOGGER, Logger
-from ..storage import BaseStorage, InMemoryStorage
-from .errors import PeerError
-from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
-from .fleet_state import FleetState
-from .keys import Contact, get_alternative_contact
-from .node_client import NodeClient
-from .node_info import NodeInfo
-from .verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_remote
+from ._errors import PeerError
+from ._fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
+from ._fleet_state import FleetState
+from ._keys import Contact, get_alternative_contact
+from ._node_client import NodeClient
+from ._node_info import NodeInfo
+from ._storage import BaseStorage, InMemoryStorage
+from ._verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_remote
 
 
 class Learner:

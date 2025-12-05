@@ -7,15 +7,14 @@ from mako import exceptions as mako_exceptions
 from mako.template import Template
 
 from .._drivers.asgi import HTTPError
+from .._p2p import FleetSensorSnapshot, VerifiedNodeInfo
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..logging import Logger
-from ..p2p.fleet_sensor import FleetSensorSnapshot
-from ..p2p.verification import VerifiedNodeInfo
 from ..version import CodeInfo
 
 BASE_DIR = Path(__file__).parent
-STATUS_TEMPLATE = Template(filename=str(BASE_DIR / "status.mako")).get_def("main")
+STATUS_TEMPLATE = Template(filename=str(BASE_DIR / "_status.mako")).get_def("main")
 
 
 def render_status(
