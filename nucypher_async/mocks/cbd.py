@@ -3,8 +3,8 @@ from typing import cast
 from ethereum_rpc import Amount
 from pons import Client, ContractABI
 
+from ..blockchain.cbd import CBDAddress, CBDAmount, CBDClient
 from ..domain import Domain
-from ..drivers.cbd import CBDAddress, CBDAmount, CBDClient
 from .eth import MockBackend, MockContract
 
 

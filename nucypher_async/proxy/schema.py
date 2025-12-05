@@ -25,7 +25,7 @@ from attrs import frozen
 from nucypher_core import Context, RetrievalKit, TreasureMap
 from nucypher_core.umbral import CapsuleFrag, PublicKey, VerifiedCapsuleFrag
 
-from ..drivers.identity import IdentityAddress
+from ..blockchain.identity import IdentityAddress
 
 JSON = str | int | float | bool | None | list["JSON"] | dict[str, "JSON"]
 

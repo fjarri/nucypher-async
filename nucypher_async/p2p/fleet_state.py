@@ -9,7 +9,7 @@ from .node_info import NodeInfo
 from .verification import VerifiedNodeInfo
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..drivers.identity import IdentityAddress
+    from ..blockchain.identity import IdentityAddress
 
 
 class FleetState:

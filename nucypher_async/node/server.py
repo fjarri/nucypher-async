@@ -11,9 +11,9 @@ from nucypher_core import (
 )
 
 from ..base.types import JSON
+from ..blockchain.identity import IdentityAddress
 from ..characters.cbd import ActiveRitual, Decryptor
 from ..characters.pre import PublisherCard, Reencryptor
-from ..drivers.identity import IdentityAddress
 from ..p2p import (
     Learner,
     NodeInfo,

@@ -1,6 +1,6 @@
 from nucypher_core.umbral import RecoverableSignature
 
-from ..drivers.identity import IdentityAccount
+from ..blockchain.identity import IdentityAccount
 from ..master_key import MasterKey
 from .keys import PeerPrivateKey
 

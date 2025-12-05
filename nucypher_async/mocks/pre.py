@@ -4,8 +4,8 @@ from attrs import frozen
 from ethereum_rpc import Address, Amount
 from pons import Client, ContractABI
 
+from ..blockchain.pre import PREAddress, PREAmount, PREClient
 from ..domain import Domain
-from ..drivers.pre import PREAddress, PREAmount, PREClient
 from .eth import MockBackend, MockContract
 
 

@@ -4,8 +4,8 @@ import arrow
 from nucypher_core import NodeMetadata, NodeMetadataPayload
 from nucypher_core.umbral import PublicKey
 
+from ..blockchain.identity import IdentityAddress
 from ..domain import Domain
-from ..drivers.identity import IdentityAddress
 from .keys import Contact, PeerPublicKey, SecureContact
 
 

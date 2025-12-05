@@ -6,10 +6,10 @@ from ipaddress import IPv4Address
 import pytest
 import trio
 
+from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityAddress
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityAddress
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import (
     MockCBDClient,

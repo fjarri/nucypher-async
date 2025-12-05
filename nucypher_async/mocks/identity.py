@@ -3,8 +3,8 @@ from typing import cast
 from ethereum_rpc import Address, Amount
 from pons import Client, ContractABI
 
+from ..blockchain.identity import AmountT, IdentityAddress, IdentityClient
 from ..domain import Domain
-from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
 from .eth import MockBackend, MockContract
 
 

@@ -5,9 +5,9 @@ from pathlib import Path
 import click
 import trio
 
+from .blockchain.identity import IdentityAccount
 from .characters.cbd import Decryptor
 from .characters.pre import Reencryptor
-from .drivers.identity import IdentityAccount
 from .master_key import EncryptedMasterKey, MasterKey
 from .node import NodeServer, NodeServerConfig, NodeServerHandle
 from .p2p import Operator

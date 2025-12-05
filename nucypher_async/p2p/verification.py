@@ -3,9 +3,9 @@ from nucypher_core.ferveo import FerveoPublicKey
 from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
+from ..blockchain.identity import IdentityAddress, IdentityClientSession
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
-from ..drivers.identity import IdentityAddress, IdentityClientSession
 from .keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
 from .operator import Operator

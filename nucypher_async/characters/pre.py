@@ -20,7 +20,7 @@ from nucypher_core.umbral import (
     reencrypt,
 )
 
-from ..drivers.identity import IdentityAddress
+from ..blockchain.identity import IdentityAddress
 from ..master_key import MasterKey
 
 

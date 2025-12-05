@@ -30,8 +30,8 @@ from nucypher_core.ferveo import (
     combine_decryption_shares_simple,
 )
 
-from ..drivers.cbd import OnChainRitual
-from ..drivers.identity import IdentityAddress
+from ..blockchain.cbd import OnChainRitual
+from ..blockchain.identity import IdentityAddress
 from ..master_key import MasterKey
 
 

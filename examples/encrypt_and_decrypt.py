@@ -6,10 +6,10 @@ import trio
 import trio.testing
 from examples_common import Context
 
+from nucypher_async.blockchain.cbd import CBDAccount, CBDAccountSigner
 from nucypher_async.characters.cbd import Encryptor
 from nucypher_async.client.cbd import LocalCBDClient
 from nucypher_async.client.network import NetworkClient
-from nucypher_async.drivers.cbd import CBDAccount, CBDAccountSigner
 from nucypher_async.master_key import MasterKey
 
 
