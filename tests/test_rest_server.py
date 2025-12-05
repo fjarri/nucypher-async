@@ -4,37 +4,31 @@ import pytest
 import trio
 
 from nucypher_async.characters.cbd import Decryptor
-from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
-from nucypher_async.drivers.http_server import HTTPServerHandle
+from nucypher_async.drivers.http_client import HTTPClient
 from nucypher_async.drivers.identity import IdentityAccount, IdentityAddress
-from nucypher_async.drivers.peer import PeerClient
-from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockIdentityClient, MockPREClient
-from nucypher_async.p2p.node_info import NodeClient
-from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
-from nucypher_async.storage import InMemoryStorage
+from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
+from nucypher_async.p2p import NodeClient, Operator
 from nucypher_async.utils.logging import NULL_LOGGER
 
 
 @pytest.fixture
 def node_server() -> NodeServer:
-    peer_server_config = PeerServerConfig.from_typed_values(
-        external_host="127.0.0.1",
-        external_port=9151,
+    http_server_config = HTTPServerConfig.from_typed_values(
+        bind_to_address="127.0.0.1",
+        bind_to_port=9151,
     )
-    config = NodeServerConfig(
+    config = NodeServerConfig.from_typed_values(
+        http_server_config=http_server_config,
         domain=Domain.MAINNET,
         identity_client=MockIdentityClient(),
         pre_client=MockPREClient(),
         cbd_client=MockCBDClient(),
-        peer_client=PeerClient(),
-        parent_logger=NULL_LOGGER,
-        storage=InMemoryStorage(),
+        logger=NULL_LOGGER,
         seed_contacts=[],
-        clock=SystemClock(),
     )
 
     master_key = MasterKey.random()
@@ -44,20 +38,19 @@ def node_server() -> NodeServer:
     decryptor = Decryptor(master_key)
 
     return NodeServer(
+        config=config,
         operator=operator,
         reencryptor=reencryptor,
         decryptor=decryptor,
-        peer_server_config=peer_server_config,
-        config=config,
         staking_provider_address=IdentityAddress(os.urandom(20)),
     )
 
 
 async def test_client_real_server(nursery: trio.Nursery, node_server: NodeServer) -> None:
-    handle = HTTPServerHandle(node_server)
+    handle = NodeServerHandle(node_server)
     await nursery.start(handle.startup)
 
-    client = NodeClient(PeerClient())
+    client = NodeClient(HTTPClient())
     response = await client.ping(node_server.secure_contact())
     assert response == "127.0.0.1"
 

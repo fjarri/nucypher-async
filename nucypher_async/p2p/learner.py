@@ -3,19 +3,20 @@ from collections.abc import Iterable
 
 import trio
 
-from ..base.peer_error import PeerError
 from ..base.time import BaseClock
 from ..domain import Domain
 from ..drivers.identity import AmountT, IdentityAddress, IdentityClient
-from ..drivers.peer import Contact, PeerClient, get_alternative_contact
 from ..drivers.time import SystemClock
 from ..storage import BaseStorage, InMemoryStorage
 from ..utils import wait_for_any
 from ..utils.logging import NULL_LOGGER, Logger
+from .errors import PeerError
 from .fleet_sensor import FleetSensor, FleetSensorSnapshot, NodeEntry, StakingProviderEntry
 from .fleet_state import FleetState
-from .node_info import NodeClient, NodeInfo
-from .verification import VerifiedNodeInfo, verify_staking_remote
+from .keys import Contact, get_alternative_contact
+from .node_client import NodeClient
+from .node_info import NodeInfo
+from .verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_remote
 
 
 class Learner:
@@ -31,7 +32,7 @@ class Learner:
     def __init__(
         self,
         domain: Domain,
-        peer_client: PeerClient,
+        node_client: NodeClient,
         identity_client: IdentityClient,
         this_node: VerifiedNodeInfo | None = None,
         seed_contacts: Iterable[Contact] | None = None,
@@ -44,7 +45,7 @@ class Learner:
 
         self._logger = parent_logger.get_child("Learner")
 
-        self._node_client = NodeClient(peer_client)
+        self._node_client = node_client
         self._identity_client = identity_client
 
         self._domain = domain
@@ -163,7 +164,7 @@ class Learner:
             try:
                 with trio.fail_after(self.VERIFICATION_TIMEOUT):
                     node, staked_amount = await self._verify_contact(contact)
-            except (PeerError, trio.TooSlowError) as exc:
+            except (PeerVerificationError, trio.TooSlowError) as exc:
                 message = "timed out" if isinstance(exc, trio.TooSlowError) else str(exc)
                 self._logger.error(
                     "Error when trying to verify {}: {}",

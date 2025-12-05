@@ -1,29 +1,52 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import trio
 
-import httpx
+from ..node import NodeServer
+from ..node.asgi_app import make_node_asgi_app
+from ..node.handle import NodeServerAsHTTPServer
+from ..p2p import Contact, NodeClient, PeerPublicKey
+from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
 
-from ..drivers.peer import Contact, PeerClient, PeerPublicKey
-from ..utils.ssl import SSLCertificate
-from .asgi import MockHTTPClient, MockNetwork
+
+class MockNodeServerHandle:
+    def __init__(self, handle: MockHTTPServerHandle):
+        self._handle = handle
+
+    async def startup(self) -> None:
+        await self._handle.startup()
+
+    async def shutdown(self) -> None:
+        await self._handle.shutdown()
 
 
-class MockPeerClient(PeerClient):
-    """
-    A counterpart of NetworkMiddleware with raw data/response pass-through
-    directly to the server.
-    """
+class MockP2PNetwork:
+    def __init__(self, nursery: trio.Nursery):
+        self._mock_http_network = MockHTTPNetwork(nursery)
 
-    def __init__(self, mock_network: MockNetwork, host: str):
-        self._mock_network = mock_network
-        self._host = host
+    def add_node_server(self, server: NodeServer) -> MockNodeServerHandle:
+        handle = self._mock_http_network.add_server(
+            NodeServerAsHTTPServer(server), make_node_asgi_app(server)
+        )
+        return MockNodeServerHandle(handle)
 
-    async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
-        # TODO: raise ConnectionError if the server is not found
-        certificate, _manager = self._mock_network.get_server(contact.host, contact.port)
-        return certificate
+    async def startup(self, contact: Contact) -> None:
+        await self._mock_http_network.startup(contact.host, contact.port)
 
-    @asynccontextmanager
-    async def _http_client(self, public_key: PeerPublicKey) -> AsyncIterator[httpx.AsyncClient]:
-        client = MockHTTPClient(self._mock_network, self._host, public_key._as_ssl_certificate())  # noqa: SLF001
-        yield client.as_httpx_async_client()
+    async def shutdown(self, contact: Contact) -> None:
+        await self._mock_http_network.shutdown(contact.host, contact.port)
+
+    def get_public_key(self, contact: Contact) -> PeerPublicKey:
+        certificate, _manager = self._mock_http_network.get_server(contact.host, contact.port)
+        return PeerPublicKey(certificate)
+
+
+# Note that we cannot just use `NodeClient(mock_http_client)` since we need the client
+# to be able to supply its own host in requests
+# (which nodes use to filter the received contact list).
+class MockNodeClient(NodeClient):
+    def __init__(self, mock_p2p_network: MockP2PNetwork, contact: Contact | None = None):
+        super().__init__(
+            MockHTTPClient(
+                mock_p2p_network._mock_http_network,  # noqa: SLF001
+                contact.host if contact else None,
+            )
+        )

@@ -3,81 +3,80 @@ from ipaddress import IPv4Address
 import trio
 from nucypher_core import (
     EncryptedThresholdDecryptionRequest,
-    EncryptedThresholdDecryptionResponse,
     MetadataRequest,
     MetadataResponse,
     MetadataResponsePayload,
-    NodeMetadata,
     ReencryptionRequest,
     ReencryptionResponse,
 )
 
-from ..base.node import BaseNodeServer
-from ..base.peer_error import GenericPeerError, InactivePolicy
-from ..base.server import ServerWrapper
 from ..base.types import JSON
 from ..characters.cbd import ActiveRitual, Decryptor
-from ..characters.node import Operator
 from ..characters.pre import PublisherCard, Reencryptor
-from ..drivers.asgi_app import make_node_asgi_app
 from ..drivers.identity import IdentityAddress
-from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..p2p.learner import Learner
-from ..p2p.node_info import NodeInfo
-from ..p2p.verification import PeerVerificationError, VerifiedNodeInfo, verify_staking_local
+from ..p2p import (
+    Learner,
+    NodeInfo,
+    Operator,
+    PeerError,
+    PeerPrivateKey,
+    PeerVerificationError,
+    SecureContact,
+    VerifiedNodeInfo,
+    verify_staking_local,
+)
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
-from .config import NodeServerConfig, PeerServerConfig
+from .config import NodeServerConfig
 from .status import render_status
 
 
-class NodeServer(BasePeerServer, BaseNodeServer):
+class NodeServer:
     @classmethod
     async def async_init(
         cls,
+        config: NodeServerConfig,
         operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
-        peer_server_config: PeerServerConfig,
-        config: NodeServerConfig,
     ) -> "NodeServer":
         async with config.identity_client.session() as session:
             staking_provider_address = await verify_staking_local(session, operator.address)
 
         return cls(
+            config=config,
             operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
-            peer_server_config=peer_server_config,
-            config=config,
             staking_provider_address=staking_provider_address,
         )
 
     def __init__(
         self,
+        config: NodeServerConfig,
         operator: Operator,
         reencryptor: Reencryptor,
         decryptor: Decryptor,
-        peer_server_config: PeerServerConfig,
-        config: NodeServerConfig,
         staking_provider_address: IdentityAddress,
     ):
         self.operator = operator
         self.reencryptor = reencryptor
         self.decryptor = decryptor
 
+        self._config = config
+
         self._clock = config.clock
-        self._logger = config.parent_logger.get_child("NodeServer")
+        self._logger = config.logger.get_child("NodeServer")
         self._storage = config.storage
 
         node_info = self._storage.get_my_node_info()
         maybe_node: VerifiedNodeInfo | None = None
 
-        peer_key_pair = peer_server_config.peer_key_pair
+        peer_key_pair = config.peer_key_pair
         if peer_key_pair is not None:
             peer_private_key, peer_public_key = peer_key_pair
         else:
-            peer_private_key = reencryptor.make_peer_private_key()
+            peer_private_key = operator.peer_private_key
             peer_public_key = None
 
         if node_info is not None:
@@ -90,7 +89,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                     operator=operator,
                     reencryptor=self.reencryptor,
                     staking_provider_address=staking_provider_address,
-                    contact=peer_server_config.contact,
+                    contact=config.contact,
                     domain=config.domain,
                     peer_public_key=peer_public_key,
                     peer_private_key=peer_private_key,
@@ -113,7 +112,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
                 encrypting_key=self.reencryptor.encrypting_key,
                 dkg_key=self.decryptor.public_key,
                 staking_provider_address=staking_provider_address,
-                contact=peer_server_config.contact,
+                contact=config.contact,
                 domain=config.domain,
             )
             self._storage.set_my_node_info(self._node)
@@ -122,7 +121,7 @@ class NodeServer(BasePeerServer, BaseNodeServer):
 
         self.learner = Learner(
             this_node=self._node,
-            peer_client=config.peer_client,
+            node_client=config.node_client,
             identity_client=config.identity_client,
             storage=config.storage,
             seed_contacts=config.seed_contacts,
@@ -132,7 +131,6 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         )
 
         self._peer_private_key = peer_private_key
-        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
 
         self._pre_client = config.pre_client
         self._cbd_client = config.cbd_client
@@ -153,10 +151,10 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         return self._peer_private_key
 
     def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self._bind_pair
-
-    def into_servable(self) -> ServerWrapper:
-        return make_node_asgi_app(self)
+        return (
+            self._config.http_server_config.bind_to_address,
+            self._config.http_server_config.bind_to_port,
+        )
 
     def logger(self) -> Logger:
         return self._logger
@@ -183,21 +181,24 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         await self._verification_task.stop()
         self.started = False
 
-    async def endpoint_ping(self, remote_host: str | None) -> bytes:
+    async def ping(self, remote_host: str | None) -> bytes:
         if remote_host:
             return remote_host.encode()
-        raise GenericPeerError
+        raise PeerError.generic("Remote host could not be obtained from the request")
 
-    async def node_metadata(
-        self, remote_host: str | None, request: MetadataRequest
-    ) -> MetadataResponse:
+    async def node_metadata(self, remote_host: str | None, request_bytes: bytes) -> bytes:
+        try:
+            request = MetadataRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(MetadataRequest, exc) from exc
+
         if request.fleet_state_checksum == self.learner.fleet_state.checksum:
             # No nodes in the response: same fleet state
             response_payload = MetadataResponsePayload(
                 timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
                 announce_nodes=[],
             )
-            return MetadataResponse(self.operator.signer, response_payload)
+            return bytes(MetadataResponse(self.operator.signer, response_payload))
 
         # Filter out our own metadata
         node_infos = [NodeInfo(m) for m in request.announce_nodes]
@@ -207,6 +208,9 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             if node_info.staking_provider_address != self._node.staking_provider_address
         ]
 
+        # TODO: this can work differently if the P2P network does not use HTTP.
+        # But we still need some way to filter node infos based on who sent them, to avoid DDoS.
+        # Also, the filtering out may need to be done here and not in Learner.
         self.learner.passive_learning(remote_host, node_infos)
 
         announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()] + [
@@ -217,19 +221,23 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             timestamp_epoch=self.learner.fleet_state.timestamp_epoch,
             announce_nodes=announce_nodes,
         )
-        return MetadataResponse(self.operator.signer, response_payload)
+        return bytes(MetadataResponse(self.operator.signer, response_payload))
 
-    async def public_information(self) -> NodeMetadata:
-        # TODO: can we just return NodeInfo?
-        return self._node.metadata
+    async def public_information(self) -> bytes:
+        return bytes(self._node.metadata)
 
-    async def reencrypt(self, request: ReencryptionRequest) -> ReencryptionResponse:
+    async def reencrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = ReencryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(ReencryptionRequest, exc) from exc
+
         hrac = request.hrac
 
         # TODO: check if the policy is marked as revoked
         async with self._pre_client.session() as session:
             if not await session.is_policy_active(hrac):
-                raise InactivePolicy(f"Policy {hrac} is not active")
+                raise PeerError.inactive_policy(f"Policy {hrac} is not active")
 
         # TODO: catch decryption errors and raise RPC error here
         verified_kfrag = self.reencryptor.decrypt_kfrag(
@@ -245,17 +253,23 @@ class NodeServer(BasePeerServer, BaseNodeServer):
             verified_kfrag=verified_kfrag, capsules=request.capsules
         )
 
-        return ReencryptionResponse(
-            signer=self.operator.signer,
-            capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
+        return bytes(
+            ReencryptionResponse(
+                signer=self.operator.signer,
+                capsules_and_vcfrags=list(zip(request.capsules, vcfrags, strict=True)),
+            )
         )
 
-    async def endpoint_condition_chains(self) -> JSON:
+    async def condition_chains(self) -> JSON:
         raise NotImplementedError
 
-    async def decrypt(
-        self, request: EncryptedThresholdDecryptionRequest
-    ) -> EncryptedThresholdDecryptionResponse:
+    async def decrypt(self, request_bytes: bytes) -> bytes:
+        try:
+            request = EncryptedThresholdDecryptionRequest.from_bytes(request_bytes)
+        except ValueError as exc:
+            raise PeerError.invalid_message(EncryptedThresholdDecryptionRequest, exc) from exc
+
+        # TODO: raise PeerError on failure
         decryption_request = self.decryptor.decrypt_threshold_decryption_request(request)
         self._logger.info(
             "Threshold decryption request for ritual ID #{}", decryption_request.ritual_id
@@ -302,12 +316,18 @@ class NodeServer(BasePeerServer, BaseNodeServer):
         decryption_response = self.decryptor.make_threshold_decryption_response(
             ritual, decryption_share
         )
-        return self.decryptor.encrypt_threshold_decryption_response(
-            response=decryption_response,
-            requester_public_key=request.requester_public_key,
+        return bytes(
+            self.decryptor.encrypt_threshold_decryption_response(
+                response=decryption_response,
+                requester_public_key=request.requester_public_key,
+            )
         )
 
-    async def endpoint_status(self) -> str:
+    # NOTE: This method really does not belong in the PeerAPI, because it is strictly HTTP,
+    # while peers can theoretically use gRPC, or Noise, or something else.
+    # But the way the protocol works now, it is hardcoded that the status page
+    # should be available at the same port as the rest of the API, so it has to stay here.
+    async def status(self) -> str:
         return render_status(
             node=self._node,
             logger=self._logger,

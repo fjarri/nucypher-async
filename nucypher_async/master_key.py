@@ -7,13 +7,13 @@ from nucypher_core import SessionSecretFactory, SessionSharedSecret, SessionStat
 from nucypher_core.ferveo import Keypair as FerveoKeypair
 from nucypher_core.umbral import SecretKey, SecretKeyFactory, Signer
 
-from .drivers.peer import PeerPrivateKey
 from .utils.passwords import (
     SecretBoxAuthenticationError,
     derive_key_material_from_password,
     secret_box_decrypt,
     secret_box_encrypt,
 )
+from .utils.ssl import SSLPrivateKey
 
 
 class NucypherKeystore(TypedDict):
@@ -104,9 +104,9 @@ class MasterKey:
         )
         return EncryptedMasterKey(encrypted_key, password_salt, wrapper_salt)
 
-    def make_peer_private_key(self) -> PeerPrivateKey:
+    def make_ssl_private_key(self) -> SSLPrivateKey:
         secret = self.__skf.make_secret(b"NuCypher/tls")
-        return PeerPrivateKey.from_seed(secret)
+        return SSLPrivateKey.from_seed(secret)
 
     def make_signer(self) -> Signer:
         return Signer(self.__skf.make_key(b"NuCypher/signing"))

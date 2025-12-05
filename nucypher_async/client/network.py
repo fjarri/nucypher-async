@@ -9,13 +9,10 @@ import trio
 
 from ..base.time import BaseClock
 from ..domain import Domain
+from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityAddress, IdentityClient
-from ..drivers.peer import Contact, PeerClient
 from ..drivers.time import SystemClock
-from ..p2p.fleet_sensor import FleetSensorSnapshot, NodeEntry
-from ..p2p.learner import Learner
-from ..p2p.node_info import NodeClient
-from ..p2p.verification import VerifiedNodeInfo
+from ..p2p import Contact, FleetSensorSnapshot, Learner, NodeClient, NodeEntry, VerifiedNodeInfo
 from ..storage import BaseStorage
 from ..utils.logging import NULL_LOGGER, Logger
 from ..utils.producer import producer
@@ -25,16 +22,16 @@ class NetworkClient:
     def __init__(
         self,
         identity_client: IdentityClient,
-        peer_client: PeerClient | None = None,
+        node_client: NodeClient | None = None,
         seed_contacts: Iterable[Contact] | None = None,
         domain: Domain = Domain.MAINNET,
         parent_logger: Logger = NULL_LOGGER,
         clock: BaseClock = SystemClock(),
         storage: BaseStorage | None = None,
     ):
-        peer_client = peer_client or PeerClient()
+        node_client = node_client or NodeClient(HTTPClient())
         self._learner = Learner(
-            peer_client=peer_client,
+            node_client=node_client,
             identity_client=identity_client,
             domain=domain,
             parent_logger=parent_logger.get_child("NetworkClient"),
@@ -42,7 +39,7 @@ class NetworkClient:
             clock=clock,
             storage=storage,
         )
-        self.node_client = NodeClient(peer_client)
+        self.node_client = node_client
         self._seeded = False
 
     @property

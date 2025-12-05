@@ -1,19 +1,23 @@
 import http
+from collections.abc import Mapping
 from ipaddress import IPv4Address
 
 import attrs
 import trio
 
-from .. import schema
-from ..base.porter import BasePorterServer
-from ..base.server import ServerWrapper
-from ..base.types import JSON
 from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
-from ..drivers.asgi_app import HTTPError, make_porter_asgi_app
-from ..drivers.peer import BasePeerServer, PeerPrivateKey, SecureContact
-from ..schema.porter import (
+from ..drivers.asgi import HTTPError
+from ..drivers.http_server import HTTPServable
+from ..node.status import render_status
+from ..utils import BackgroundTask
+from ..utils.logging import Logger
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
+from . import schema
+from .config import ProxyServerConfig
+from .schema import (
+    JSON,
     GetUrsulasRequest,
     GetUrsulasResponse,
     GetUrsulasResult,
@@ -23,19 +27,15 @@ from ..schema.porter import (
     ServerRetrieveCFragsResult,
     UrsulaResult,
 )
-from ..utils import BackgroundTask
-from ..utils.logging import Logger
-from .config import PeerServerConfig, PorterServerConfig
-from .status import render_status
 
 
-class PorterServer(BasePeerServer, BasePorterServer):
-    def __init__(self, peer_server_config: PeerServerConfig, config: PorterServerConfig):
+class ProxyServer(HTTPServable):
+    def __init__(self, config: ProxyServerConfig):
         self._clock = config.clock
         self._config = config
-        self._logger = config.parent_logger.get_child("PorterServer")
+        self._logger = config.logger
         self._network_client = NetworkClient(
-            peer_client=config.peer_client,
+            node_client=config.node_client,
             identity_client=config.identity_client,
             seed_contacts=config.seed_contacts,
             parent_logger=self._logger,
@@ -44,20 +44,13 @@ class PorterServer(BasePeerServer, BasePorterServer):
             storage=config.storage,
         )
         self._pre_client = config.pre_client
-
-        self._contact = peer_server_config.contact
-
-        # TODO: generate self-signed ones if these are missing in the config
-        peer_key_pair = peer_server_config.peer_key_pair
-        if peer_key_pair is not None:
-            self._peer_private_key, self._peer_public_key = peer_key_pair
-        else:
-            raise NotImplementedError
-
-        self._secure_contact = SecureContact(peer_server_config.contact, self._peer_public_key)
-        self._bind_pair = (peer_server_config.bind_to_address, peer_server_config.bind_to_port)
-
+        self._cbd_client = config.cbd_client
         self._domain = config.domain
+
+        # TODO: generate self-signed ones if these are missing in the config?
+        if config.http_server_config.ssl_config is None:
+            raise ValueError("SSL keypair must be specified for a proxy server")
+        self._ssl_config = config.http_server_config.ssl_config
 
         self._verification_task = BackgroundTask(
             worker=self._network_client.verification_task, logger=self._logger
@@ -73,17 +66,20 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         self.started = False
 
-    def secure_contact(self) -> SecureContact:
-        return self._secure_contact
-
-    def peer_private_key(self) -> PeerPrivateKey:
-        return self._peer_private_key
-
     def bind_pair(self) -> tuple[IPv4Address, int]:
-        return self._bind_pair
+        return (
+            self._config.http_server_config.bind_to_address,
+            self._config.http_server_config.bind_to_port,
+        )
 
-    def into_servable(self) -> ServerWrapper:
-        return make_porter_asgi_app(self)
+    def ssl_certificate(self) -> SSLCertificate:
+        return self._ssl_config.certificate
+
+    def ssl_private_key(self) -> SSLPrivateKey:
+        return self._ssl_config.private_key
+
+    def ssl_ca_chain(self) -> list[SSLCertificate]:
+        return self._ssl_config.ca_chain
 
     def logger(self) -> Logger:
         return self._logger
@@ -112,19 +108,19 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         self.started = False
 
-    async def endpoint_get_ursulas(
-        self, request_params: dict[str, str], request_body: JSON | None
+    async def get_ursulas(
+        self, request_params: Mapping[str, str], request_body: JSON | None
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
         except schema.ValidationError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         if request_body is not None:
             try:
                 request_from_body = schema.from_json(GetUrsulasRequest, request_body)
             except schema.ValidationError as exc:
-                raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+                raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
             # TODO: kind of weird. Who would use both query params and body?
             # Also, should GET request even support a body?
@@ -144,10 +140,11 @@ class PorterServer(BasePeerServer, BasePorterServer):
                     exclude_nodes=request.exclude_ursulas,
                 )
         except RuntimeError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
         except trio.TooSlowError as exc:
             raise HTTPError(
-                "Could not get all the nodes in time", http.HTTPStatus.GATEWAY_TIMEOUT
+                http.HTTPStatus.GATEWAY_TIMEOUT,
+                "Could not get all the nodes in time",
             ) from exc
 
         node_list = [
@@ -164,11 +161,11 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         return schema.to_json(response)
 
-    async def endpoint_retrieve_cfrags(self, request_body: JSON) -> JSON:
+    async def retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
             request = schema.from_json(RetrieveCFragsRequest, request_body)
         except schema.ValidationError as exc:
-            raise HTTPError(str(exc), http.HTTPStatus.BAD_REQUEST) from exc
+            raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         client = LocalPREClient(self._network_client, self._pre_client)
 
@@ -189,7 +186,7 @@ class PorterServer(BasePeerServer, BasePorterServer):
 
         return schema.to_json(response)
 
-    async def endpoint_status(self) -> str:
+    async def status(self) -> str:
         return render_status(
             node=None,
             logger=self._logger,

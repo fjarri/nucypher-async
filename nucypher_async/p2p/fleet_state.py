@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from nucypher_core import FleetStateChecksum
 
 from ..base.time import BaseClock
-from ..drivers.peer import Contact
+from .keys import Contact
 from .node_info import NodeInfo
 from .verification import VerifiedNodeInfo
 

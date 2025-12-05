@@ -2,22 +2,21 @@ import json
 from collections.abc import Iterable
 from http import HTTPStatus
 
-import httpx
-from nucypher_core import Context, RetrievalKit, TreasureMap
+from nucypher_core import Context, TreasureMap
+from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
-from .. import schema
-from ..characters.pre import DelegatorCard, RecipientCard
+from ..characters.pre import DelegatorCard, MessageKit, RecipientCard, RetrievalKit
+from ..client.pre import BasePREConsumerClient, PRERetrievalOutcome
+from ..drivers.http_client import HTTPClient
 from ..drivers.identity import IdentityAddress
-from ..schema.porter import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
+from . import schema
+from .schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
 
 
-class PorterClient:
-    def __init__(self, host: str, port: int, http_client: httpx.AsyncClient | None = None):
-        if http_client is not None:
-            self._http_client = http_client
-        else:
-            self._http_client = httpx.AsyncClient()
+class ProxyClient:
+    def __init__(self, host: str, port: int, http_client: HTTPClient | None = None):
+        self._http_client = http_client or HTTPClient()
         self._host = host
         self._port = port
 
@@ -36,16 +35,16 @@ class PorterClient:
             exclude_ursulas=",".join(address.checksum for address in exclude_nodes),
         )
 
-        response = await self._http_client.get(
-            f"https://{self._host}:{self._port}/get_ursulas", params=request
-        )
+        async with self._http_client.session() as session:
+            response = await session.get(
+                f"https://{self._host}:{self._port}/get_ursulas", params=request
+            )
 
         if response.status_code != HTTPStatus.OK:
             # TODO: a more specialized exception
             raise RuntimeError(f"/get_ursulas failed with status {response.status_code}")
 
-        response_json = response.json()
-        parsed_response = schema.from_json(GetUrsulasResponse, response_json)
+        parsed_response = schema.from_json(GetUrsulasResponse, response.json)
 
         return {
             node.checksum_address: (node.uri, node.encrypting_key)
@@ -55,7 +54,7 @@ class PorterClient:
     async def retrieve_cfrags(
         self,
         treasure_map: TreasureMap,
-        retrieval_kits: Iterable[RetrievalKit],
+        retrieval_kits: Iterable[CoreRetrievalKit],
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
@@ -69,16 +68,16 @@ class PorterClient:
             context=context,
         )
 
-        response = await self._http_client.post(
-            f"https://{self._host}:{self._port}/retrieve_cfrags",
-            content=json.dumps(schema.to_json(request)),
-        )
+        async with self._http_client.session() as session:
+            response = await session.post(
+                f"https://{self._host}:{self._port}/retrieve_cfrags",
+                data=json.dumps(schema.to_json(request)).encode(),
+            )
         if response.status_code != HTTPStatus.OK:
             # TODO: a more specialized exception
             raise RuntimeError(f"/retrieve_cfrags failed with status {response.status_code}")
 
-        response_json = response.json()
-        parsed_response = schema.from_json(ClientRetrieveCFragsResponse, response_json)
+        parsed_response = schema.from_json(ClientRetrieveCFragsResponse, response.json)
 
         processed_response = []
         for rkit, result in zip(
@@ -96,3 +95,32 @@ class PorterClient:
             processed_response.append(processed_result)
 
         return processed_response
+
+
+class ProxyPREClient(BasePREConsumerClient):
+    def __init__(self, proxy_host: str, proxy_port: int, http_client: HTTPClient | None = None):
+        self._proxy_client = ProxyClient(proxy_host, proxy_port, http_client=http_client)
+
+    async def retrieve(
+        self,
+        treasure_map: TreasureMap,
+        message_kit: MessageKit | RetrievalKit,
+        delegator_card: DelegatorCard,
+        recipient_card: RecipientCard,
+        context: Context | None = None,
+    ) -> PRERetrievalOutcome:
+        # TODO: support multi-step retrieval in Proxy
+        # (that is, when some parts were already retrieved,
+        # we can list those addresses in RetrievalKit)
+        # TODO: support retrieving multiple kits
+        retrieval_kits = [
+            message_kit.core_retrieval_kit
+            if isinstance(message_kit, RetrievalKit)
+            else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
+        ]
+        cfrags = await self._proxy_client.retrieve_cfrags(
+            treasure_map, retrieval_kits, delegator_card, recipient_card, context
+        )
+
+        # TODO: collect errors as well
+        return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

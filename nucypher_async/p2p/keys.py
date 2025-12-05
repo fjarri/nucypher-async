@@ -5,32 +5,15 @@ The related details are also hidden here (e.g. that a peer contact is a DNS name
 or that its transport key is a SSL certificate).
 """
 
-import http
-import ssl
-from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterable
-from contextlib import asynccontextmanager
+from collections.abc import Iterable
 from functools import cached_property
-from ipaddress import IPv4Address, ip_address
+from ipaddress import ip_address
 
 import arrow
-import httpx
 import trio
 
-from ..base.peer_error import PeerError
-from ..base.server import ServerWrapper
 from ..base.time import BaseClock
-from ..utils import temp_file
-from ..utils.logging import Logger
-from ..utils.ssl import SSLCertificate, SSLPrivateKey, fetch_certificate
-
-
-class PeerConnectionError(PeerError):
-    pass
-
-
-class HandshakeError(PeerError):
-    pass
+from ..utils.ssl import SSLCertificate, SSLPrivateKey
 
 
 class Contact:
@@ -63,9 +46,8 @@ class PeerPrivateKey:
         return self.__private_key
 
     def matches(self, public_key: "PeerPublicKey") -> bool:
-        expected_public_key = self._as_ssl_private_key().public_key()
         certificate = public_key._as_ssl_certificate()  # noqa: SLF001
-        return certificate.public_key() == expected_public_key
+        return self._as_ssl_private_key().matches(certificate)
 
 
 class PeerPublicKey:
@@ -161,7 +143,7 @@ class SecureContact:
         # when creating a public key, it is logical to also check that it is correct,
         # and this is the best place to do it.
         if public_key.declared_host != contact.host:
-            raise HandshakeError(
+            raise ValueError(
                 f"Host mismatch: contact has {contact.host}, "
                 f"but certificate has {public_key.declared_host}"
             )
@@ -182,77 +164,3 @@ class SecureContact:
     @property
     def _uri(self) -> str:
         return self.contact.uri()
-
-
-class PeerClient:
-    @asynccontextmanager
-    async def _http_client(self, public_key: PeerPublicKey) -> AsyncIterator[httpx.AsyncClient]:
-        """
-        Creates a client context manager to send HTTP requests.
-        Can be overridden in mocks.
-        """
-        # It would be nice avoid saving the certificate to disk at each request.
-        # Having a cache directory requires too much architectural overhead,
-        # and with the current frequency of REST calls it just isn't worth it.
-        # Maybe the long-standing https://bugs.python.org/issue16487 will finally get fixed,
-        # and we will be able to load certificates from memory.
-        with temp_file(public_key._as_ssl_certificate().to_pem_bytes()) as filename:  # noqa: SLF001
-            # Timeouts are caught at top level, as per `trio` style.
-            context = ssl.create_default_context(cafile=str(filename))
-            async with httpx.AsyncClient(verify=context, timeout=None) as client:  # noqa: S113
-                try:
-                    yield client
-                except (OSError, httpx.HTTPError) as exc:
-                    exc_message = str(exc)
-                    message = str(type(exc)) + (f" {exc_message}" if exc_message else "")
-                    raise PeerConnectionError(message) from exc
-
-    async def _fetch_certificate(self, contact: Contact) -> SSLCertificate:
-        """
-        Fetches the SSL certificate for the contact.
-        Can be overridden in mocks.
-        """
-        try:
-            return await fetch_certificate(contact.host, contact.port)
-        except RuntimeError as exc:
-            raise PeerConnectionError(str(exc)) from exc
-
-    async def handshake(self, contact: Contact) -> SecureContact:
-        """Resolves a peer contact into a secure contact that can be used for communication."""
-        certificate = await self._fetch_certificate(contact)
-        public_key = PeerPublicKey(certificate)
-        return SecureContact(contact, public_key)
-
-    async def communicate(
-        self, secure_contact: SecureContact, route: str, data: bytes | None = None
-    ) -> bytes:
-        """Sends an optional message to the specified route and returns the response bytes."""
-        async with self._http_client(secure_contact.public_key) as client:
-            path = f"{secure_contact._uri}/{route}"  # noqa: SLF001
-            if data is None:
-                response = await client.get(path)
-            else:
-                response = await client.post(path, content=data)
-
-            response_data = response.read()
-            if response.status_code != http.HTTPStatus.OK:
-                raise PeerError.from_json(response_data)
-            return response_data
-
-
-class BasePeerServer(ABC):
-    @abstractmethod
-    def secure_contact(self) -> SecureContact: ...
-
-    @abstractmethod
-    def peer_private_key(self) -> PeerPrivateKey: ...
-
-    @abstractmethod
-    def into_servable(self) -> ServerWrapper: ...
-
-    @abstractmethod
-    def logger(self) -> Logger: ...
-
-    # TODO: abstraction leak, can this be made more general?
-    @abstractmethod
-    def bind_pair(self) -> tuple[IPv4Address, int]: ...

@@ -1,4 +1,5 @@
 .python-version
 *.egg-info
 *.pyc
+*.DS_STORE
 

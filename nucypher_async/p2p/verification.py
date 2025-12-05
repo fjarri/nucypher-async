@@ -3,15 +3,15 @@ from nucypher_core.ferveo import FerveoPublicKey
 from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from ..base.time import BaseClock
-from ..characters.node import Operator
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
 from ..drivers.identity import IdentityAddress, IdentityClientSession
-from ..drivers.peer import Contact, PeerError, PeerPrivateKey, PeerPublicKey, SecureContact
+from .keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
+from .operator import Operator
 
 
-class PeerVerificationError(PeerError):
+class PeerVerificationError(Exception):
     pass
 
 
@@ -108,7 +108,7 @@ class VerifiedNodeInfo(NodeInfo):
             # Abstraction leak here, ideally NodeMetadata should
             # have a field like `peer_public_key`.
             certificate_der=bytes(public_key),
-            host=contact.host,
+            host=str(contact.host),
             port=contact.port,
         )
         metadata = NodeMetadata(signer=signer, payload=payload)
@@ -143,12 +143,12 @@ class VerifiedNodeInfo(NodeInfo):
         cls,
         clock: BaseClock,
         node_info: NodeInfo,
-        operator: Operator,
-        reencryptor: Reencryptor,
+        operator: Operator,  # TODO: use OperatorCard?
+        reencryptor: Reencryptor,  # TODO: use ReencryptorCard
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
-        peer_private_key: PeerPrivateKey,
+        peer_private_key: PeerPrivateKey,  # TODO: this is a property of Operator
         peer_public_key: PeerPublicKey | None,
     ) -> "VerifiedNodeInfo":
         _verify_peer_shared(

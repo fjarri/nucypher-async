@@ -10,21 +10,19 @@ from hexbytes import HexBytes
 
 from nucypher_async.base.time import BaseClock
 from nucypher_async.characters.cbd import Decryptor
-from nucypher_async.characters.node import Operator
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient, Reencryptor
 from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
 from nucypher_async.domain import Domain
 from nucypher_async.drivers.cbd import CBDClient
-from nucypher_async.drivers.http_server import HTTPServerHandle
+from nucypher_async.drivers.http_client import HTTPClient
 from nucypher_async.drivers.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.drivers.peer import Contact, PeerClient
 from nucypher_async.drivers.pre import PREAccount, PREAccountSigner, PREClient
 from nucypher_async.drivers.time import SystemClock
 from nucypher_async.master_key import MasterKey
 from nucypher_async.mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
-from nucypher_async.server import NodeServer, NodeServerConfig, PeerServerConfig
-from nucypher_async.storage import InMemoryStorage
+from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
+from nucypher_async.p2p import Contact, NodeClient, Operator
 from nucypher_async.utils.logging import ConsoleHandler, Level, Logger
 from nucypher_async.utils.ssl import fetch_certificate
 
@@ -49,7 +47,7 @@ class Context(NamedTuple):
 # TODO: move to a separate module to use in other examples
 async def run_local_node_fleet(
     context: Context, nursery: trio.Nursery
-) -> tuple[list[HTTPServerHandle], Contact]:
+) -> tuple[list[NodeServerHandle], Contact]:
     handles = []
     for i in range(3):
         master_key = MasterKey.random()
@@ -71,31 +69,33 @@ async def run_local_node_fleet(
             AmountT.ether(40000),
         )
 
-        peer_server_config = PeerServerConfig.from_typed_values(
-            external_host=LOCALHOST,
-            external_port=PORT_BASE + i,
+        logger = context.logger.get_child(f"Node{i + 1}")
+
+        http_server_config = HTTPServerConfig.from_typed_values(
+            bind_to_address=LOCALHOST,
+            bind_to_port=PORT_BASE + i,
         )
 
-        config = NodeServerConfig(
+        config = NodeServerConfig.from_typed_values(
+            http_server_config=http_server_config,
             domain=context.domain,
             identity_client=context.identity_client,
             pre_client=context.pre_client,
             cbd_client=context.cbd_client,
-            peer_client=PeerClient(),
-            parent_logger=context.logger.get_child(f"Node{i + 1}"),
-            storage=InMemoryStorage(),
+            node_client=NodeClient(HTTPClient()),
+            logger=logger,
             seed_contacts=seed_contacts,
             clock=context.clock,
         )
 
         server = await NodeServer.async_init(
+            config=config,
             operator=operator,
             reencryptor=reencryptor,
             decryptor=decryptor,
-            peer_server_config=peer_server_config,
-            config=config,
         )
-        handle = HTTPServerHandle(server)
+
+        handle = NodeServerHandle(server)
         await nursery.start(handle.startup)
         handles.append(handle)
 
