@@ -23,6 +23,7 @@ from .errors import InvalidMessage, PeerError
 from .keys import Contact, PeerPublicKey, SecureContact
 from .node_info import NodeInfo
 from .routes import NodeRoutes
+from .verification import VerifiedNodeInfo
 
 
 class PeerConnectionError(Exception):
@@ -89,11 +90,10 @@ class NodeClient:
 
     async def exchange_node_info(
         self,
-        node_info: NodeInfo,
+        node_info: VerifiedNodeInfo,
         fleet_state_checksum: FleetStateChecksum,
         this_node_info: NodeInfo | None,
     ) -> list[NodeInfo]:
-        # TODO: should `this_node_info` be narrowed down to VerifiedNodeInfo?
         request = MetadataRequest(
             fleet_state_checksum, [this_node_info.metadata] if this_node_info else []
         )
@@ -117,7 +117,7 @@ class NodeClient:
 
     async def reencrypt(
         self,
-        node_info: NodeInfo,
+        node_info: VerifiedNodeInfo,
         capsules: list[Capsule],
         treasure_map: TreasureMap,
         delegator_card: DelegatorCard,
@@ -125,7 +125,6 @@ class NodeClient:
         conditions: Conditions | None = None,
         context: Context | None = None,
     ) -> list[VerifiedCapsuleFrag]:
-        # TODO: should we narrow down `node_info` to `VerifiedNodeInfo`?
         try:
             ekfrag = treasure_map.destinations[Address(bytes(node_info.staking_provider_address))]
         except KeyError as exc:
@@ -164,7 +163,7 @@ class NodeClient:
 
     async def decrypt(
         self,
-        node_info: NodeInfo,
+        node_info: VerifiedNodeInfo,
         request: EncryptedThresholdDecryptionRequest,
     ) -> EncryptedThresholdDecryptionResponse:
         response_bytes = await self._http_communicate(
