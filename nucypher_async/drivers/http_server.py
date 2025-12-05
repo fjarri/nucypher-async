@@ -108,9 +108,6 @@ def make_config(server: "HTTPServable") -> InMemoryCertificateConfig:
 
 class HTTPServable(ABC):
     @abstractmethod
-    def into_servable(self) -> HTTPServableApp: ...
-
-    @abstractmethod
     def bind_pair(self) -> tuple[IPv4Address, int]: ...
 
     @abstractmethod
@@ -132,9 +129,9 @@ class HTTPServerHandle:
     Can be used to shut it down.
     """
 
-    def __init__(self, server: HTTPServable):
+    def __init__(self, server: HTTPServable, app: HTTPServableApp):
         self.server = server
-        self.app = server.into_servable()
+        self.app = app
         self._shutdown_event = trio.Event()
         self._shutdown_finished = trio.Event()
 

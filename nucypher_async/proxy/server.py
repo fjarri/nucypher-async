@@ -9,13 +9,12 @@ from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
 from ..drivers.asgi import HTTPError
-from ..drivers.http_server import HTTPServable, HTTPServableApp
+from ..drivers.http_server import HTTPServable
 from ..node.status import render_status
 from ..utils import BackgroundTask
 from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from . import schema
-from .asgi_app import BaseProxyServer, make_proxy_asgi_app
 from .config import ProxyServerConfig
 from .schema import (
     JSON,
@@ -30,7 +29,7 @@ from .schema import (
 )
 
 
-class ProxyServer(HTTPServable, BaseProxyServer):
+class ProxyServer(HTTPServable):
     def __init__(self, config: ProxyServerConfig):
         self._clock = config.clock
         self._config = config
@@ -81,9 +80,6 @@ class ProxyServer(HTTPServable, BaseProxyServer):
 
     def ssl_ca_chain(self) -> list[SSLCertificate]:
         return self._ssl_config.ca_chain
-
-    def into_servable(self) -> HTTPServableApp:
-        return make_proxy_asgi_app(self)
 
     def logger(self) -> Logger:
         return self._logger

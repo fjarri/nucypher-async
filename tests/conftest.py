@@ -156,7 +156,7 @@ async def lonely_nodes(
             reencryptor=reencryptors[i],
             decryptor=decryptors[i],
         )
-        handle = mock_p2p_network.add_server(server)
+        handle = mock_p2p_network.add_node_server(server)
         servers.append((handle, server))
 
     return servers
@@ -249,7 +249,7 @@ async def proxy_server(
 
     server = ProxyServer(config)
 
-    handle = mock_http_network.add_server(server)
+    handle = mock_http_network.add_proxy_server(server)
 
     await handle.startup()
     yield server

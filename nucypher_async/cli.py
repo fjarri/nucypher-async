@@ -7,12 +7,11 @@ import trio
 
 from .characters.cbd import Decryptor
 from .characters.pre import Reencryptor
-from .drivers.http_server import HTTPServerHandle
 from .drivers.identity import IdentityAccount
 from .master_key import EncryptedMasterKey, MasterKey
 from .node import NodeServer, NodeServerConfig, NodeServerHandle
 from .p2p import Operator
-from .proxy import ProxyServer, ProxyServerConfig
+from .proxy import ProxyServer, ProxyServerConfig, ProxyServerHandle
 
 
 async def make_node_server(
@@ -109,7 +108,7 @@ def node(config_path: str, nucypher_password: str, geth_password: str) -> None:
 @click.argument("config_path")
 def proxy(config_path: str) -> None:
     server = make_proxy_server(config_path)
-    handle = HTTPServerHandle(server)
+    handle = ProxyServerHandle(server)
     trio.run(handle.startup)
 
 

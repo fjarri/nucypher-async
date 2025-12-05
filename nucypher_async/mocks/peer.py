@@ -1,6 +1,7 @@
 import trio
 
 from ..node import NodeServer
+from ..node.asgi_app import make_node_asgi_app
 from ..node.handle import NodeServerAsHTTPServer
 from ..p2p import Contact, NodeClient, PeerPublicKey
 from .asgi import MockHTTPClient, MockHTTPNetwork, MockHTTPServerHandle
@@ -21,8 +22,10 @@ class MockP2PNetwork:
     def __init__(self, nursery: trio.Nursery):
         self._mock_http_network = MockHTTPNetwork(nursery)
 
-    def add_server(self, server: NodeServer) -> MockNodeServerHandle:
-        handle = self._mock_http_network.add_server(NodeServerAsHTTPServer(server))
+    def add_node_server(self, server: NodeServer) -> MockNodeServerHandle:
+        handle = self._mock_http_network.add_server(
+            NodeServerAsHTTPServer(server), make_node_asgi_app(server)
+        )
         return MockNodeServerHandle(handle)
 
     async def startup(self, contact: Contact) -> None:

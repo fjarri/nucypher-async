@@ -2,7 +2,7 @@ from ipaddress import IPv4Address
 
 import trio
 
-from ..drivers.http_server import HTTPServable, HTTPServableApp, HTTPServerHandle
+from ..drivers.http_server import HTTPServable, HTTPServerHandle
 from ..utils.logging import Logger
 from ..utils.ssl import SSLCertificate, SSLPrivateKey
 from .asgi_app import make_node_asgi_app
@@ -12,9 +12,6 @@ from .server import NodeServer
 class NodeServerAsHTTPServer(HTTPServable):
     def __init__(self, node_server: NodeServer):
         self._node_server = node_server
-
-    def into_servable(self) -> HTTPServableApp:
-        return make_node_asgi_app(self._node_server)
 
     def bind_pair(self) -> tuple[IPv4Address, int]:
         return self._node_server.bind_pair()
@@ -39,7 +36,7 @@ class NodeServerHandle:
     """
 
     def __init__(self, server: NodeServer):
-        self._handle = HTTPServerHandle(NodeServerAsHTTPServer(server))
+        self._handle = HTTPServerHandle(NodeServerAsHTTPServer(server), make_node_asgi_app(server))
 
     async def startup(
         self, *, task_status: trio.TaskStatus[list[str]] = trio.TASK_STATUS_IGNORED

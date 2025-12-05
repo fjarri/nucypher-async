@@ -15,7 +15,9 @@ from hypercorn.typing import (
 )
 
 from ..drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
-from ..drivers.http_server import HTTPServable
+from ..drivers.http_server import HTTPServable, HTTPServableApp
+from ..proxy import ProxyServer
+from ..proxy.asgi_app import make_proxy_asgi_app
 from ..utils.ssl import SSLCertificate
 
 
@@ -66,8 +68,10 @@ class MockHTTPNetwork:
         self._known_servers: dict[tuple[str, int], tuple[SSLCertificate, LifespanManager]] = {}
         self._nursery = nursery
 
-    def add_server(self, server: HTTPServable) -> MockHTTPServerHandle:
-        app = server.into_servable()
+    def add_proxy_server(self, server: ProxyServer) -> MockHTTPServerHandle:
+        return self.add_server(server, make_proxy_asgi_app(server))
+
+    def add_server(self, server: HTTPServable, app: HTTPServableApp) -> MockHTTPServerHandle:
         manager = LifespanManager(app)
         certificate = server.ssl_certificate()
         host, port = server.bind_pair()
