@@ -163,7 +163,7 @@ warn_unreachable = true
 # otherwise mypy fails to pick up signatures from eth_* packages
 implicit_reexport = true
 explicit_package_bases = true
-mypy_path = "./stubs"
+mypy_path = "./stubs,./examples"
 
 [tool.pytest.ini_options]
 trio_mode = true
