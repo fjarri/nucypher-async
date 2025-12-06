@@ -1,7 +1,7 @@
 from nucypher_core import Conditions, Context
 
+from nucypher_async.characters import MasterKey
 from nucypher_async.characters.cbd import ActiveRitual, Decryptor, Encryptor, Recipient
-from nucypher_async.master_key import MasterKey
 
 
 def test_encrypt_and_decrypt() -> None:

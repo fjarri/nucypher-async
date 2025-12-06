@@ -21,7 +21,7 @@ from nucypher_core.umbral import (
 )
 
 from ..blockchain.identity import IdentityAddress
-from ..master_key import MasterKey
+from ._master_key import MasterKey
 
 
 @frozen

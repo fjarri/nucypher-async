@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 
 from nucypher_async.blockchain.identity import IdentityAddress
+from nucypher_async.characters import MasterKey
 from nucypher_async.characters.pre import (
     DecryptionKit,
     Delegator,
@@ -10,7 +11,6 @@ from nucypher_async.characters.pre import (
     Recipient,
     Reencryptor,
 )
-from nucypher_async.master_key import MasterKey
 
 
 @dataclass

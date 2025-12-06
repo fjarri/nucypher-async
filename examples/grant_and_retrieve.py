@@ -7,10 +7,10 @@ import trio
 from examples_common import Context
 
 from nucypher_async.blockchain.pre import PREAccountSigner
+from nucypher_async.characters import MasterKey
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient
 from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
-from nucypher_async.master_key import MasterKey
 
 
 async def main(*, mocked: bool = True) -> None:

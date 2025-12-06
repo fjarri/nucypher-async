@@ -7,11 +7,11 @@ from nucypher_async._drivers.http_client import HTTPClient
 from nucypher_async._mocks import MockCBDClient, MockIdentityClient, MockPREClient
 from nucypher_async._p2p import NodeClient, Operator
 from nucypher_async.blockchain.identity import IdentityAccount, IdentityAddress
+from nucypher_async.characters import MasterKey
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.logging import NULL_LOGGER
-from nucypher_async.master_key import MasterKey
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
 
 

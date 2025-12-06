@@ -16,11 +16,11 @@ from nucypher_async.base.time import BaseClock
 from nucypher_async.blockchain.cbd import CBDClient
 from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityClient
 from nucypher_async.blockchain.pre import PREAccount, PREClient
+from nucypher_async.characters import MasterKey
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
 from nucypher_async.domain import Domain
 from nucypher_async.logging import ConsoleHandler, Level, Logger
-from nucypher_async.master_key import MasterKey
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, NodeServerHandle
 
 LOCALHOST = "127.0.0.1"

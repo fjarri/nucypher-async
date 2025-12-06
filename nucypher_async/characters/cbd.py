@@ -32,7 +32,7 @@ from nucypher_core.ferveo import (
 
 from ..blockchain.cbd import OnChainRitual
 from ..blockchain.identity import IdentityAddress
-from ..master_key import MasterKey
+from ._master_key import MasterKey
 
 
 class Encryptor:

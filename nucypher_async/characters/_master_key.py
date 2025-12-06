@@ -7,13 +7,13 @@ from nucypher_core import SessionSecretFactory, SessionSharedSecret, SessionStat
 from nucypher_core.ferveo import Keypair as FerveoKeypair
 from nucypher_core.umbral import SecretKey, SecretKeyFactory, Signer
 
-from ._drivers.passwords import (
+from .._drivers.passwords import (
     SecretBoxAuthenticationError,
     derive_key_material_from_password,
     secret_box_decrypt,
     secret_box_encrypt,
 )
-from ._drivers.ssl import SSLPrivateKey
+from .._drivers.ssl import SSLPrivateKey
 
 
 class NucypherKeystore(TypedDict):

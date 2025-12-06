@@ -7,9 +7,9 @@ import trio
 
 from ._p2p import Operator
 from .blockchain.identity import IdentityAccount
+from .characters import EncryptedMasterKey, MasterKey
 from .characters.cbd import Decryptor
 from .characters.pre import Reencryptor
-from .master_key import EncryptedMasterKey, MasterKey
 from .node import NodeServer, NodeServerConfig, NodeServerHandle
 from .proxy import ProxyServer, ProxyServerConfig, ProxyServerHandle
 
