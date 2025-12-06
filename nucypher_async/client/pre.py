@@ -6,6 +6,9 @@ from attrs import frozen
 from nucypher_core import Context, EncryptedTreasureMap, TreasureMap
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
+from .._p2p import VerifiedNodeInfo
+from ..blockchain.identity import IdentityAddress
+from ..blockchain.pre import PREAccountSigner, PREClient
 from ..characters.pre import (
     DecryptionKit,
     DelegatorCard,
@@ -17,9 +20,6 @@ from ..characters.pre import (
     RecipientCard,
     RetrievalKit,
 )
-from ..drivers.identity import IdentityAddress
-from ..drivers.pre import PREAccountSigner, PREClient
-from ..p2p.verification import VerifiedNodeInfo
 from .network import NetworkClient
 
 
@@ -79,6 +79,7 @@ class BasePREConsumerClient(ABC):
         )
 
 
+# TODO: move to `characters`
 def pre_encrypt(policy: Policy | EnactedPolicy, message: bytes) -> MessageKit:
     policy_ = policy.policy if isinstance(policy, EnactedPolicy) else policy
     return MessageKit(policy_, message, conditions=None)
