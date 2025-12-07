@@ -234,7 +234,8 @@ class Decryptor:
     def make_threshold_decryption_response(
         self, ritual: ActiveRitual, decryption_share: DecryptionShareSimple
     ) -> ThresholdDecryptionResponse:
-        # TODO: need the serialization because of https://github.com/nucypher/nucypher-core/issues/121
+        # TODO (#38): need the serialization because of
+        # https://github.com/nucypher/nucypher-core/issues/121
         return ThresholdDecryptionResponse(ritual.id, bytes(decryption_share))
 
     def encrypt_threshold_decryption_response(
@@ -286,12 +287,14 @@ class Recipient:
     def decrypt_with_responses(
         message_kit: ThresholdMessageKit, responses: Iterable[ThresholdDecryptionResponse]
     ) -> bytes:
-        # TODO: need the deserialization because of https://github.com/nucypher/nucypher-core/issues/121
+        # TODO (#38): need the deserialization because of
+        # https://github.com/nucypher/nucypher-core/issues/121
         decryption_shares = [
             DecryptionShareSimple.from_bytes(response.decryption_share) for response in responses
         ]
 
-        # TODO: need the conversion because of https://github.com/nucypher/nucypher-core/issues/119
+        # TODO (#39): need the conversion because of
+        # https://github.com/nucypher/nucypher-core/issues/119
         return bytes(
             message_kit.decrypt_with_shared_secret(
                 combine_decryption_shares_simple(decryption_shares)
