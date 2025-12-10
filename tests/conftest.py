@@ -38,7 +38,7 @@ def logger() -> logging.Logger:
 
 
 @pytest.fixture
-async def mock_clock() -> MockClock:
+def mock_clock() -> MockClock:
     return MockClock()
 
 
