@@ -1,7 +1,7 @@
 import arrow
 import trio
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 
 
 # TODO (#45): derive from `trio.abc.Clock`.

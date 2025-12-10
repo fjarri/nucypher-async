@@ -13,7 +13,7 @@ import trio
 from attrs import evolve, frozen
 from sortedcontainers import SortedKeyList
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress
 from ._keys import Contact
 from ._node_info import NodeInfo

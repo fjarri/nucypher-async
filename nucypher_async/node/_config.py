@@ -7,7 +7,7 @@ from platformdirs import PlatformDirs
 
 from .._drivers.http_client import HTTPClient
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
-from .._drivers.time import SystemClock
+from .._drivers.time import BaseClock, SystemClock
 from .._p2p import (
     BaseStorage,
     Contact,
@@ -17,7 +17,6 @@ from .._p2p import (
     PeerPrivateKey,
     PeerPublicKey,
 )
-from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient

@@ -84,7 +84,7 @@ def mock_http_network(nursery: trio.Nursery) -> MockHTTPNetwork:
 
 @pytest.fixture
 def mock_passive_http_client(mock_http_network: MockHTTPNetwork) -> MockHTTPClient:
-    return MockHTTPClient(mock_http_network, host=None)
+    return MockHTTPClient(mock_http_network, client_host=None)
 
 
 @pytest.fixture

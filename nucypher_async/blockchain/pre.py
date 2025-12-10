@@ -160,7 +160,6 @@ class PREClientSession:
         is_active = await self._backend_session.call(
             self._manager.method.isPolicyActive(bytes(hrac))
         )
-        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast("bool", is_active)
 
     async def get_policy_cost(self, shares: int, policy_start: int, policy_end: int) -> PREAmount:

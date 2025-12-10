@@ -2,7 +2,7 @@ from nucypher_core import Address, NodeMetadata, NodeMetadataPayload
 from nucypher_core.ferveo import FerveoPublicKey
 from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 from ..blockchain.identity import IdentityAddress, IdentityClientSession
 from ..characters.pre import Reencryptor, ReencryptorCard
 from ..domain import Domain
