@@ -32,11 +32,22 @@ from nucypher_async.proxy import ProxyPREClient, ProxyServer, ProxyServerConfig
 from nucypher_async.proxy._client import ProxyClient
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--loglevel",
+        action="store",
+        choices=["debug", "info"],
+        default="debug",
+        help="Log level used in the logging fixture",
+    )
+
+
 @pytest.fixture(scope="session")
-def logger() -> logging.Logger:
-    # TODO: we may add a CLI option to reduce the verbosity of test logging
+def logger(pytestconfig: pytest.Config) -> logging.Logger:
+    loglevel = pytestconfig.getoption("--loglevel")
+    level = logging.DEBUG if loglevel == "debug" else logging.INFO
     return logging.Logger(
-        level=logging.DEBUG, handlers=[logging.ConsoleHandler(stderr_at=None)], clock=MockClock()
+        level=level, handlers=[logging.ConsoleHandler(stderr_at=None)], clock=MockClock()
     )
 
 
