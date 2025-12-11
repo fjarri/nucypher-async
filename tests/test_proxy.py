@@ -1,33 +1,22 @@
+from collections.abc import Callable
+
 import trio
 import trio.testing
 
-from nucypher_async._mocks import (
-    MockClock,
-    MockHTTPClient,
-    MockIdentityClient,
-    MockNodeClient,
-    MockPREClient,
-)
+from nucypher_async._mocks import MockPREClient
 from nucypher_async.blockchain.pre import PREAccount, PREAccountSigner, PREAmount
 from nucypher_async.characters.pre import Delegator, Publisher, Recipient
-from nucypher_async.client.network import NetworkClient
 from nucypher_async.client.pre import LocalPREClient, pre_encrypt
-from nucypher_async.domain import Domain
 from nucypher_async.node import NodeServer
-from nucypher_async.proxy import ProxyPREClient, ProxyServer
+from nucypher_async.proxy import ProxyPREClient
 from nucypher_async.proxy._client import ProxyClient
 
 
 async def test_get_nodes(
-    mock_passive_http_client: MockHTTPClient,
-    fully_learned_nodes: list[NodeServer],
-    # TODO: make the fixture return a handle or something, so we can actually use it?
-    # Or `ProxyClient`?
-    proxy_server: ProxyServer,  # noqa: ARG001
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
+    fully_learned_nodes: list[NodeServer],
+    proxy_client: ProxyClient,
 ) -> None:
-    proxy_client = ProxyClient("127.0.0.1", 9000, mock_passive_http_client)
-
     some_nodes = [
         fully_learned_nodes[3]._node.staking_provider_address,
         fully_learned_nodes[7]._node.staking_provider_address,
@@ -42,30 +31,17 @@ async def test_get_nodes(
 
 
 async def test_retrieve_cfrags(
-    mock_passive_node_client: MockNodeClient,
-    mock_passive_http_client: MockHTTPClient,
-    mock_identity_client: MockIdentityClient,
-    mock_pre_client: MockPREClient,
-    fully_learned_nodes: list[NodeServer],
-    proxy_server: ProxyServer,  # noqa: ARG001
     autojump_clock: trio.testing.MockClock,  # noqa: ARG001
-    mock_clock: MockClock,
+    mock_pre_client: MockPREClient,
+    proxy_pre_client: ProxyPREClient,
+    local_pre_client_factory: Callable[[str], LocalPREClient],
 ) -> None:
     alice = Delegator.random()
     publisher = Publisher.random()
     publisher_signer = PREAccountSigner(PREAccount.random())
     bob = Recipient.random()
 
-    publisher_client = LocalPREClient(
-        NetworkClient(
-            node_client=mock_passive_node_client,
-            identity_client=mock_identity_client,
-            seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
-            domain=Domain.MAINNET,
-            clock=mock_clock,
-        ),
-        mock_pre_client,
-    )
+    publisher_client = local_pre_client_factory("Publisher")
 
     # Fund the publisher
     mock_pre_client.mock_set_balance(publisher_signer.address, PREAmount.ether(1))
@@ -88,9 +64,7 @@ async def test_retrieve_cfrags(
     message = b"a secret message"
     message_kit = pre_encrypt(policy, message)
 
-    bob_client = ProxyPREClient("127.0.0.1", 9000, mock_passive_http_client)
-
-    decrypted = await bob_client.decrypt(
+    decrypted = await proxy_pre_client.decrypt(
         recipient=bob,
         enacted_policy=enacted_policy,
         message_kit=message_kit,
