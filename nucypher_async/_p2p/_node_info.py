@@ -56,9 +56,13 @@ class NodeInfo:
     def timestamp(self) -> arrow.Arrow:
         return arrow.get(self._metadata_payload.timestamp_epoch)
 
-    def __bytes__(self) -> bytes:
-        # TODO: cache it too?
+    @cached_property
+    def _bytes(self) -> bytes:
+        # Cannot apply `cached_property` to `__bytes__()` directly, so have to use a trampoline.
         return bytes(self.metadata)
+
+    def __bytes__(self) -> bytes:
+        return self._bytes
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "NodeInfo":
