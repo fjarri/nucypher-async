@@ -298,6 +298,9 @@ class Learner:
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()
 
+    def has_no_new_contacts(self) -> bool:
+        return self._fleet_sensor.has_no_new_contacts()
+
     async def verification_task(self, stop_event: trio.Event) -> None:
         while True:
             await self.verification_round()
