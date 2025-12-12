@@ -151,7 +151,7 @@ class ProxyServer(HTTPServable):
             UrsulaResult(
                 checksum_address=node.staking_provider_address,
                 uri=node.contact.uri(),
-                encrypting_key=node.encrypting_key,
+                encrypting_key=node.pre_encrypting_key,
             )
             for node in nodes
         ]

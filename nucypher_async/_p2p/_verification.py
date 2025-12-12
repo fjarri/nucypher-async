@@ -179,22 +179,22 @@ class VerifiedNodeInfo(NodeInfo):
                 f"{staking_provider_address} recorded in the blockchain"
             )
 
-        if node_info.verifying_key != operator.verifying_key:
+        if node_info.pre_verifying_key != operator.verifying_key:
             raise PeerVerificationError(
-                f"Verifying key mismatch: {node_info.verifying_key} in the metadata, "
+                f"Verifying key mismatch: {node_info.pre_verifying_key} in the metadata, "
                 f"{operator.verifying_key} derived from the master key"
             )
 
-        if node_info.encrypting_key != reencryptor_card.encrypting_key:
+        if node_info.pre_encrypting_key != reencryptor_card.encrypting_key:
             raise PeerVerificationError(
-                f"Encrypting key mismatch: {node_info.encrypting_key} in the metadata, "
+                f"Encrypting key mismatch: {node_info.pre_encrypting_key} in the metadata, "
                 f"{reencryptor_card.encrypting_key} derived from the master key"
             )
 
         return cls(node_info.metadata)
 
     def reencryptor_card(self) -> ReencryptorCard:
-        return ReencryptorCard(encrypting_key=self.encrypting_key)
+        return ReencryptorCard(encrypting_key=self.pre_encrypting_key)
 
     def __str__(self) -> str:
         return f"VerifiedNodeInfo({self.staking_provider_address.checksum})"

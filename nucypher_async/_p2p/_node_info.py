@@ -2,7 +2,7 @@ from functools import cached_property
 
 import arrow
 from nucypher_core import NodeMetadata, NodeMetadataPayload
-from nucypher_core.umbral import PublicKey
+from nucypher_core.umbral import PublicKey as UmbralPublicKey
 
 from ..blockchain.identity import IdentityAddress
 from ..domain import Domain
@@ -45,11 +45,11 @@ class NodeInfo:
         return Domain(self._metadata_payload.domain)
 
     @property
-    def encrypting_key(self) -> PublicKey:
+    def pre_encrypting_key(self) -> UmbralPublicKey:
         return self._metadata_payload.encrypting_key
 
     @property
-    def verifying_key(self) -> PublicKey:
+    def pre_verifying_key(self) -> UmbralPublicKey:
         return self._metadata_payload.verifying_key
 
     @cached_property
