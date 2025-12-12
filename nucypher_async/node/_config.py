@@ -98,7 +98,10 @@ class SSLConfig:
         else:
             ssl_ca_chain = []
 
-        # TODO: check that the SSL certificate corresponds to the given private key
+        if not ssl_private_key.matches(ssl_certificate):
+            raise ValueError(
+                "The given SSL certificate must be created using the given private key"
+            )
 
         # TODO: check that certificates in the chain are in the correct order?
         # (root certificate last)

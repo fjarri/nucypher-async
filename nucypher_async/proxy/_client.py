@@ -116,5 +116,5 @@ class ProxyPREClient(BasePREConsumerClient):
             treasure_map, [metadata], delegator_card, recipient_card, context
         )
 
-        # TODO: collect errors as well
+        # TODO (#51): collect errors as well
         return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

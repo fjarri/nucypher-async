@@ -86,7 +86,7 @@ class ActiveRitual:
         )
 
     def _make_dkg_struct(self, me: "DkgNodeCard") -> Dkg:
-        # TODO: the address argument to Validator has no effect on cryptographic operations,
+        # TODO (#53): the address argument to Validator has no effect on cryptographic operations,
         # to be removed in https://github.com/nucypher/ferveo/pull/220
         validators = [
             Validator(
@@ -180,7 +180,7 @@ class Decryptor:
     def participate_in_ritual(
         self, ritual_id: int, participants: Sequence[PlannedParticipant], threshold: int
     ) -> tuple[Participant, Transcript]:
-        # TODO: the address argument to Validator has no effect on cryptographic operations,
+        # TODO (#53): the address argument to Validator has no effect on cryptographic operations,
         # to be removed in https://github.com/nucypher/ferveo/pull/220
         validators = [
             Validator(

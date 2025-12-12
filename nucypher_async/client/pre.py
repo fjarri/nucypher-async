@@ -34,7 +34,7 @@ class EnactedPolicy:
 
 @frozen
 class PRERetrievalOutcome:
-    # TODO: merge the two fields into dict[IdentityAddress, VerifiedCapsuleFrag | Exception]?
+    # TODO (#51): merge the two fields into dict[IdentityAddress, VerifiedCapsuleFrag | Exception]?
     cfrags: dict[IdentityAddress, VerifiedCapsuleFrag]
     errors: dict[IdentityAddress, str]
 

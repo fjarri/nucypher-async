@@ -243,7 +243,7 @@ class NodeServer:
             publisher_card=PublisherCard(request.publisher_verifying_key),
         )
 
-        # TODO: check conditions here
+        # TODO (#52): check conditions here
 
         # TODO: catch reencryption errors (if any) and raise RPC error here
         vcfrags = self.reencryptor.reencrypt(
