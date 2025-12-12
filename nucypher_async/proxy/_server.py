@@ -88,8 +88,7 @@ class ProxyServer(HTTPServable):
         if self.started:
             raise RuntimeError("The loop is already started")
 
-        # TODO: get rid of ._learner access
-        await self._network_client._learner.seed_round(must_succeed=True)  # noqa: SLF001
+        await self._network_client._ensure_seeded()  # noqa: SLF001
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
         self._verification_task.start(nursery)
@@ -169,7 +168,7 @@ class ProxyServer(HTTPServable):
 
         client = LocalPREClient(self._network_client, self._pre_client)
 
-        assert len(request.retrieval_kits) == 1  # TODO: support retrieving multiple kits
+        assert len(request.retrieval_kits) == 1  # TODO (#50): support retrieving multiple kits
         outcome = await client.retrieve(
             treasure_map=request.treasure_map,
             message_kit=RetrievalKit(request.retrieval_kits[0]),

@@ -17,7 +17,7 @@ async def test_verified_nodes_iter(
     network_client_factory: Callable[[str], NetworkClient],
 ) -> None:
     network_client = network_client_factory("")
-    addresses = [server._node.staking_provider_address for server in fully_learned_nodes[:3]]
+    addresses = [server.info.staking_provider_address for server in fully_learned_nodes[:3]]
     nodes = []
 
     with trio.fail_after(10):

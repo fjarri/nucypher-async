@@ -15,7 +15,7 @@ async def test_learning(
             break
 
     known_nodes = {
-        server._node.staking_provider_address: server.learner.get_verified_nodes()
+        server.info.staking_provider_address: server.learner.get_verified_nodes()
         for server in chain_seeded_nodes
     }
 

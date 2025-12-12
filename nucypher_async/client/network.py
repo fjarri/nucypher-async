@@ -62,7 +62,7 @@ class NetworkClient:
 
     async def _ensure_seeded(self) -> None:
         if not self._seeded:
-            await self._learner.seed_round()
+            await self._learner.seed_round(must_succeed=True)
             self._seeded = True
 
     async def verification_task(self, stop_event: trio.Event) -> None:

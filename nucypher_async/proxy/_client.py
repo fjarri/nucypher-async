@@ -112,7 +112,7 @@ class ProxyPREClient(BasePREConsumerClient):
         # TODO: support multi-step retrieval in Proxy
         # (that is, when some parts were already retrieved,
         # we can list those addresses in RetrievalKit)
-        # TODO: support retrieving multiple kits
+        # TODO (#50): support retrieving multiple kits
         retrieval_kits = [
             message_kit.core_retrieval_kit
             if isinstance(message_kit, RetrievalKit)

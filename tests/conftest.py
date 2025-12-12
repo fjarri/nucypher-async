@@ -205,10 +205,10 @@ async def fully_learned_nodes(
             if other_server is server:
                 continue
 
-            peer_info = other_server._node  # TODO: add a proper method to NodeServer
+            node_info = other_server.info
             async with mock_identity_client.session() as session:
-                stake = await session.get_staked_amount(peer_info.staking_provider_address)
-            server.learner._test_add_verified_node(peer_info, stake)
+                stake = await session.get_staked_amount(node_info.staking_provider_address)
+            server.learner._test_add_verified_node(node_info, stake)
 
     for handle, _server in lonely_nodes:
         await handle.startup()

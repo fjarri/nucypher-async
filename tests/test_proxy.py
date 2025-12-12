@@ -18,8 +18,8 @@ async def test_get_nodes(
     proxy_client: ProxyClient,
 ) -> None:
     some_nodes = [
-        fully_learned_nodes[3]._node.staking_provider_address,
-        fully_learned_nodes[7]._node.staking_provider_address,
+        fully_learned_nodes[3].info.staking_provider_address,
+        fully_learned_nodes[7].info.staking_provider_address,
     ]
     nodes = await proxy_client.get_nodes(quantity=3, include_nodes=some_nodes)
     assert len(nodes) == 3
