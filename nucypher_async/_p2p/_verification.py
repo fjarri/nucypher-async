@@ -1,12 +1,11 @@
 from nucypher_core import Address, NodeMetadata, NodeMetadataPayload
-from nucypher_core.ferveo import FerveoPublicKey
-from nucypher_core.umbral import PublicKey, RecoverableSignature, Signer
 
 from .._drivers.time import BaseClock
 from ..blockchain.identity import IdentityAddress, IdentityClientSession
-from ..characters.pre import Reencryptor, ReencryptorCard
+from ..characters.cbd import DkgNodeCard
+from ..characters.pre import ReencryptorCard
 from ..domain import Domain
-from ._keys import Contact, PeerPrivateKey, PeerPublicKey, SecureContact
+from ._keys import Contact, PeerPublicKey, SecureContact
 from ._node_info import NodeInfo
 from ._operator import Operator
 
@@ -84,34 +83,33 @@ class VerifiedNodeInfo(NodeInfo):
     @classmethod
     def generate(
         cls,
-        peer_private_key: PeerPrivateKey,
+        operator: Operator,
         peer_public_key: PeerPublicKey | None,
-        signer: Signer,
-        encrypting_key: PublicKey,
-        dkg_key: FerveoPublicKey,
-        operator_signature: RecoverableSignature,
+        reencryptor_card: ReencryptorCard,
+        dkg_node_card: DkgNodeCard,
         clock: BaseClock,
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
     ) -> "VerifiedNodeInfo":
-        # TODO: use the character instead of several arguments?
-        public_key = peer_public_key or PeerPublicKey.generate(peer_private_key, clock, contact)
+        public_key = peer_public_key or PeerPublicKey.generate(
+            operator.peer_private_key, clock, contact
+        )
         payload = NodeMetadataPayload(
             staking_provider_address=Address(bytes(staking_provider_address)),
             domain=domain.value,
             timestamp_epoch=int(clock.utcnow().timestamp()),
-            operator_signature=operator_signature,
-            verifying_key=signer.verifying_key(),
-            encrypting_key=encrypting_key,
-            ferveo_public_key=dkg_key,
+            operator_signature=operator.signature,
+            verifying_key=operator.verifying_key,
+            encrypting_key=reencryptor_card.encrypting_key,
+            ferveo_public_key=dkg_node_card.public_key,
             # Abstraction leak here, ideally NodeMetadata should
-            # have a field like `peer_public_key`.
+            # have a field like `transport_public_key`.
             certificate_der=bytes(public_key),
             host=str(contact.host),
             port=contact.port,
         )
-        metadata = NodeMetadata(signer=signer, payload=payload)
+        metadata = NodeMetadata(signer=operator.signer, payload=payload)
         return cls(metadata)
 
     @classmethod
@@ -143,12 +141,11 @@ class VerifiedNodeInfo(NodeInfo):
         cls,
         clock: BaseClock,
         node_info: NodeInfo,
-        operator: Operator,  # TODO: use OperatorCard?
-        reencryptor: Reencryptor,  # TODO: use ReencryptorCard
+        operator: Operator,
+        reencryptor_card: ReencryptorCard,
         staking_provider_address: IdentityAddress,
         contact: Contact,
         domain: Domain,
-        peer_private_key: PeerPrivateKey,  # TODO: this is a property of Operator
         peer_public_key: PeerPublicKey | None,
     ) -> "VerifiedNodeInfo":
         _verify_peer_shared(
@@ -159,7 +156,7 @@ class VerifiedNodeInfo(NodeInfo):
             expected_operator_address=operator.address,
         )
 
-        if not peer_private_key.matches(node_info.public_key):
+        if not operator.peer_private_key.matches(node_info.public_key):
             raise PeerVerificationError(
                 "The peer public key in the metadata does not match the given peer private key"
             )
@@ -169,7 +166,11 @@ class VerifiedNodeInfo(NodeInfo):
                 "The peer public key in the metadata does not match the given peer public key"
             )
 
-        # TODO: check that peer_public_key.host == contact.host? Or is that redundant at this point?
+        if peer_public_key is not None and peer_public_key.declared_host != contact.host:
+            raise PeerVerificationError(
+                f"The host declared in the public key ({peer_public_key.declared_host}) "
+                f"is different from the external host in the config ({contact.host})"
+            )
 
         if node_info.staking_provider_address != staking_provider_address:
             raise PeerVerificationError(
@@ -184,16 +185,15 @@ class VerifiedNodeInfo(NodeInfo):
                 f"{operator.verifying_key} derived from the master key"
             )
 
-        if node_info.encrypting_key != reencryptor.encrypting_key:
+        if node_info.encrypting_key != reencryptor_card.encrypting_key:
             raise PeerVerificationError(
                 f"Encrypting key mismatch: {node_info.encrypting_key} in the metadata, "
-                f"{reencryptor.encrypting_key} derived from the master key"
+                f"{reencryptor_card.encrypting_key} derived from the master key"
             )
 
         return cls(node_info.metadata)
 
     def reencryptor_card(self) -> ReencryptorCard:
-        # TODO: this method seems out of place here?
         return ReencryptorCard(encrypting_key=self.encrypting_key)
 
     def __str__(self) -> str:

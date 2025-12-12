@@ -87,12 +87,11 @@ class NodeServer:
                     clock=self._clock,
                     node_info=node_info,
                     operator=operator,
-                    reencryptor=self.reencryptor,
+                    reencryptor_card=self.reencryptor.card(),
                     staking_provider_address=staking_provider_address,
                     contact=config.contact,
                     domain=config.domain,
                     peer_public_key=peer_public_key,
-                    peer_private_key=peer_private_key,
                 )
             except PeerVerificationError as exc:
                 self._logger.warning(
@@ -105,12 +104,10 @@ class NodeServer:
             self._logger.debug("Generating new metadata")
             self._node = VerifiedNodeInfo.generate(
                 clock=self._clock,
-                peer_private_key=peer_private_key,
+                operator=self.operator,
                 peer_public_key=peer_public_key,
-                signer=self.operator.signer,
-                operator_signature=self.operator.signature,
-                encrypting_key=self.reencryptor.encrypting_key,
-                dkg_key=self.decryptor.public_key,
+                reencryptor_card=self.reencryptor.card(),
+                dkg_node_card=self.decryptor.card(),
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain,
