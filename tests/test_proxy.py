@@ -5,8 +5,8 @@ import trio.testing
 
 from nucypher_async._mocks import MockPREClient
 from nucypher_async.blockchain.pre import PREAccount, PREAccountSigner, PREAmount
-from nucypher_async.characters.pre import Delegator, Publisher, Recipient
-from nucypher_async.client.pre import LocalPREClient, pre_encrypt
+from nucypher_async.characters.pre import Delegator, EncryptedMessage, Publisher, Recipient
+from nucypher_async.client.pre import LocalPREClient
 from nucypher_async.node import NodeServer
 from nucypher_async.proxy import ProxyPREClient
 from nucypher_async.proxy._client import ProxyClient
@@ -62,12 +62,12 @@ async def test_retrieve_cfrags(
         )
 
     message = b"a secret message"
-    message_kit = pre_encrypt(policy, message)
+    encrypted_message = EncryptedMessage(policy, message)
 
     decrypted = await proxy_pre_client.decrypt(
         recipient=bob,
         enacted_policy=enacted_policy,
-        message_kit=message_kit,
+        encrypted_message=encrypted_message,
         delegator_card=alice.card(),
         publisher_card=publisher.card(),
     )

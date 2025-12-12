@@ -9,7 +9,7 @@ from .._drivers.asgi import HTTPError
 from .._drivers.http_server import HTTPServable
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
 from .._utils import BackgroundTask
-from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
+from ..characters.pre import DelegatorCard, EncryptedMessageMetadata, RecipientCard
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
 from ..logging import Logger
@@ -171,7 +171,7 @@ class ProxyServer(HTTPServable):
         assert len(request.retrieval_kits) == 1  # TODO (#50): support retrieving multiple kits
         outcome = await client.retrieve(
             treasure_map=request.treasure_map,
-            message_kit=RetrievalKit(request.retrieval_kits[0]),
+            metadata=EncryptedMessageMetadata(request.retrieval_kits[0]),
             delegator_card=DelegatorCard(request.alice_verifying_key),
             recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
         )

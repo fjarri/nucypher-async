@@ -5,9 +5,9 @@ import trio.testing
 
 from nucypher_async._mocks import MockPREClient
 from nucypher_async.blockchain.pre import PREAccount, PREAccountSigner, PREAmount
-from nucypher_async.characters.pre import Delegator, Publisher, Recipient
+from nucypher_async.characters.pre import Delegator, EncryptedMessage, Publisher, Recipient
 from nucypher_async.client.network import NetworkClient
-from nucypher_async.client.pre import LocalPREClient, pre_encrypt
+from nucypher_async.client.pre import LocalPREClient
 from nucypher_async.node import NodeServer
 
 
@@ -58,7 +58,7 @@ async def test_granting(
         )
 
     message = b"a secret message"
-    message_kit = pre_encrypt(policy, message)
+    encrypted_message = EncryptedMessage(policy, message)
 
     bob_client = local_pre_client_factory("Recipient")
 
@@ -66,7 +66,7 @@ async def test_granting(
         decrypted = await bob_client.decrypt(
             recipient=bob,
             enacted_policy=enacted_policy,
-            message_kit=message_kit,
+            encrypted_message=encrypted_message,
             delegator_card=alice.card(),
             publisher_card=publisher.card(),
         )
