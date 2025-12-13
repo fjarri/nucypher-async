@@ -5,9 +5,8 @@ from attrs import frozen
 from platformdirs import PlatformDirs
 
 from .._drivers.http_client import HTTPClient
-from .._drivers.time import SystemClock
+from .._drivers.time import BaseClock, SystemClock
 from .._p2p import BaseStorage, Contact, FileSystemStorage, InMemoryStorage, NodeClient
-from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient

@@ -8,9 +8,9 @@ from examples_common import Context
 
 from nucypher_async.blockchain.pre import PREAccountSigner
 from nucypher_async.characters import MasterKey
-from nucypher_async.characters.pre import Delegator, Publisher, Recipient
+from nucypher_async.characters.pre import Delegator, EncryptedMessage, Publisher, Recipient
 from nucypher_async.client.network import NetworkClient
-from nucypher_async.client.pre import LocalPREClient, pre_encrypt
+from nucypher_async.client.pre import LocalPREClient
 
 
 async def main(*, mocked: bool = True) -> None:
@@ -62,13 +62,13 @@ async def main(*, mocked: bool = True) -> None:
         )
 
         message = b"a secret message"
-        message_kit = pre_encrypt(enacted_policy, message)
+        encrypted_message = EncryptedMessage(enacted_policy.policy, message)
 
         context.logger.info("Bob retrieves and decrypts")
         decrypted = await bob_client.decrypt(
             bob,
             enacted_policy,
-            message_kit,
+            encrypted_message,
             alice.card(),
             publisher.card(),
         )

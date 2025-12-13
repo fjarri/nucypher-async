@@ -1,9 +1,10 @@
 import arrow
 import trio
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 
 
+# TODO (#45): derive from `trio.abc.Clock`.
 class MockClock(BaseClock):
     def __init__(self) -> None:
         self._start: float | None = None

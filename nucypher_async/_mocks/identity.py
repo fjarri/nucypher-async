@@ -39,7 +39,7 @@ class TacoApplication(MockContract):
     def getActiveStakingProviders(  # noqa: N802
         self, _start_index: int, _max_staking_providers: int
     ) -> tuple[int, list[bytes]]:
-        # TODO: support pagination
+        # TODO (#47): implement pagination
         total = sum(amount.as_wei() for amount in self._stakes.values())
         return total, [
             bytes(address) + amount.as_wei().to_bytes(12, byteorder="big")

@@ -23,7 +23,7 @@ dependencies = [
     "arrow>=1",
     "humanize>=4.3",
     "attrs>=22",
-    "cattrs>=22",
+    "compages>=0.3",
     "click>=8",
 ]
 requires-python = ">=3.10"

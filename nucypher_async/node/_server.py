@@ -70,7 +70,7 @@ class NodeServer:
         self._storage = config.storage
 
         node_info = self._storage.get_my_node_info()
-        maybe_node: VerifiedNodeInfo | None = None
+        maybe_node_info: VerifiedNodeInfo | None = None
 
         peer_key_pair = config.peer_key_pair
         if peer_key_pair is not None:
@@ -83,16 +83,15 @@ class NodeServer:
             self._logger.debug("Found existing metadata, verifying")
 
             try:
-                maybe_node = VerifiedNodeInfo.checked_local(
+                maybe_node_info = VerifiedNodeInfo.checked_local(
                     clock=self._clock,
                     node_info=node_info,
                     operator=operator,
-                    reencryptor=self.reencryptor,
+                    reencryptor_card=self.reencryptor.card(),
                     staking_provider_address=staking_provider_address,
                     contact=config.contact,
                     domain=config.domain,
                     peer_public_key=peer_public_key,
-                    peer_private_key=peer_private_key,
                 )
             except PeerVerificationError as exc:
                 self._logger.warning(
@@ -101,26 +100,24 @@ class NodeServer:
                     exc_info=True,
                 )
 
-        if maybe_node is None:
+        if maybe_node_info is None:
             self._logger.debug("Generating new metadata")
-            self._node = VerifiedNodeInfo.generate(
+            self.info = VerifiedNodeInfo.generate(
                 clock=self._clock,
-                peer_private_key=peer_private_key,
+                operator=self.operator,
                 peer_public_key=peer_public_key,
-                signer=self.operator.signer,
-                operator_signature=self.operator.signature,
-                encrypting_key=self.reencryptor.encrypting_key,
-                dkg_key=self.decryptor.public_key,
+                reencryptor_card=self.reencryptor.card(),
+                dkg_node_card=self.decryptor.card(),
                 staking_provider_address=staking_provider_address,
                 contact=config.contact,
                 domain=config.domain,
             )
-            self._storage.set_my_node_info(self._node)
+            self._storage.set_my_node_info(self.info)
         else:
-            self._node = maybe_node
+            self.info = maybe_node_info
 
         self.learner = Learner(
-            this_node=self._node,
+            this_node=self.info,
             node_client=config.node_client,
             identity_client=config.identity_client,
             storage=config.storage,
@@ -145,7 +142,7 @@ class NodeServer:
         self.started = False
 
     def secure_contact(self) -> SecureContact:
-        return self._node.secure_contact
+        return self.info.secure_contact
 
     def peer_private_key(self) -> PeerPrivateKey:
         return self._peer_private_key
@@ -205,7 +202,7 @@ class NodeServer:
         node_infos = [
             node_info
             for node_info in node_infos
-            if node_info.staking_provider_address != self._node.staking_provider_address
+            if node_info.staking_provider_address != self.info.staking_provider_address
         ]
 
         # TODO: this can work differently if the P2P network does not use HTTP.
@@ -214,7 +211,7 @@ class NodeServer:
         self.learner.passive_learning(remote_host, node_infos)
 
         announce_nodes = [m.metadata for m in self.learner.get_verified_nodes()] + [
-            self._node.metadata
+            self.info.metadata
         ]
 
         response_payload = MetadataResponsePayload(
@@ -224,7 +221,7 @@ class NodeServer:
         return bytes(MetadataResponse(self.operator.signer, response_payload))
 
     async def public_information(self) -> bytes:
-        return bytes(self._node.metadata)
+        return bytes(self.info.metadata)
 
     async def reencrypt(self, request_bytes: bytes) -> bytes:
         try:
@@ -246,7 +243,7 @@ class NodeServer:
             publisher_card=PublisherCard(request.publisher_verifying_key),
         )
 
-        # TODO: check conditions here
+        # TODO (#52): check conditions here
 
         # TODO: catch reencryption errors (if any) and raise RPC error here
         vcfrags = self.reencryptor.reencrypt(
@@ -278,7 +275,7 @@ class NodeServer:
         async with self._cbd_client.session() as session:
             assert await session.is_ritual_active(decryption_request.ritual_id)
             assert await session.is_participant(
-                decryption_request.ritual_id, self._node.staking_provider_address
+                decryption_request.ritual_id, self.info.staking_provider_address
             )
 
         ciphertext_header = decryption_request.ciphertext_header
@@ -299,7 +296,7 @@ class NodeServer:
 
             validators = {}
             for staking_provider_address in on_chain_ritual.providers:
-                if staking_provider_address == self._node.staking_provider_address:
+                if staking_provider_address == self.info.staking_provider_address:
                     # Local
                     public_key = self.decryptor.public_key
                 else:
@@ -329,10 +326,10 @@ class NodeServer:
     # should be available at the same port as the rest of the API, so it has to stay here.
     async def status(self) -> str:
         return render_status(
-            node=self._node,
+            node=self.info,
             logger=self._logger,
             clock=self._clock,
             snapshot=self.learner.get_snapshot(),
             started_at=self._started_at,
-            domain=self._node.domain,
+            domain=self.info.domain,
         )

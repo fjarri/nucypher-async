@@ -13,7 +13,7 @@ import trio
 from attrs import evolve, frozen
 from sortedcontainers import SortedKeyList
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress
 from ._keys import Contact
 from ._node_info import NodeInfo
@@ -428,6 +428,9 @@ class FleetSensor:
 
     def is_empty(self) -> bool:
         return self._contacts_db.is_empty() and self._verified_nodes_db.is_empty()
+
+    def has_no_new_contacts(self) -> bool:
+        return self._contacts_db.is_empty()
 
     def next_verification_in(self) -> float:
         if self._contacts_db.is_empty() and self._verified_nodes_db.is_empty():

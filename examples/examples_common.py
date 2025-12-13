@@ -9,13 +9,12 @@ from hexbytes import HexBytes
 
 from nucypher_async._drivers.http_client import HTTPClient
 from nucypher_async._drivers.ssl import fetch_certificate
-from nucypher_async._drivers.time import SystemClock
+from nucypher_async._drivers.time import BaseClock, SystemClock
 from nucypher_async._mocks import MockCBDClient, MockClock, MockIdentityClient, MockPREClient
 from nucypher_async._p2p import Contact, NodeClient, Operator
-from nucypher_async.base.time import BaseClock
 from nucypher_async.blockchain.cbd import CBDClient
 from nucypher_async.blockchain.identity import AmountT, IdentityAccount, IdentityClient
-from nucypher_async.blockchain.pre import PREAccount, PREClient
+from nucypher_async.blockchain.pre import PREAccount, PREAmount, PREClient
 from nucypher_async.characters import MasterKey
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
@@ -54,6 +53,9 @@ class Context:
         cbd_client = MockCBDClient()
         clock = MockClock()
 
+        pre_account = PREAccount.random()
+        pre_client.mock_set_balance(pre_account.address, PREAmount.ether(1))
+
         logger.info("Mocked mode - starting nodes")
 
         for i in range(3):
@@ -74,7 +76,7 @@ class Context:
                 AmountT.ether(40000),
             )
 
-            logger = logger.get_child(f"Node{i + 1}")
+            node_logger = logger.get_child(f"Node{i + 1}")
 
             http_server_config = HTTPServerConfig.from_typed_values(
                 bind_to_address=LOCALHOST,
@@ -88,7 +90,7 @@ class Context:
                 pre_client=pre_client,
                 cbd_client=cbd_client,
                 node_client=NodeClient(HTTPClient()),
-                logger=logger,
+                logger=node_logger,
                 seed_contacts=seed_contacts,
                 clock=clock,
             )
@@ -118,7 +120,7 @@ class Context:
             clock=clock,
             seed_contact=Contact(LOCALHOST, PORT_BASE),
             server_handles=handles,
-            pre_account=PREAccount.random(),
+            pre_account=pre_account,
         )
 
     @classmethod

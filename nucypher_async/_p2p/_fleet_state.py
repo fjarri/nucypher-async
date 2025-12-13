@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from nucypher_core import FleetStateChecksum
 
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 from ._keys import Contact
 from ._node_info import NodeInfo
 from ._verification import VerifiedNodeInfo

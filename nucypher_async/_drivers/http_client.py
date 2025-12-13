@@ -7,28 +7,23 @@ from typing import cast
 
 import httpx
 
-from .._utils import temp_file
 from ..base.types import JSON
-from .ssl import SSLCertificate, fetch_certificate
+from .ssl import SSLCertificate, fetch_certificate, make_client_ssl_context
 
 
 class HTTPClientError(Exception):
     pass
 
 
-# TODO: move logic to _drivers/ssl
-def make_ssl_context(certificate: SSLCertificate) -> ssl.SSLContext:
-    # Cannot create a context with a certificate directly, see https://bugs.python.org/issue16487.
-    # So instead we do it via a temporary file, and negate the performance penalty by caching.
-    with temp_file(certificate.to_pem_bytes()) as certificate_filename:
-        return ssl.create_default_context(cafile=str(certificate_filename))
-
-
 class HTTPClient:
     # The default certificate cache size is chosen to cover the possible size of the network,
     # which at its best only had a few hundred nodes.
     def __init__(self, certificate_cache_size: int = 1024):
-        self._cached_ssl_context = lru_cache(maxsize=certificate_cache_size)(make_ssl_context)
+        @lru_cache(maxsize=certificate_cache_size)
+        def cached_ssl_context(certificate: SSLCertificate) -> ssl.SSLContext:
+            return make_client_ssl_context(certificate)
+
+        self._cached_ssl_context = cached_ssl_context
 
     async def fetch_certificate(self, host: str, port: int) -> SSLCertificate:
         return await fetch_certificate(host, port)
@@ -60,9 +55,11 @@ class HTTPResponse:
         return cast("JSON", self._response.json())
 
     @property
-    def status_code(self) -> http.HTTPStatus:
-        # TODO: should we add a handling of an unrecognized status code?
-        return http.HTTPStatus(self._response.status_code)
+    def status_code(self) -> http.HTTPStatus | None:
+        try:
+            return http.HTTPStatus(self._response.status_code)
+        except ValueError:
+            return None
 
 
 class HTTPClientSession:

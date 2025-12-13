@@ -103,7 +103,9 @@ class NodeClient:
         response = try_deserialize(response_bytes, MetadataResponse)
 
         try:
-            payload = response.verify(node_info.verifying_key)
+            # It's an inconsistency in `nucypher_core` that the Umbral verifying key is used
+            # for general P2P messages.
+            payload = response.verify(node_info.pre_verifying_key)
         except Exception as exc:  # TODO: can we narrow it down?
             # TODO: should it be a separate error class?
             raise PeerError.invalid_message(MetadataResponse, exc) from exc
@@ -151,7 +153,7 @@ class NodeClient:
             verified_cfrags = response.verify(
                 capsules=capsules,
                 alice_verifying_key=delegator_card.verifying_key,
-                ursula_verifying_key=node_info.verifying_key,
+                ursula_verifying_key=node_info.pre_verifying_key,
                 policy_encrypting_key=treasure_map.policy_encrypting_key,
                 bob_encrypting_key=recipient_card.encrypting_key,
             )

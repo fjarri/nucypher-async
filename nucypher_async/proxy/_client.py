@@ -3,12 +3,11 @@ from collections.abc import Iterable
 from http import HTTPStatus
 
 from nucypher_core import Context, TreasureMap
-from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import PublicKey, VerifiedCapsuleFrag
 
 from .._drivers.http_client import HTTPClient
 from ..blockchain.identity import IdentityAddress
-from ..characters.pre import DelegatorCard, MessageKit, RecipientCard, RetrievalKit
+from ..characters.pre import DelegatorCard, EncryptedMessageMetadata, RecipientCard
 from ..client.pre import BasePREConsumerClient, PRERetrievalOutcome
 from . import _schema
 from ._schema import ClientRetrieveCFragsResponse, GetUrsulasResponse, RetrieveCFragsRequest
@@ -54,14 +53,14 @@ class ProxyClient:
     async def retrieve_cfrags(
         self,
         treasure_map: TreasureMap,
-        retrieval_kits: Iterable[CoreRetrievalKit],
+        metadatas: Iterable[EncryptedMessageMetadata],
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
     ) -> list[dict[IdentityAddress, VerifiedCapsuleFrag]]:
         request = RetrieveCFragsRequest(
             treasure_map=treasure_map,
-            retrieval_kits=list(retrieval_kits),
+            retrieval_kits=[metadata.retrieval_kit for metadata in metadatas],
             alice_verifying_key=delegator_card.verifying_key,
             bob_encrypting_key=recipient_card.encrypting_key,
             bob_verifying_key=recipient_card.verifying_key,
@@ -80,12 +79,12 @@ class ProxyClient:
         parsed_response = _schema.from_json(ClientRetrieveCFragsResponse, response.json)
 
         processed_response = []
-        for rkit, result in zip(
-            retrieval_kits, parsed_response.result.retrieval_results, strict=True
+        for metadata, result in zip(
+            metadatas, parsed_response.result.retrieval_results, strict=True
         ):
             processed_result = {
                 address: cfrag.verify(
-                    rkit.capsule,
+                    metadata.capsule,
                     verifying_pk=delegator_card.verifying_key,
                     delegating_pk=treasure_map.policy_encrypting_key,
                     receiving_pk=recipient_card.encrypting_key,
@@ -104,7 +103,7 @@ class ProxyPREClient(BasePREConsumerClient):
     async def retrieve(
         self,
         treasure_map: TreasureMap,
-        message_kit: MessageKit | RetrievalKit,
+        metadata: EncryptedMessageMetadata,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
@@ -112,15 +111,10 @@ class ProxyPREClient(BasePREConsumerClient):
         # TODO: support multi-step retrieval in Proxy
         # (that is, when some parts were already retrieved,
         # we can list those addresses in RetrievalKit)
-        # TODO: support retrieving multiple kits
-        retrieval_kits = [
-            message_kit.core_retrieval_kit
-            if isinstance(message_kit, RetrievalKit)
-            else RetrievalKit.from_message_kit(message_kit).core_retrieval_kit
-        ]
+        # TODO (#50): support retrieving multiple kits
         cfrags = await self._proxy_client.retrieve_cfrags(
-            treasure_map, retrieval_kits, delegator_card, recipient_card, context
+            treasure_map, [metadata], delegator_card, recipient_card, context
         )
 
-        # TODO: collect errors as well
+        # TODO (#51): collect errors as well
         return PRERetrievalOutcome(cfrags=cfrags[0], errors={})

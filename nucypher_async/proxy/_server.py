@@ -1,15 +1,16 @@
+import dataclasses
 import http
 from collections.abc import Mapping
 from ipaddress import IPv4Address
 
-import attrs
 import trio
+from compages import StructuringError
 
 from .._drivers.asgi import HTTPError
 from .._drivers.http_server import HTTPServable
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
 from .._utils import BackgroundTask
-from ..characters.pre import DelegatorCard, RecipientCard, RetrievalKit
+from ..characters.pre import DelegatorCard, EncryptedMessageMetadata, RecipientCard
 from ..client.network import NetworkClient
 from ..client.pre import LocalPREClient
 from ..logging import Logger
@@ -88,8 +89,7 @@ class ProxyServer(HTTPServable):
         if self.started:
             raise RuntimeError("The loop is already started")
 
-        # TODO: get rid of ._learner access
-        await self._network_client._learner.seed_round(must_succeed=True)  # noqa: SLF001
+        await self._network_client._ensure_seeded()  # noqa: SLF001
 
         # TODO: make sure a proper cleanup happens if the start-up fails halfway
         self._verification_task.start(nursery)
@@ -113,19 +113,20 @@ class ProxyServer(HTTPServable):
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
-        except _schema.ValidationError as exc:
+        except StructuringError as exc:
+            self._logger.exception("Here")
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         if request_body is not None:
             try:
                 request_from_body = _schema.from_json(GetUrsulasRequest, request_body)
-            except _schema.ValidationError as exc:
+            except StructuringError as exc:
                 raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
             # TODO: kind of weird. Who would use both query params and body?
             # Also, should GET request even support a body?
             # What does the reference implementation do?
-            request = attrs.evolve(
+            request = dataclasses.replace(
                 request_from_body,
                 quantity=request.quantity,
                 include_ursulas=request.include_ursulas,
@@ -151,7 +152,7 @@ class ProxyServer(HTTPServable):
             UrsulaResult(
                 checksum_address=node.staking_provider_address,
                 uri=node.contact.uri(),
-                encrypting_key=node.encrypting_key,
+                encrypting_key=node.pre_encrypting_key,
             )
             for node in nodes
         ]
@@ -164,15 +165,15 @@ class ProxyServer(HTTPServable):
     async def retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
             request = _schema.from_json(RetrieveCFragsRequest, request_body)
-        except _schema.ValidationError as exc:
+        except StructuringError as exc:
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         client = LocalPREClient(self._network_client, self._pre_client)
 
-        assert len(request.retrieval_kits) == 1  # TODO: support retrieving multiple kits
+        assert len(request.retrieval_kits) == 1  # TODO (#50): support retrieving multiple kits
         outcome = await client.retrieve(
             treasure_map=request.treasure_map,
-            message_kit=RetrievalKit(request.retrieval_kits[0]),
+            metadata=EncryptedMessageMetadata(request.retrieval_kits[0]),
             delegator_card=DelegatorCard(request.alice_verifying_key),
             recipient_card=RecipientCard(request.bob_encrypting_key, request.bob_verifying_key),
         )
