@@ -49,7 +49,7 @@ class ProxyServerAsHTTPServer:
         await self._server.stop()
 
     async def get_ursulas(self, request: Request) -> JSONResponse:
-        request_body = await request.body_json()  # TODO: add the query parameters here
+        request_body = await request.body_json()
         response = await self._server.get_ursulas(request.query_params, request_body)
         return JSONResponse(data=response)
 
