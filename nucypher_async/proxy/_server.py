@@ -1,9 +1,10 @@
+import dataclasses
 import http
 from collections.abc import Mapping
 from ipaddress import IPv4Address
 
-import attrs
 import trio
+from compages import StructuringError
 
 from .._drivers.asgi import HTTPError
 from .._drivers.http_server import HTTPServable
@@ -112,19 +113,20 @@ class ProxyServer(HTTPServable):
     ) -> JSON:
         try:
             request = GetUrsulasRequest.from_query_params(request_params)
-        except _schema.ValidationError as exc:
+        except StructuringError as exc:
+            self._logger.exception("Here")
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         if request_body is not None:
             try:
                 request_from_body = _schema.from_json(GetUrsulasRequest, request_body)
-            except _schema.ValidationError as exc:
+            except StructuringError as exc:
                 raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
             # TODO: kind of weird. Who would use both query params and body?
             # Also, should GET request even support a body?
             # What does the reference implementation do?
-            request = attrs.evolve(
+            request = dataclasses.replace(
                 request_from_body,
                 quantity=request.quantity,
                 include_ursulas=request.include_ursulas,
@@ -163,7 +165,7 @@ class ProxyServer(HTTPServable):
     async def retrieve_cfrags(self, request_body: JSON) -> JSON:
         try:
             request = _schema.from_json(RetrieveCFragsRequest, request_body)
-        except _schema.ValidationError as exc:
+        except StructuringError as exc:
             raise HTTPError(http.HTTPStatus.BAD_REQUEST, str(exc)) from exc
 
         client = LocalPREClient(self._network_client, self._pre_client)
