@@ -5,25 +5,29 @@ from types import NoneType, UnionType
 from typing import Any, TypeVar, Union, cast
 
 from compages import (
-    StructureDictIntoDataclass,
+    AsDataclassToDict,
+    AsDict,
+    AsInt,
+    AsList,
+    AsNone,
+    AsStr,
+    AsUnion,
+    DataclassBase,
+    IntoDataclassFromMapping,
+    IntoDict,
+    IntoList,
+    IntoNone,
+    IntoStr,
+    IntoUnion,
+    StructureHandler,
     Structurer,
+    StructurerContext,
     StructuringError,
-    UnstructureDataclassToDict,
+    UnstructureHandler,
     Unstructurer,
-    simple_structure,
-    simple_unstructure,
-    structure_into_dict,
-    structure_into_list,
-    structure_into_none,
-    structure_into_str,
-    structure_into_union,
-    unstructure_as_dict,
-    unstructure_as_int,
-    unstructure_as_list,
-    unstructure_as_none,
-    unstructure_as_str,
-    unstructure_as_union,
+    UnstructurerContext,
 )
+from ethereum_rpc import Address
 from nucypher_core import Context, RetrievalKit, TreasureMap
 from nucypher_core.umbral import CapsuleFrag, PublicKey, VerifiedCapsuleFrag
 
@@ -32,117 +36,106 @@ from ..blockchain.identity import IdentityAddress
 JSON = str | int | float | bool | None | list["JSON"] | dict[str, "JSON"]
 
 
-@simple_structure
-def _structure_into_int(val: Any) -> int:
-    # Need to support both strings (coming from request parameters)
-    # and actual integers (coming from the JSON body)
-    if isinstance(val, int):
-        return val
-    if isinstance(val, str):
-        try:
-            return int(val)
-        except ValueError as exc:
-            raise StructuringError(f"Cannot parse `{val}` as integer") from exc
+class _IntoInt(StructureHandler):
+    def structure(self, _context: StructurerContext, val: Any) -> int:
+        # Need to support both strings (coming from request parameters)
+        # and actual integers (coming from the JSON body)
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str):
+            try:
+                return int(val)
+            except ValueError as exc:
+                raise StructuringError(f"Cannot parse `{val}` as integer") from exc
 
-    raise StructuringError(f"Cannot parse a value of type `{type(val)}` as integer")
-
-
-@simple_structure
-def structure_into_identity_address(val: Any) -> IdentityAddress:
-    return IdentityAddress.from_hex(val)
+        raise StructuringError(f"Cannot parse a value of type `{type(val)}` as integer")
 
 
-@simple_unstructure
-def unstructure_as_identity_address(val: IdentityAddress) -> Any:
-    return val.checksum
+class _IntoPublicKey(StructureHandler):
+    def structure(self, _context: StructurerContext, val: Any) -> PublicKey:
+        if not isinstance(val, str):
+            raise StructuringError("Expected a string")
+        return PublicKey.from_compressed_bytes(bytes.fromhex(val))
 
 
-@simple_structure
-def structure_into_public_key(val: str) -> PublicKey:
-    return PublicKey.from_compressed_bytes(bytes.fromhex(val))
+class _AsPublicKey(UnstructureHandler):
+    def unstructure(self, _context: UnstructurerContext, val: PublicKey) -> str:
+        return val.to_compressed_bytes().hex()
 
 
-@simple_unstructure
-def unstructure_as_public_key(val: PublicKey) -> str:
-    return val.to_compressed_bytes().hex()
+class _IntoObjFromBase64(StructureHandler):
+    def structure(self, context: StructurerContext, val: Any) -> Any:
+        if not isinstance(val, str):
+            raise StructuringError("Expected a string")
+        data = base64.b64decode(val.encode())
+        # TODO: use a Protocol to make the expectations explicit?
+        return context.structure_into.from_bytes(data)  # type: ignore[union-attr]
 
 
-@simple_structure
-def structure_into_treasure_map(val: str) -> TreasureMap:
-    return TreasureMap.from_bytes(base64.b64decode(val.encode()))
+class _AsBase64(UnstructureHandler):
+    def unstructure(self, _context: UnstructurerContext, val: Any) -> str:
+        return base64.b64encode(bytes(val)).decode()
 
 
-@simple_unstructure
-def unstructure_as_treasure_map(val: TreasureMap) -> str:
-    return base64.b64encode(bytes(val)).decode()
+class _IntoContext(StructureHandler):
+    def structure(self, _context: StructurerContext, val: str) -> Context:
+        if not isinstance(val, str):
+            raise StructuringError("Expected a string")
+        return Context(val)
 
 
-@simple_structure
-def structure_into_retrieval_kit(val: str) -> RetrievalKit:
-    return RetrievalKit.from_bytes(base64.b64decode(val.encode()))
+class _AsContext(UnstructureHandler):
+    def unstructure(self, _context: UnstructurerContext, val: Context) -> str:
+        return str(val)
 
 
-@simple_unstructure
-def unstructure_as_retrieval_kit(val: RetrievalKit) -> str:
-    return base64.b64encode(bytes(val)).decode()
+class _IntoAddress(StructureHandler):
+    def structure(self, context: StructurerContext, val: str) -> Address:
+        structure_into = cast("type[Address]", context.structure_into)
+        return structure_into.from_hex(val)
 
 
-@simple_structure
-def structure_into_cfrag(val: str) -> CapsuleFrag:
-    return CapsuleFrag.from_bytes(base64.b64decode(val.encode()))
-
-
-@simple_unstructure
-def unstructure_as_vcfrag(val: VerifiedCapsuleFrag) -> str:
-    return base64.b64encode(bytes(val)).decode()
-
-
-@simple_structure
-def structure_into_context(val: str) -> Context:
-    return Context(val)
-
-
-@simple_unstructure
-def unstructure_as_context(val: Context) -> str:
-    return str(val)
+class _AsAddress(UnstructureHandler):
+    def unstructure(self, _context: UnstructurerContext, val: Address) -> str:
+        return val.checksum
 
 
 STRUCTURER = Structurer(
     {
-        IdentityAddress: structure_into_identity_address,
-        PublicKey: structure_into_public_key,
-        TreasureMap: structure_into_treasure_map,
-        RetrievalKit: structure_into_retrieval_kit,
-        CapsuleFrag: structure_into_cfrag,
-        Context: structure_into_context,
-        int: _structure_into_int,
-        str: structure_into_str,
-        NoneType: structure_into_none,
-        list: structure_into_list,
-        dict: structure_into_dict,
-        UnionType: structure_into_union,
-        Union: structure_into_union,
+        Address: _IntoAddress(),
+        PublicKey: _IntoPublicKey(),
+        TreasureMap: _IntoObjFromBase64(),
+        RetrievalKit: _IntoObjFromBase64(),
+        CapsuleFrag: _IntoObjFromBase64(),
+        Context: _IntoContext(),
+        int: _IntoInt(),
+        str: IntoStr(),
+        NoneType: IntoNone(),
+        list: IntoList(),
+        dict: IntoDict(),
+        UnionType: IntoUnion(),
+        Union: IntoUnion(),
+        DataclassBase: IntoDataclassFromMapping(),
     },
-    [StructureDictIntoDataclass()],
 )
 
 UNSTRUCTURER = Unstructurer(
     {
-        IdentityAddress: unstructure_as_identity_address,
-        PublicKey: unstructure_as_public_key,
-        TreasureMap: unstructure_as_treasure_map,
-        RetrievalKit: unstructure_as_retrieval_kit,
-        VerifiedCapsuleFrag: unstructure_as_vcfrag,
-        Context: unstructure_as_context,
-        int: unstructure_as_int,
-        str: unstructure_as_str,
-        NoneType: unstructure_as_none,
-        list: unstructure_as_list,
-        dict: unstructure_as_dict,
-        UnionType: unstructure_as_union,
-        Union: unstructure_as_union,
+        Address: _AsAddress(),
+        PublicKey: _AsPublicKey(),
+        TreasureMap: _AsBase64(),
+        RetrievalKit: _AsBase64(),
+        VerifiedCapsuleFrag: _AsBase64(),
+        Context: _AsContext(),
+        int: AsInt(),
+        str: AsStr(),
+        NoneType: AsNone(),
+        list: AsList(),
+        dict: AsDict(),
+        UnionType: AsUnion(),
+        Union: AsUnion(),
+        DataclassBase: AsDataclassToDict(),
     },
-    [UnstructureDataclassToDict()],
 )
 
 

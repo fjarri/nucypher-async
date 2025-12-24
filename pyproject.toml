@@ -16,14 +16,14 @@ dependencies = [
     "mnemonic>=0.20",
     "eth-account>=0.6",
     "pons[http-provider]>=0.11",
-    "ethereum_rpc>=0.1.1",
+    "ethereum_rpc>=0.2",
     "platformdirs>=2",
     "mako>=1",
     "sortedcontainers>=2.4",
     "arrow>=1",
     "humanize>=4.3",
     "attrs>=22",
-    "compages>=0.3",
+    "compages>=0.4",
     "click>=8",
 ]
 requires-python = ">=3.10"
