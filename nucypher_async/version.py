@@ -8,7 +8,6 @@ from attrs import frozen
 
 def _run_in_project_dir(cmd: Sequence[str]) -> str:
     cwd = Path(__file__).parent
-    # TODO: use some library that queries git instead of just calling it
     results = subprocess.run(cmd, capture_output=True, cwd=cwd, check=True)  # noqa: S603
     return results.stdout.strip().decode()
 

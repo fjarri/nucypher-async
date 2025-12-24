@@ -4,8 +4,6 @@ from pathlib import Path
 from ._node_info import NodeInfo
 
 
-# TODO: add the ability to save certificates
-# TODO: add `get_child()` so that it could be used hierarchically
 class BaseStorage(ABC):
     @abstractmethod
     def get_my_node_info(self) -> NodeInfo | None: ...

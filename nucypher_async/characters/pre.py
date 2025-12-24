@@ -7,10 +7,10 @@ from nucypher_core import (
     Conditions,
     EncryptedKeyFrag,
     EncryptedTreasureMap,
+    MessageKit,
+    RetrievalKit,
     TreasureMap,
 )
-from nucypher_core import MessageKit as CoreMessageKit
-from nucypher_core import RetrievalKit as CoreRetrievalKit
 from nucypher_core.umbral import (
     Capsule,
     PublicKey,
@@ -112,32 +112,36 @@ class Publisher:
         return PublisherCard(verifying_key=self.verifying_key)
 
 
-# TODO: rename to `EncryptedMessage` and remove `Encryptor` character?
-class MessageKit:
+class EncryptedMessage:
     def __init__(self, policy: Policy, message: bytes, conditions: Conditions | None = None):
-        self.core_message_kit = CoreMessageKit(
+        self.message_kit = MessageKit(
             policy_encrypting_key=policy.encrypting_key, plaintext=message, conditions=conditions
         )
-        self.capsule = self.core_message_kit.capsule
-        self.conditions = self.core_message_kit.conditions
+
+    @property
+    def capsule(self) -> Capsule:
+        return self.message_kit.capsule
+
+    @property
+    def conditions(self) -> Conditions | None:
+        return self.message_kit.conditions
+
+    @property
+    def metadata(self) -> "EncryptedMessageMetadata":
+        return EncryptedMessageMetadata(RetrievalKit.from_message_kit(self.message_kit))
 
 
-# TODO: rename to something like `EncryptedMessageMetadata`?
-class RetrievalKit:
-    @classmethod
-    def from_message_kit(cls, message_kit: MessageKit) -> "RetrievalKit":
-        return cls(CoreRetrievalKit.from_message_kit(message_kit.core_message_kit))
+class EncryptedMessageMetadata:
+    def __init__(self, retrieval_kit: RetrievalKit):
+        self.retrieval_kit = retrieval_kit
 
-    def __init__(self, retrieval_kit: CoreRetrievalKit):
-        self.core_retrieval_kit = retrieval_kit
-        self.capsule = self.core_retrieval_kit.capsule
-        self.conditions = self.core_retrieval_kit.conditions
+    @property
+    def capsule(self) -> Capsule:
+        return self.retrieval_kit.capsule
 
-
-class Encryptor:
-    @staticmethod
-    def encrypt(policy: Policy, message: bytes, conditions: Conditions | None = None) -> MessageKit:
-        return MessageKit(policy, message, conditions=conditions)
+    @property
+    def conditions(self) -> Conditions | None:
+        return self.retrieval_kit.conditions
 
 
 @frozen
@@ -148,16 +152,17 @@ class PublisherCard:
 class DecryptionKit:
     encrypted_kfrags: dict[IdentityAddress, EncryptedKeyFrag]
 
-    capsule: Capsule
-
-    def __init__(self, message_kit: MessageKit, treasure_map: TreasureMap):
-        self.core_message_kit = message_kit.core_message_kit
-        self.core_treasure_map = treasure_map
-        self.capsule = self.core_message_kit.capsule
+    def __init__(self, encrypted_message: EncryptedMessage, treasure_map: TreasureMap):
+        self.message_kit = encrypted_message.message_kit
+        self.treasure_map = treasure_map
         self.encrypted_kfrags = {
             IdentityAddress(bytes(address)): ekfrag
-            for address, ekfrag in self.core_treasure_map.destinations.items()
+            for address, ekfrag in self.treasure_map.destinations.items()
         }
+
+    @property
+    def capsule(self) -> Capsule:
+        return self.message_kit.capsule
 
 
 class Recipient:
@@ -187,9 +192,9 @@ class Recipient:
         decryption_kit: DecryptionKit,
         vcfrags: Iterable[VerifiedCapsuleFrag],
     ) -> bytes:
-        return decryption_kit.core_message_kit.decrypt_reencrypted(
+        return decryption_kit.message_kit.decrypt_reencrypted(
             self._decrypting_key,
-            decryption_kit.core_treasure_map.policy_encrypting_key,
+            decryption_kit.treasure_map.policy_encrypting_key,
             list(vcfrags),
         )
 

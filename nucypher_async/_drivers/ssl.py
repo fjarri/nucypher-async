@@ -1,4 +1,6 @@
+import secrets
 import ssl
+from collections.abc import Iterable
 from ipaddress import ip_address
 from typing import cast, get_args
 
@@ -13,6 +15,8 @@ from cryptography.hazmat.primitives.asymmetric.types import (
 )
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509.oid import NameOID
+
+from .._utils import temp_file
 
 
 class SSLPrivateKey:
@@ -85,8 +89,6 @@ class SSLCertificate:
         host: str,
         days_valid: int = 365,
     ) -> "SSLCertificate":
-        # TODO: assert that the start date is in UTC?
-
         public_key = private_key._public_key()  # noqa: SLF001
 
         end_date = start_date.shift(days=days_valid)
@@ -140,6 +142,10 @@ class SSLCertificate:
         certs_bytes = data.split(start_line)
         return [cls.from_pem_bytes(start_line + cert_bytes) for cert_bytes in certs_bytes[1:]]
 
+    @staticmethod
+    def list_to_pem_str(certificates: Iterable["SSLCertificate"]) -> str:
+        return b"\n".join(certificate.to_pem_bytes() for certificate in certificates).decode()
+
     @classmethod
     def from_der_bytes(cls, data: bytes) -> "SSLCertificate":
         return cls(x509.load_der_x509_certificate(data))
@@ -173,6 +179,34 @@ class SSLCertificate:
     @property
     def not_valid_after(self) -> arrow.Arrow:
         return arrow.get(self._certificate.not_valid_after_utc)
+
+
+def make_client_ssl_context(certificate: SSLCertificate) -> ssl.SSLContext:
+    # Cannot create a context with a certificate directly, see https://bugs.python.org/issue16487.
+    # So instead we do it via a temporary file, and negate the performance penalty by caching.
+    with temp_file(certificate.to_pem_bytes()) as certificate_filename:
+        return ssl.create_default_context(cafile=str(certificate_filename))
+
+
+def fill_ssl_context(
+    context: ssl.SSLContext,
+    private_key: SSLPrivateKey,
+    certificate: SSLCertificate,
+    ca_chain: Iterable[SSLCertificate] | None,
+) -> None:
+    if ca_chain:
+        context.load_verify_locations(cadata=SSLCertificate.list_to_pem_str(ca_chain))
+
+    # Encrypt the temporary file we create with an emphemeral password.
+    # Would be nice to zeroize it in the end, but we cannot zeroize `bytes`,
+    # and `cryptography` does not accept `bytearray` as a password.
+    keyfile_password = secrets.token_bytes(32)
+
+    with (
+        temp_file(certificate.to_pem_bytes()) as certfile,
+        temp_file(private_key.to_pem_bytes(keyfile_password)) as keyfile,
+    ):
+        context.load_cert_chain(certfile=certfile, keyfile=keyfile, password=keyfile_password)
 
 
 async def fetch_certificate(host: str, port: int) -> SSLCertificate:

@@ -199,7 +199,6 @@ class IdentityClientSession:
     async def is_staking_provider_authorized(
         self, staking_provider_address: IdentityAddress
     ) -> bool:
-        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast(
             "bool",
             await self._backend_session.call(
@@ -208,7 +207,6 @@ class IdentityClientSession:
         )
 
     async def is_operator_confirmed(self, operator_address: IdentityAddress) -> bool:
-        # TODO: casting for now, see https://github.com/fjarri/pons/issues/41
         return cast(
             "bool",
             await self._backend_session.call(
@@ -223,7 +221,7 @@ class IdentityClientSession:
     async def get_active_staking_providers(
         self, start_index: int = 0, max_staking_providers: int = 0
     ) -> dict[IdentityAddress, AmountT]:
-        # TODO: implement pagination
+        # TODO (#47): implement pagination
         _total_staked, staking_providers_data = await self._backend_session.call(
             self._taco_application.method.getActiveStakingProviders(
                 start_index, max_staking_providers

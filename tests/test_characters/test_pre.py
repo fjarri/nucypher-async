@@ -6,7 +6,7 @@ from nucypher_async.characters import MasterKey
 from nucypher_async.characters.pre import (
     DecryptionKit,
     Delegator,
-    Encryptor,
+    EncryptedMessage,
     Publisher,
     Recipient,
     Reencryptor,
@@ -59,12 +59,12 @@ def test_grant_and_retrieve() -> None:
     # Someone encrypts a message
 
     message = b"a secret message"
-    message_kit = Encryptor.encrypt(policy, message)
+    encrypted_message = EncryptedMessage(policy, message)
 
     # Bob decrypts
 
     treasure_map = bob.decrypt_treasure_map(encrypted_treasure_map, publisher.card())
-    decryption_kit = DecryptionKit(message_kit, treasure_map)
+    decryption_kit = DecryptionKit(encrypted_message, treasure_map)
     vcfrags = []
 
     for node in nodes:

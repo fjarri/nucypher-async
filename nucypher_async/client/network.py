@@ -8,7 +8,7 @@ from typing import Generic, TypeVar
 import trio
 
 from .._drivers.http_client import HTTPClient
-from .._drivers.time import SystemClock
+from .._drivers.time import BaseClock, SystemClock
 from .._p2p import (
     BaseStorage,
     Contact,
@@ -19,7 +19,6 @@ from .._p2p import (
     VerifiedNodeInfo,
 )
 from .._utils import producer
-from ..base.time import BaseClock
 from ..blockchain.identity import IdentityAddress, IdentityClient
 from ..domain import Domain
 from ..logging import NULL_LOGGER, Logger
@@ -33,9 +32,10 @@ class NetworkClient:
         seed_contacts: Iterable[Contact] | None = None,
         domain: Domain = Domain.MAINNET,
         parent_logger: Logger = NULL_LOGGER,
-        clock: BaseClock = SystemClock(),
+        clock: BaseClock | None = None,
         storage: BaseStorage | None = None,
     ):
+        clock = clock or SystemClock()
         node_client = node_client or NodeClient(HTTPClient())
         self._learner = Learner(
             node_client=node_client,
@@ -62,7 +62,7 @@ class NetworkClient:
 
     async def _ensure_seeded(self) -> None:
         if not self._seeded:
-            await self._learner.seed_round()
+            await self._learner.seed_round(must_succeed=True)
             self._seeded = True
 
     async def verification_task(self, stop_event: trio.Event) -> None:

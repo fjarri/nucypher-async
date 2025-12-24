@@ -59,16 +59,26 @@ class MockBackend:
     async def transact(
         self, signer: Signer, call: BoundMethodCall, amount: Amount | None = None
     ) -> None:
-        # TODO: change the caller's balance appropriately
-        # TODO: check that the call is payable if amount is not 0
-
         # Lower the type from specific currency
         amount = Amount.wei(0 if amount is None else amount.as_wei())
+
+        signer_balance = self._balances[signer.address]
+        if signer_balance < amount:
+            raise ValueError(
+                f"Not enough funds for {signer.address.checksum}: "
+                f"need {amount}, got {signer_balance}"
+            )
+
+        if amount.as_wei() != 0 and not call.payable:
+            raise ValueError(
+                "The call is not payable, but the transaction has funds attached to it"
+            )
 
         # Lower the signer address type
         address = Address(bytes(signer.address))
 
         self._contracts[call.contract_address].transact(address, amount, call.data_bytes)
+        self._balances[signer.address] -= amount
 
     def set_balance(self, address: Address, amount: Amount) -> None:
         # Lower the type from specific currency

@@ -281,7 +281,7 @@ class CBDClientSession:
         call = self._coordinator.method.rituals(ritual_id)
         ritual = await self._backend_session.call(call)
 
-        # TODO: workaround for https://github.com/nucypher/ferveo/issues/209
+        # TODO (#49): workaround for https://github.com/nucypher/ferveo/issues/209
         # The `AggregatedTranscript` in `ferveo` has an additional field (dkg public key)
         # compared to the aggregated transcript saved on chain.
         # Since we use serde/bincode in rust, we need a metadata field for the public key,

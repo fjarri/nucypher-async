@@ -2,7 +2,7 @@ from functools import cached_property
 
 import arrow
 from nucypher_core import NodeMetadata, NodeMetadataPayload
-from nucypher_core.umbral import PublicKey
+from nucypher_core.umbral import PublicKey as UmbralPublicKey
 
 from ..blockchain.identity import IdentityAddress
 from ..domain import Domain
@@ -45,20 +45,24 @@ class NodeInfo:
         return Domain(self._metadata_payload.domain)
 
     @property
-    def encrypting_key(self) -> PublicKey:
+    def pre_encrypting_key(self) -> UmbralPublicKey:
         return self._metadata_payload.encrypting_key
 
     @property
-    def verifying_key(self) -> PublicKey:
+    def pre_verifying_key(self) -> UmbralPublicKey:
         return self._metadata_payload.verifying_key
 
     @cached_property
     def timestamp(self) -> arrow.Arrow:
         return arrow.get(self._metadata_payload.timestamp_epoch)
 
-    def __bytes__(self) -> bytes:
-        # TODO: cache it too?
+    @cached_property
+    def _bytes(self) -> bytes:
+        # Cannot apply `cached_property` to `__bytes__()` directly, so have to use a trampoline.
         return bytes(self.metadata)
+
+    def __bytes__(self) -> bytes:
+        return self._bytes
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "NodeInfo":

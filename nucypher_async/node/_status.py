@@ -7,8 +7,8 @@ from mako import exceptions as mako_exceptions
 from mako.template import Template
 
 from .._drivers.asgi import HTTPError
+from .._drivers.time import BaseClock
 from .._p2p import FleetSensorSnapshot, VerifiedNodeInfo
-from ..base.time import BaseClock
 from ..domain import Domain
 from ..logging import Logger
 from ..version import CodeInfo

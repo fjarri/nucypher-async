@@ -12,13 +12,13 @@ from ..blockchain.pre import PREAccountSigner, PREClient
 from ..characters.pre import (
     DecryptionKit,
     DelegatorCard,
-    MessageKit,
+    EncryptedMessage,
+    EncryptedMessageMetadata,
     Policy,
     Publisher,
     PublisherCard,
     Recipient,
     RecipientCard,
-    RetrievalKit,
 )
 from .network import NetworkClient
 
@@ -34,7 +34,7 @@ class EnactedPolicy:
 
 @frozen
 class PRERetrievalOutcome:
-    # TODO: merge the two fields into dict[IdentityAddress, VerifiedCapsuleFrag | Exception]?
+    # TODO (#51): merge the two fields into dict[IdentityAddress, VerifiedCapsuleFrag | Exception]?
     cfrags: dict[IdentityAddress, VerifiedCapsuleFrag]
     errors: dict[IdentityAddress, str]
 
@@ -44,7 +44,7 @@ class BasePREConsumerClient(ABC):
     async def retrieve(
         self,
         treasure_map: TreasureMap,
-        message_kit: MessageKit | RetrievalKit,
+        metadata: EncryptedMessageMetadata,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
@@ -54,7 +54,7 @@ class BasePREConsumerClient(ABC):
         self,
         recipient: Recipient,
         enacted_policy: EnactedPolicy,
-        message_kit: MessageKit,
+        encrypted_message: EncryptedMessage,
         delegator_card: DelegatorCard,
         publisher_card: PublisherCard | None = None,
         context: Context | None = None,
@@ -66,7 +66,7 @@ class BasePREConsumerClient(ABC):
         # TODO: run mutliple rounds until completion
         outcome = await self.retrieve(
             treasure_map=treasure_map,
-            message_kit=message_kit,
+            metadata=encrypted_message.metadata,
             delegator_card=delegator_card,
             recipient_card=recipient.card(),
             context=context,
@@ -74,15 +74,9 @@ class BasePREConsumerClient(ABC):
 
         # TODO: check that we have enough vcfrags
         return recipient.decrypt(
-            decryption_kit=DecryptionKit(message_kit, treasure_map),
+            decryption_kit=DecryptionKit(encrypted_message, treasure_map),
             vcfrags=outcome.cfrags.values(),
         )
-
-
-# TODO: move to `characters`
-def pre_encrypt(policy: Policy | EnactedPolicy, message: bytes) -> MessageKit:
-    policy_ = policy.policy if isinstance(policy, EnactedPolicy) else policy
-    return MessageKit(policy_, message, conditions=None)
 
 
 class LocalPREClient(BasePREConsumerClient):
@@ -93,7 +87,7 @@ class LocalPREClient(BasePREConsumerClient):
     async def retrieve(
         self,
         treasure_map: TreasureMap,
-        message_kit: MessageKit | RetrievalKit,
+        metadata: EncryptedMessageMetadata,
         delegator_card: DelegatorCard,
         recipient_card: RecipientCard,
         context: Context | None = None,
@@ -103,12 +97,12 @@ class LocalPREClient(BasePREConsumerClient):
         async def reencrypt(nursery: trio.Nursery, node_info: VerifiedNodeInfo) -> None:
             verified_cfrags = await self._network_client.node_client.reencrypt(
                 node_info=node_info,
-                # TODO: support retrieving for several capsules at once - REST API allows it
-                capsules=[message_kit.capsule],
+                # TODO (#50): support retrieving for several capsules at once - REST API allows it
+                capsules=[metadata.capsule],
                 treasure_map=treasure_map,
                 delegator_card=delegator_card,
                 recipient_card=recipient_card,
-                conditions=message_kit.conditions,
+                conditions=metadata.conditions,
                 context=context,
             )
             responses[node_info.staking_provider_address] = verified_cfrags[0]

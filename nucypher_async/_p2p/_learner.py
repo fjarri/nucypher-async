@@ -3,9 +3,8 @@ from collections.abc import Iterable
 
 import trio
 
-from .._drivers.time import SystemClock
+from .._drivers.time import BaseClock, SystemClock
 from .._utils import wait_for_any
-from ..base.time import BaseClock
 from ..blockchain.identity import AmountT, IdentityAddress, IdentityClient
 from ..domain import Domain
 from ..logging import NULL_LOGGER, Logger
@@ -298,6 +297,9 @@ class Learner:
 
     def get_snapshot(self) -> FleetSensorSnapshot:
         return self._fleet_sensor.get_snapshot()
+
+    def has_no_new_contacts(self) -> bool:
+        return self._fleet_sensor.has_no_new_contacts()
 
     async def verification_task(self, stop_event: trio.Event) -> None:
         while True:

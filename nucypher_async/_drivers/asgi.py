@@ -83,7 +83,8 @@ class Request:
 
     @property
     def remote_host(self) -> str | None:
-        # TODO: we can get the port here too
+        # We could get a port here too, but it won't be useful,
+        # because it won't correspond to the port the server (if any) is bound to.
         return self._request.client.host if self._request.client else None
 
     @property

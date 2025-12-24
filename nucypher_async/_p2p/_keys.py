@@ -13,7 +13,7 @@ import arrow
 import trio
 
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
-from ..base.time import BaseClock
+from .._drivers.time import BaseClock
 
 
 class Contact:

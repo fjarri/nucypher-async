@@ -1,6 +1,6 @@
 import itertools
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from ipaddress import IPv4Address
 
 import pytest
@@ -24,21 +24,35 @@ from nucypher_async.blockchain.identity import AmountT, IdentityAccount, Identit
 from nucypher_async.characters import MasterKey
 from nucypher_async.characters.cbd import Decryptor
 from nucypher_async.characters.pre import Reencryptor
+from nucypher_async.client.network import NetworkClient
+from nucypher_async.client.pre import LocalPREClient
 from nucypher_async.domain import Domain
 from nucypher_async.node import HTTPServerConfig, NodeServer, NodeServerConfig, SSLConfig
-from nucypher_async.proxy import ProxyServer, ProxyServerConfig
+from nucypher_async.proxy import ProxyPREClient, ProxyServer, ProxyServerConfig
+from nucypher_async.proxy._client import ProxyClient
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--loglevel",
+        action="store",
+        choices=["debug", "info"],
+        default="debug",
+        help="Log level used in the logging fixture",
+    )
 
 
 @pytest.fixture(scope="session")
-def logger() -> logging.Logger:
-    # TODO: we may add a CLI option to reduce the verbosity of test logging
+def logger(pytestconfig: pytest.Config) -> logging.Logger:
+    loglevel = pytestconfig.getoption("--loglevel")
+    level = logging.DEBUG if loglevel == "debug" else logging.INFO
     return logging.Logger(
-        level=logging.DEBUG, handlers=[logging.ConsoleHandler(stderr_at=None)], clock=MockClock()
+        level=level, handlers=[logging.ConsoleHandler(stderr_at=None)], clock=MockClock()
     )
 
 
 @pytest.fixture
-async def mock_clock() -> MockClock:
+def mock_clock() -> MockClock:
     return MockClock()
 
 
@@ -84,7 +98,7 @@ def mock_http_network(nursery: trio.Nursery) -> MockHTTPNetwork:
 
 @pytest.fixture
 def mock_passive_http_client(mock_http_network: MockHTTPNetwork) -> MockHTTPClient:
-    return MockHTTPClient(mock_http_network, host=None)
+    return MockHTTPClient(mock_http_network, client_host=None)
 
 
 @pytest.fixture
@@ -191,10 +205,10 @@ async def fully_learned_nodes(
             if other_server is server:
                 continue
 
-            peer_info = other_server._node  # TODO: add a proper method to NodeServer
+            node_info = other_server.info
             async with mock_identity_client.session() as session:
-                stake = await session.get_staked_amount(peer_info.staking_provider_address)
-            server.learner._test_add_verified_node(peer_info, stake)
+                stake = await session.get_staked_amount(node_info.staking_provider_address)
+            server.learner._test_add_verified_node(node_info, stake)
 
     for handle, _server in lonely_nodes:
         await handle.startup()
@@ -253,3 +267,55 @@ async def proxy_server(
     await handle.startup()
     yield server
     await handle.shutdown()
+
+
+@pytest.fixture
+async def proxy_client(
+    mock_passive_http_client: MockHTTPClient, proxy_server: ProxyServer
+) -> ProxyClient:
+    host, port = proxy_server.bind_pair()
+    return ProxyClient(str(host), port, mock_passive_http_client)
+
+
+@pytest.fixture
+async def proxy_pre_client(
+    mock_passive_http_client: MockHTTPClient, proxy_server: ProxyServer
+) -> ProxyPREClient:
+    host, port = proxy_server.bind_pair()
+    return ProxyPREClient(str(host), port, mock_passive_http_client)
+
+
+@pytest.fixture
+async def network_client_factory(
+    mock_passive_node_client: MockNodeClient,
+    mock_identity_client: MockIdentityClient,
+    fully_learned_nodes: list[NodeServer],
+    logger: logging.Logger,
+    mock_clock: MockClock,
+) -> Callable[[str], NetworkClient]:
+    # We want several instances of NetworkClient to be independent
+    # (since they are very much stateful),
+    # so we return a factory instead of an actual instance.
+    # This way a test can create several of those.
+    def factory(logger_tag: str) -> NetworkClient:
+        return NetworkClient(
+            node_client=mock_passive_node_client,
+            identity_client=mock_identity_client,
+            seed_contacts=[fully_learned_nodes[0].secure_contact().contact],
+            domain=Domain.MAINNET,
+            clock=mock_clock,
+            parent_logger=logger.get_child(logger_tag),
+        )
+
+    return factory
+
+
+@pytest.fixture
+async def local_pre_client_factory(
+    network_client_factory: Callable[[str], NetworkClient],
+    mock_pre_client: MockPREClient,
+) -> Callable[[str], LocalPREClient]:
+    def factory(logger_tag: str) -> LocalPREClient:
+        return LocalPREClient(network_client_factory(logger_tag), mock_pre_client)
+
+    return factory

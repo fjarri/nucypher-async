@@ -14,7 +14,7 @@ from hypercorn.typing import (
     LifespanStartupEvent,
 )
 
-from .._drivers.http_client import HTTPClient, HTTPClientSession, HTTPResponse
+from .._drivers.http_client import HTTPClient, HTTPClientError, HTTPClientSession, HTTPResponse
 from .._drivers.http_server import HTTPServable, HTTPServableApp
 from .._drivers.ssl import SSLCertificate
 from ..proxy import ProxyServer
@@ -93,10 +93,11 @@ class MockHTTPNetwork:
 
 
 class MockHTTPClient(HTTPClient):
-    def __init__(self, mock_network: MockHTTPNetwork, host: str | None = None):
-        # TODO: do we actually need to be able to specify the client's host?
+    def __init__(self, mock_network: MockHTTPNetwork, client_host: str | None = None):
         self._mock_network = mock_network
-        self._host = host or "passive client"
+        # Since the nodes use HTTP for P2P messaging,
+        # we need to be able to report the client's hostname (used for DDoS protection).
+        self._client_host = client_host or "passive client"
 
     async def fetch_certificate(self, host: str, port: int) -> SSLCertificate:
         certificate, _manager = self._mock_network.get_server(host, port)
@@ -104,15 +105,21 @@ class MockHTTPClient(HTTPClient):
 
     @asynccontextmanager
     async def session(
-        self, _certificate: SSLCertificate | None = None
+        self, certificate: SSLCertificate | None = None
     ) -> AsyncIterator["MockHTTPClientSession"]:
-        yield MockHTTPClientSession(self._mock_network, self._host)
+        yield MockHTTPClientSession(self._mock_network, self._client_host, certificate)
 
 
 class MockHTTPClientSession(HTTPClientSession):
-    def __init__(self, mock_network: MockHTTPNetwork, host: str = "mock_hostname"):
+    def __init__(
+        self,
+        mock_network: MockHTTPNetwork,
+        client_host: str = "mock_hostname",
+        certificate: SSLCertificate | None = None,
+    ):
         self._mock_network = mock_network
-        self._host = host
+        self._client_host = client_host
+        self._certificate = certificate
 
     async def get(self, url: str, params: Mapping[str, str] = {}) -> HTTPResponse:
         response = await self._request("get", url, params=params)
@@ -126,11 +133,14 @@ class MockHTTPClientSession(HTTPClientSession):
         url_parts = urlparse(url)
         assert url_parts.hostname is not None, "Hostname is missing from the url"
         assert url_parts.port is not None, "Port is missing from the url"
-        _certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
-        # TODO: check the cerificate's validity here
+        certificate, manager = self._mock_network.get_server(url_parts.hostname, url_parts.port)
+
+        if self._certificate is not None and certificate != self._certificate:
+            raise HTTPClientError("Certificate mismatch")
+
         # Unfortunately there are no unified types for hypercorn and httpx,
         # so we have to cast manually.
         app = cast("httpx._transports.asgi._ASGIApp", manager.app)  # noqa: SLF001
-        transport = httpx.ASGITransport(app=app, client=(str(self._host), 9999))
+        transport = httpx.ASGITransport(app=app, client=(self._client_host, 9999))
         async with httpx.AsyncClient(transport=transport) as client:
             return await client.request(method, url, *args, **kwargs)

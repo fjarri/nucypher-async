@@ -7,7 +7,7 @@ from platformdirs import PlatformDirs
 
 from .._drivers.http_client import HTTPClient
 from .._drivers.ssl import SSLCertificate, SSLPrivateKey
-from .._drivers.time import SystemClock
+from .._drivers.time import BaseClock, SystemClock
 from .._p2p import (
     BaseStorage,
     Contact,
@@ -17,7 +17,6 @@ from .._p2p import (
     PeerPrivateKey,
     PeerPublicKey,
 )
-from ..base.time import BaseClock
 from ..blockchain.cbd import CBDClient
 from ..blockchain.identity import IdentityClient
 from ..blockchain.pre import PREClient
@@ -99,7 +98,10 @@ class SSLConfig:
         else:
             ssl_ca_chain = []
 
-        # TODO: check that the SSL certificate corresponds to the given private key
+        if not ssl_private_key.matches(ssl_certificate):
+            raise ValueError(
+                "The given SSL certificate must be created using the given private key"
+            )
 
         # TODO: check that certificates in the chain are in the correct order?
         # (root certificate last)

@@ -1,6 +1,5 @@
 """Encapsulates a specific HTTP server running our ASGI app (currently ``hypercorn``)."""
 
-import os
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address
 from ssl import SSLContext
@@ -12,9 +11,8 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 from hypercorn.typing import ASGIFramework
 
-from .._utils import temp_file
 from ..logging import Logger
-from .ssl import SSLCertificate, SSLPrivateKey
+from .ssl import SSLCertificate, SSLPrivateKey, fill_ssl_context
 
 if TYPE_CHECKING:  # pragma: no cover
     import logging
@@ -42,35 +40,18 @@ class InMemoryCertificateConfig(Config):
 
         # Have to keep the unencrypted private key in memory,
         # but at least we're not leaking it in the filesystem.
-        # TODO: Can we do better? Zeroize it on cleanup?
         self.__ssl_private_key = ssl_private_key
 
     def create_ssl_context(self) -> SSLContext | None:
-        # sanity check
-        if self.certfile or self.keyfile or self.ca_certs:
-            raise RuntimeError(
-                "Certificate/keyfile must be passed to the constructor in the serialized form"
-            )
-
         context = super().create_ssl_context()
 
         # Since ssl_enabled() returns True, the context will be created,
         # but with no certificates loaded.
         assert context is not None, "SSL context was not created"
 
-        # Encrypt the temporary file we create with an emphemeral password.
-        keyfile_password = os.urandom(32)
-
-        # TODO: move logic to _drivers/ssl
-        if self.__ssl_ca_chain:
-            chain_data = b"\n".join(cert.to_pem_bytes() for cert in self.__ssl_ca_chain).decode()
-            context.load_verify_locations(cadata=chain_data)
-
-        with (
-            temp_file(self.__ssl_certificate.to_pem_bytes()) as certfile,
-            temp_file(self.__ssl_private_key.to_pem_bytes(keyfile_password)) as keyfile,
-        ):
-            context.load_cert_chain(certfile=certfile, keyfile=keyfile, password=keyfile_password)
+        fill_ssl_context(
+            context, self.__ssl_private_key, self.__ssl_certificate, self.__ssl_ca_chain
+        )
 
         return context
 
